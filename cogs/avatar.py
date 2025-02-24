@@ -7,13 +7,15 @@ class Avatar(commands.Cog):
 
     @discord.app_commands.command(name="avatar", description="ユーザーのアイコンを表示します")
     async def avatar(self, interaction: discord.Interaction, user: discord.User) -> None:
-        embed = discord.Embed(
-            title=f"{user.name}のアバター",
-            color=discord.Color.blue()
-        )
-        embed.set_image(url=user.avatar.url)
-
-        await interaction.response.send_message(embed=embed)
+        if not user.avatar:
+            await interaction.response.send_message("アイコンが設定されてないよ")
+        else:
+            embed = discord.Embed(
+                title=f"{user.name}のアイコン",
+                color=discord.Color.blue()
+            )
+            embed.set_image(url=user.avatar.url)
+            await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):

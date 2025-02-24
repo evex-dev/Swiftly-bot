@@ -8,14 +8,15 @@ import re
 import aiohttp
 from urllib.parse import urlparse
 
+
 class AntiInvite(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # Ensure the data directory exists
-        data_dir = os.path.join(os.getcwd(), 'data')
+        data_dir = os.path.join(os.getcwd(), "data")
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
-        db_path = os.path.join(data_dir, 'anti_invite.db')
+        db_path = os.path.join(data_dir, "anti_invite.db")
         self.db = sqlite3.connect(db_path)
         cursor = self.db.cursor()
         cursor.execute("""
@@ -25,9 +26,9 @@ class AntiInvite(commands.Cog):
             )
         """)
         self.db.commit()
-        
+
         # 新規: DB for whitelist（ホワリス）
-        db_exempt_path = os.path.join(data_dir, 'anti_invite_exempt.db')
+        db_exempt_path = os.path.join(data_dir, "anti_invite_exempt.db")
         self.db_exempt = sqlite3.connect(db_exempt_path)
         cursor_exempt = self.db_exempt.cursor()
         cursor_exempt.execute("""
@@ -36,8 +37,7 @@ class AntiInvite(commands.Cog):
                 channel_id INTEGER,
                 PRIMARY KEY (guild_id, channel_id)
             )
-        """
-        )
+        """)
         self.db_exempt.commit()
 
     def set_setting(self, guild_id: int, enabled: bool):
@@ -57,14 +57,17 @@ class AntiInvite(commands.Cog):
 
     async def contains_invite(self, content: str) -> bool:
         # 直接の招待リンクが含まれているかチェック
-        if 'discord.gg/' in content or 'discordapp.com/invite/' in content or 'discord.com/invite/' in content:
+        if "discord.gg/" in content or "discordapp.com/invite/" in content or "discord.com/invite/" in content:
             return True
         # メッセージ内のURLを抽出
-        urls = re.findall(r'(https?://\S+)', content)
+        urls = re.findall(r"(https?://\S+)", content)
         if not urls:
             return False
         # 既知の短縮URLドメイン一覧
-        shorteners = ["x.gd", "bit.ly", "tinyurl.com", "goo.gl", "is.gd", "ow.ly", "buff.ly", "00m.in"]
+        shorteners = [
+            "x.gd", "bit.ly", "tinyurl.com",
+            "goo.gl", "is.gd", "ow.ly", "buff.ly", "00m.in"
+        ]
         for url in urls:
             try:
                 parsed = urlparse(url)
@@ -77,7 +80,7 @@ class AntiInvite(commands.Cog):
                             # HEADリクエストが失敗した場合、GETリクエストで試す
                             async with session.get(url, allow_redirects=True, timeout=5) as response:
                                 final_url = str(response.url)
-                    if 'discord.gg/' in final_url or 'discordapp.com/invite/' in final_url or 'discord.com/invite/' in final_url:
+                    if "discord.gg/" in final_url or "discordapp.com/invite/" in final_url or "discord.com/invite/" in final_url:
                         return True
             except Exception:
                 continue
@@ -92,15 +95,15 @@ class AntiInvite(commands.Cog):
     async def anti_invite(self, interaction: discord.Interaction, action: str):
         # 管理者チェックを追加
         if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message('このコマンドはサーバー管理者のみ実行可能です。', ephemeral=True)
+            await interaction.response.send_message("このコマンドはサーバー管理者のみ実行可能です。", ephemeral=True)
             return
         if interaction.guild is None:
-            await interaction.response.send_message('このコマンドはサーバー内でのみ使用可能です。', ephemeral=True)
+            await interaction.response.send_message("このコマンドはサーバー内でのみ使用可能です。", ephemeral=True)
             return
-        enabled = action.lower() == 'enable'
+        enabled = action.lower() == "enable"
         self.set_setting(interaction.guild.id, enabled)
-        state = '有効' if enabled else '無効'
-        embed = discord.Embed(title="Anti-Invite設定", description=f'このサーバーでの招待リンク自動削除は **{state}** になりました。', color=0x00ff00)
+        state = "有効" if enabled else "無効"
+        embed = discord.Embed(title="Anti-Invite設定", description=f"このサーバーでの招待リンク自動削除は **{state}** になりました。", color=0x00ff00)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # 新規: ホワリス設定コマンド（禁止対象外のチャンネル設定）
@@ -117,23 +120,23 @@ class AntiInvite(commands.Cog):
         channel_9="指定チャンネル9（任意）",
         channel_10="指定チャンネル10（任意）"
     )
-    async def anti_invite_setting(self, interaction: discord.Interaction, 
-                                   channel_1: discord.TextChannel = None,
-                                   channel_2: discord.TextChannel = None,
-                                   channel_3: discord.TextChannel = None,
-                                   channel_4: discord.TextChannel = None,
-                                   channel_5: discord.TextChannel = None,
-                                   channel_6: discord.TextChannel = None,
-                                   channel_7: discord.TextChannel = None,
-                                   channel_8: discord.TextChannel = None,
-                                   channel_9: discord.TextChannel = None,
-                                   channel_10: discord.TextChannel = None):
+    async def anti_invite_setting(self, interaction: discord.Interaction,
+                                  channel_1: discord.TextChannel = None,
+                                  channel_2: discord.TextChannel = None,
+                                  channel_3: discord.TextChannel = None,
+                                  channel_4: discord.TextChannel = None,
+                                  channel_5: discord.TextChannel = None,
+                                  channel_6: discord.TextChannel = None,
+                                  channel_7: discord.TextChannel = None,
+                                  channel_8: discord.TextChannel = None,
+                                  channel_9: discord.TextChannel = None,
+                                  channel_10: discord.TextChannel = None):
         # 管理者チェックを追加
         if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message('このコマンドはサーバー管理者のみ実行可能です。', ephemeral=True)
+            await interaction.response.send_message("このコマンドはサーバー管理者のみ実行可能です。", ephemeral=True)
             return
         if interaction.guild is None:
-            await interaction.response.send_message('このコマンドはサーバー内でのみ使用可能です。', ephemeral=True)
+            await interaction.response.send_message("このコマンドはサーバー内でのみ使用可能です。", ephemeral=True)
             return
         channels = []
         for ch in [channel_1, channel_2, channel_3, channel_4, channel_5, channel_6, channel_7, channel_8, channel_9, channel_10]:
@@ -145,7 +148,8 @@ class AntiInvite(commands.Cog):
             cursor_exempt.execute("INSERT INTO whitelist (guild_id, channel_id) VALUES (?, ?)", (interaction.guild.id, ch_id))
         self.db_exempt.commit()
         if channels:
-            desc = "以下のチャンネルで招待リンクの自動削除が無効化されました。\n" + "\n".join([f"<#{ch_id}>" for ch_id in channels])
+            desc = "以下のチャンネルで招待リンクの自動削除が無効化されました。\n" + \
+                "\n".join([f"<#{ch_id}>" for ch_id in channels])
             title = "ホワリス設定完了"
         else:
             desc = "全てのチャンネルの無効化設定を解除しました。"
@@ -174,6 +178,7 @@ class AntiInvite(commands.Cog):
                     pass
                 except Exception:
                     pass
+
 
 async def setup(bot):
     await bot.add_cog(AntiInvite(bot))
