@@ -1,6 +1,36 @@
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
 
+class ServerListView(View):
+    def __init__(self, pages, interaction):
+        super().__init__(timeout=60)
+        self.pages = pages
+        self.current_page = 0
+        self.interaction = interaction
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.clear_items()
+        if self.current_page > 0:
+            self.add_item(Button(label="前へ", custom_id="prev", style=discord.ButtonStyle.primary))
+        if self.current_page < len(self.pages) - 1:
+            self.add_item(Button(label="次へ", custom_id="next", style=discord.ButtonStyle.primary))
+
+    async def interaction_check(self, button_interaction: discord.Interaction) -> bool:
+        return button_interaction.user.id == self.interaction.user.id
+
+    @discord.ui.button(label="前へ", custom_id="prev", style=discord.ButtonStyle.primary)
+    async def prev_button(self, interaction: discord.Interaction, button: Button):
+        self.current_page = max(0, self.current_page - 1)
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
+
+    @discord.ui.button(label="次へ", custom_id="next", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: Button):
+        self.current_page = min(len(self.pages) - 1, self.current_page + 1)
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
 class BotAdmin(commands.Cog):
     def __init__(self, bot):
@@ -18,14 +48,26 @@ class BotAdmin(commands.Cog):
             return
 
         if option == "servers":
-            embed = discord.Embed(title="参加中のサーバー", color=discord.Color.blue())
-            for guild in self.bot.guilds:
-                member_count = len(guild.members)
-                owner = guild.owner
-                created_at = guild.created_at.strftime("%Y-%m-%d")
-                value = f"ID: {guild.id}\nオーナー: {owner}\nメンバー数: {member_count}\n作成日: {created_at}"
-                embed.add_field(name=guild.name, value=value, inline=False)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            guilds = list(self.bot.guilds)
+            pages = []
+            
+            # 10サーバーごとにページを作成
+            for i in range(0, len(guilds), 10):
+                embed = discord.Embed(title=f"参加中のサーバー ({i//10 + 1}/{(len(guilds)-1)//10 + 1}ページ)", 
+                                    color=discord.Color.blue())
+                
+                for guild in guilds[i:i+10]:
+                    member_count = len(guild.members)
+                    owner = guild.owner
+                    created_at = guild.created_at.strftime("%Y-%m-%d")
+                    value = f"ID: {guild.id}\nオーナー: {owner}\nメンバー数: {member_count}\n作成日: {created_at}"
+                    embed.add_field(name=guild.name, value=value, inline=False)
+                
+                pages.append(embed)
+
+            view = ServerListView(pages, interaction)
+            await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+
         elif option == "debug":
             cogs = ", ".join(self.bot.cogs.keys())
             shard_info = (
@@ -43,6 +85,7 @@ class BotAdmin(commands.Cog):
             embed = discord.Embed(
                 title="デバッグ情報", description=debug_info, color=discord.Color.green())
             await interaction.response.send_message(embed=embed, ephemeral=True)
+
         elif option.startswith("say:"):
             message = option[4:]
             await interaction.channel.send(message)
@@ -53,7 +96,6 @@ class BotAdmin(commands.Cog):
             embed = discord.Embed(
                 title="エラー", description="無効なオプションです。", color=discord.Color.red())
             await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
 async def setup(bot):
     await bot.add_cog(BotAdmin(bot))
