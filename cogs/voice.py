@@ -213,6 +213,43 @@ class Voice(commands.Cog):
         if voice_client:
             if len(voice_client.channel.members) == 1:  # ボットだけが残っている場合
                 await voice_client.disconnect()
+        
+        # 新しく参加したメンバーがいる場合
+        if before.channel is None and after.channel is not None:
+            guild_id = member.guild.id
+            channel_id = after.channel.id
+            if guild_id in self.voice_clients and channel_id in self.voice_clients[guild_id]:
+                message = f"{member.display_name}が参加しました。"
+                sanitized_message = self.sanitize_message(message)
+                sanitized_message = self.limit_message(sanitized_message)
+                if guild_id not in self.locks:
+                    self.locks[guild_id] = asyncio.Lock()
+                async with self.locks[guild_id]:
+                    try:
+                        self.tts_queues[guild_id][channel_id].append(sanitized_message)
+                        if not self.voice_clients[guild_id][channel_id].is_playing():
+                            next_message = self.tts_queues[guild_id][channel_id].pop(0)
+                            await self.play_tts(guild_id, channel_id, next_message)
+                    except Exception as e:
+                        print(f"エラーが発生しました: {e}")
+        # 退出したメンバーがいる場合
+        elif before.channel is not None and after.channel is None:
+            guild_id = member.guild.id
+            channel_id = before.channel.id
+            if guild_id in self.voice_clients and channel_id in self.voice_clients[guild_id]:
+                message = f"{member.display_name}が退出しました。"
+                sanitized_message = self.sanitize_message(message)
+                sanitized_message = self.limit_message(sanitized_message)
+                if guild_id not in self.locks:
+                    self.locks[guild_id] = asyncio.Lock()
+                async with self.locks[guild_id]:
+                    try:
+                        self.tts_queues[guild_id][channel_id].append(sanitized_message)
+                        if not self.voice_clients[guild_id][channel_id].is_playing():
+                            next_message = self.tts_queues[guild_id][channel_id].pop(0)
+                            await self.play_tts(guild_id, channel_id, next_message)
+                    except Exception as e:
+                        print(f"エラーが発生しました: {e}")
 
     @commands.Cog.listener()
     async def on_message(self, message):
