@@ -145,7 +145,7 @@ async def on_command(ctx):
         return
 
 @bot.command(name="set_prohibited_channel")
-@commands.has_permissions(administrator=True)
+# @commands.has_permissions(administrator=True)
 async def set_prohibited_channel(ctx, channel: discord.TextChannel):
     guild_id = str(ctx.guild.id)
     channel_id = str(channel.id)
