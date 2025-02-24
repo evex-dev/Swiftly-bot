@@ -90,6 +90,7 @@ class BotAdmin(commands.Cog):
                 await previous_page(interaction)
             elif interaction.data['custom_id'] == 'next_page':
                 await next_page(interaction)
+            await interaction.response.defer()  # インタラクションに対する応答を行う
 
         view.children[0].callback = button_callback
         view.children[1].callback = button_callback
