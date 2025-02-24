@@ -53,12 +53,6 @@ logging.getLogger('discord').setLevel(logging.WARNING)
 logging.getLogger('discord').addHandler(log_handler)
 logging.getLogger('discord').addHandler(command_log_handler)
 
-# Load prohibited channels from JSON file
-prohibited_channels = {}
-if os.path.exists("prohibited_channels.json"):
-    with open("prohibited_channels.json", "r", encoding="utf-8") as f:
-        prohibited_channels = json.load(f)
-
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}!")
@@ -143,26 +137,6 @@ async def on_command(ctx):
     if str(ctx.channel.id) in prohibited_channels.get(str(ctx.guild.id), []):
         await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
         return
-
-@bot.command(name="set_prohibited_channel")
-# @commands.has_permissions(administrator=True)
-async def set_prohibited_channel(ctx, channel: discord.TextChannel):
-    guild_id = str(ctx.guild.id)
-    channel_id = str(channel.id)
-
-    if guild_id not in prohibited_channels:
-        prohibited_channels[guild_id] = []
-
-    if channel_id not in prohibited_channels[guild_id]:
-        prohibited_channels[guild_id].append(channel_id)
-        await ctx.send(f"{channel.mention} をコマンド実行禁止チャンネルに追加しました。")
-    else:
-        prohibited_channels[guild_id].remove(channel_id)
-        await ctx.send(f"{channel.mention} をコマンド実行禁止チャンネルから削除しました。")
-
-    with open("prohibited_channels.json", "w", encoding="utf-8") as f:
-        json.dump(prohibited_channels, f, ensure_ascii=False, indent=4)
-
-
+    
 if __name__ == "__main__":
     asyncio.run(bot.start(TOKEN))
