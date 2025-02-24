@@ -131,8 +131,9 @@ async def on_command_error(ctx, error):
     logging.getLogger('commands').error(f"Error: {error}")
     await ctx.send("エラーが発生しました")
 
-@bot.event
-async def on_command(ctx):
+#コマンド実行時にチャンネルが禁止されているか確認
+@bot.check
+async def prohibit_commands_in_channels(ctx):
     import sqlite3
     DB_PATH = "prohibited_channels.db"
     with sqlite3.connect(DB_PATH) as conn:
@@ -144,7 +145,8 @@ async def on_command(ctx):
         prohibited_channels = [row[0] for row in cursor.fetchall()]
     if str(ctx.channel.id) in prohibited_channels:
         await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
-        return
-    
+        return False  # コマンド実行をキャンセル
+    return True
+
 if __name__ == "__main__":
     asyncio.run(bot.start(TOKEN))
