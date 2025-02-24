@@ -22,10 +22,12 @@ class Prohibited(commands.Cog):
 
     @discord.app_commands.command(
         name="set_prohibited_channel", 
-        description="特定のチャンネルでのコマンドの利用を禁止する（チャンネルのIDを指定）"
+        description="特定のチャンネルでのコマンドの利用を禁止する"
     )
-    async def set_prohibited_channel(self, ctx, channel_id: str):
+    async def set_prohibited_channel(self, ctx, channel: discord.TextChannel):
         guild_id = str(ctx.guild.id)
+        channel_id = str(channel.id)
+        
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -38,13 +40,13 @@ class Prohibited(commands.Cog):
                     "INSERT INTO prohibited_channels (guild_id, channel_id) VALUES (?, ?)",
                     (guild_id, channel_id)
                 )
-                message = f"<#{channel_id}> をコマンド実行禁止チャンネルに追加しました。"
+                message = f"{channel.mention} をコマンド実行禁止チャンネルに追加しました。"
             else:
                 cursor.execute(
                     "DELETE FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?",
                     (guild_id, channel_id)
                 )
-                message = f"<#{channel_id}> をコマンド実行禁止チャンネルから削除しました。"
+                message = f"{channel.mention} をコマンド実行禁止チャンネルから削除しました。"
             conn.commit()
         await ctx.response.send_message(message)
 

@@ -34,14 +34,18 @@ if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
 # すべてのログを1つのファイルに記録
-log_handler = TimedRotatingFileHandler(f"{log_dir}/logs.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
+log_handler = TimedRotatingFileHandler(
+    f"{log_dir}/logs.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
 log_handler.setLevel(logging.DEBUG)
-log_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+log_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
 # コマンド実行履歴のログ
-command_log_handler = TimedRotatingFileHandler(f"{log_dir}/commands.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
+command_log_handler = TimedRotatingFileHandler(
+    f"{log_dir}/commands.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
 command_log_handler.setLevel(logging.INFO)
-command_log_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+command_log_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
 # ロガーの設定
 logger = logging.getLogger('bot')
@@ -53,6 +57,7 @@ logger.addHandler(command_log_handler)
 logging.getLogger('discord').setLevel(logging.WARNING)
 logging.getLogger('discord').addHandler(log_handler)
 logging.getLogger('discord').addHandler(command_log_handler)
+
 
 @bot.event
 async def on_ready():
@@ -136,38 +141,70 @@ async def on_command_error(ctx, error):
 DB_PATH = "prohibited_channels.db"
 db_conn = None
 
+
 def get_db_connection():
     global db_conn
     if db_conn is None:
         db_conn = sqlite3.connect(DB_PATH)
     return db_conn
 
+
+async def check_prohibited_channel(guild_id: int, channel_id: int) -> bool:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?",
+            (str(guild_id), str(channel_id))
+        )
+        return cursor.fetchone() is not None
+    except Exception as e:
+        logging.getLogger('bot').error(f"Prohibited channel check error: {e}")
+        return False
+
+
 @bot.check
 async def prohibit_commands_in_channels(ctx):
     # DMの場合はコマンドを許可
     if ctx.guild is None:
         return True
-        
+
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT channel_id FROM prohibited_channels WHERE guild_id = ?",
-            (str(ctx.guild.id),)
-        )
-        prohibited_channels = [int(row[0]) for row in cursor.fetchall()]
-        
-        if ctx.channel.id in prohibited_channels:
+        if ctx.command and ctx.command.name == "set_prohibited_channel":
+            return True
+
+        is_prohibited = await check_prohibited_channel(ctx.guild.id, ctx.channel.id)
+        if is_prohibited:
             await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
             return False
         return True
-        
+
     except Exception as e:
-        # エラーログを記録
         logging.getLogger('bot').error(f"Prohibited channel check error: {e}")
-        return True  # エラーの場合はコマンドを許可
+        return True
 
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    logging.getLogger('commands').error(f"App command error: {error}")
+    await interaction.response.send_message("エラーが発生しました", ephemeral=True)
+
+
+async def check_slash_command(interaction: discord.Interaction) -> bool:
+    if not interaction.guild:
+        return True
+
+    # set_prohibited_channelコマンドは常に許可
+    if interaction.command and interaction.command.name == "set_prohibited_channel":
+        return True
+
+    is_prohibited = await check_prohibited_channel(interaction.guild_id, interaction.channel_id)
+    if is_prohibited:
+        await interaction.response.send_message("このチャンネルではコマンドの実行が禁止されています。", ephemeral=True)
+        return False
+    return True
+
+bot.tree.interaction_check = check_slash_command
 
 if __name__ == "__main__":
     asyncio.run(bot.start(TOKEN))
