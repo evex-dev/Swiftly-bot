@@ -53,7 +53,7 @@ class Voice(commands.Cog):
                 asyncio.run_coroutine_threadsafe(self.play_tts(guild_id, channel_id, next_message), self.bot.loop)
 
         # Play the audio with volume reduced by 10%
-        voice_client.play(discord.FFmpegPCMAudio(temp_filename, options="-filter:a 'volume=0.9'"), after=after_playing)
+        voice_client.play(discord.FFmpegPCMAudio(temp_filename, options="-filter:a 'volume=0.6'"), after=after_playing)
 
     @discord.app_commands.command(name="join", description="ボイスチャンネルに参加します")
     async def join(self, interaction: discord.Interaction):
