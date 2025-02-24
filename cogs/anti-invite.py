@@ -146,5 +146,5 @@ class AntiInvite(commands.Cog):
                 except Exception:
                     pass
 
-def setup(bot):
-    bot.add_cog(AntiInvite(bot))
+async def setup(bot):
+    await bot.add_cog(AntiInvite(bot))
