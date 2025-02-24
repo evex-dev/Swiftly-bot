@@ -3,7 +3,10 @@ import discord
 from discord.ext import commands
 import sqlite3
 import os
-import asyncio  # 追加: asyncioをインポート
+import asyncio
+import re
+import aiohttp
+from urllib.parse import urlparse
 
 class AntiInvite(commands.Cog):
     def __init__(self, bot):
@@ -52,7 +55,34 @@ class AntiInvite(commands.Cog):
         row = cursor.fetchone()
         return bool(row[0]) if row else False
 
-    # アプリケーションコマンドとしての設定コマンドに変更
+    async def contains_invite(self, content: str) -> bool:
+        # 直接の招待リンクが含まれているかチェック
+        if 'discord.gg/' in content or 'discordapp.com/invite/' in content or 'discord.com/invite/' in content:
+            return True
+        # メッセージ内のURLを抽出
+        urls = re.findall(r'(https?://\S+)', content)
+        if not urls:
+            return False
+        # 既知の短縮URLドメイン一覧
+        shorteners = ["x.gd", "bit.ly", "tinyurl.com", "goo.gl", "is.gd", "ow.ly", "buff.ly"]
+        for url in urls:
+            try:
+                parsed = urlparse(url)
+                if parsed.hostname and parsed.hostname.lower() in shorteners:
+                    async with aiohttp.ClientSession() as session:
+                        try:
+                            async with session.head(url, allow_redirects=True, timeout=5) as response:
+                                final_url = str(response.url)
+                        except Exception:
+                            # HEADリクエストが失敗した場合、GETリクエストで試す
+                            async with session.get(url, allow_redirects=True, timeout=5) as response:
+                                final_url = str(response.url)
+                    if 'discord.gg/' in final_url or 'discordapp.com/invite/' in final_url or 'discord.com/invite/' in final_url:
+                        return True
+            except Exception:
+                continue
+        return False
+
     @discord.app_commands.command(name="anti-invite", description="Discord招待リンクの自動削除を設定します。（デフォルトはdisable）")
     @discord.app_commands.describe(action="設定する値（enable または disable）")
     @discord.app_commands.choices(action=[
@@ -134,8 +164,7 @@ class AntiInvite(commands.Cog):
             whitelist_channels = [row[0] for row in cursor_exempt.fetchall()]
             if message.channel.id in whitelist_channels:
                 return
-            content = message.content.lower()
-            if 'discord.gg/' in content or 'discordapp.com/invite/' in content or 'discord.com/invite/' in content:
+            if await self.contains_invite(message.content):
                 try:
                     await message.delete()
                     warning = await message.channel.send("Discord招待リンクは禁止です。メッセージは削除されました。")
