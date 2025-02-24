@@ -131,6 +131,10 @@ async def on_command_error(ctx, error):
     logging.getLogger('commands').error(f"Error: {error}")
     await ctx.send("エラーが発生しました")
 
+prohibited_channels = {}
+if os.path.exists("prohibited_channels.json"):
+    with open("prohibited_channels.json", "r", encoding="utf-8") as f:
+        prohibited_channels = json.load(f)
 
 @bot.event
 async def on_command(ctx):
