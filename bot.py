@@ -132,21 +132,23 @@ async def on_command_error(ctx, error):
     await ctx.send("エラーが発生しました")
 
 #コマンド実行時にチャンネルが禁止されているか確認
-@bot.check
-async def prohibit_commands_in_channels(ctx):
+@bot.tree.check
+async def prohibit_commands_in_channels_app(interaction: discord.Interaction) -> bool:
     import sqlite3
     DB_PATH = "prohibited_channels.db"
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT channel_id FROM prohibited_channels WHERE guild_id = ?",
-            (str(ctx.guild.id),)
+            (str(interaction.guild.id),)
         )
         prohibited_channels = [row[0] for row in cursor.fetchall()]
-    if str(ctx.channel.id) in prohibited_channels:
-        await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
-        return False  # コマンド実行をキャンセル
+    if str(interaction.channel.id) in prohibited_channels:
+        # スラッシュコマンドの場合はエフェメラルなレスポンスがおすすめ
+        await interaction.response.send_message("このチャンネルではコマンドの実行が禁止されています。", ephemeral=True)
+        return False
     return True
+
 
 if __name__ == "__main__":
     asyncio.run(bot.start(TOKEN))
