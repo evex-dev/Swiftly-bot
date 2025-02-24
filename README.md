@@ -51,6 +51,9 @@ Swiftly, a multi-function Discord bot
 - `/botadmin`
     Bot管理コマンド
 
+- `/set_prohibited_channel`
+    コマンド実行禁止チャンネルを設定します。管理者のみ実行可能です。
+
 その他にも色々あります！
 
 ## コントリビューターのみなさんへ
