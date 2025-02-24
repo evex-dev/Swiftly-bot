@@ -133,13 +133,16 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_command(ctx):
-    # prohibited_channels.jsonから毎回データを読み込み
-    prohibited_channels = {}
-    if os.path.exists("prohibited_channels.json"):
-        with open("prohibited_channels.json", "r", encoding="utf-8") as f:
-            prohibited_channels = json.load(f)
-
-    if str(ctx.channel.id) in prohibited_channels.get(str(ctx.guild.id), []):
+    import sqlite3
+    DB_PATH = "prohibited_channels.db"
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT channel_id FROM prohibited_channels WHERE guild_id = ?",
+            (str(ctx.guild.id),)
+        )
+        prohibited_channels = [row[0] for row in cursor.fetchall()]
+    if str(ctx.channel.id) in prohibited_channels:
         await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
         return
     
