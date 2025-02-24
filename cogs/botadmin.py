@@ -20,14 +20,12 @@ class ServerListView(View):
     async def interaction_check(self, button_interaction: discord.Interaction) -> bool:
         return button_interaction.user.id == self.interaction.user.id
 
-    @discord.ui.button(label="前へ", custom_id="prev", style=discord.ButtonStyle.primary)
-    async def prev_button(self, interaction: discord.Interaction, button: Button):
+    async def prev_callback(self, interaction: discord.Interaction):
         self.current_page = max(0, self.current_page - 1)
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
-    @discord.ui.button(label="次へ", custom_id="next", style=discord.ButtonStyle.primary)
-    async def next_button(self, interaction: discord.Interaction, button: Button):
+    async def next_callback(self, interaction: discord.Interaction):
         self.current_page = min(len(self.pages) - 1, self.current_page + 1)
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
