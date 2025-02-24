@@ -20,10 +20,10 @@ class Prohibited(commands.Cog):
         self.bot = bot
 
     @discord.app_commands.command(
-        name="set_prohibited_channel",
+        name="set_mute_channel",
         description="特定のチャンネルでのコマンドの利用を禁止する"
     )
-    async def set_prohibited_channel(self, ctx, channel: discord.TextChannel):
+    async def set_mute_channel(self, ctx, channel: discord.TextChannel):
         guild_id = str(ctx.guild.id)
         channel_id = str(channel.id)
 

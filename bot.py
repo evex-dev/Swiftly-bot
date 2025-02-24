@@ -170,7 +170,7 @@ async def prohibit_commands_in_channels(ctx):
         return True
 
     try:
-        if ctx.command and ctx.command.name == "set_prohibited_channel":
+        if ctx.command and ctx.command.name == "set_mute_channel":
             return True
 
         is_prohibited = await check_prohibited_channel(ctx.guild.id, ctx.channel.id)
@@ -194,8 +194,7 @@ async def check_slash_command(interaction: discord.Interaction) -> bool:
     if not interaction.guild:
         return True
 
-    # set_prohibited_channelコマンドは常に許可
-    if interaction.command and interaction.command.name == "set_prohibited_channel":
+    if interaction.command and interaction.command.name == "set_mute_channel":
         return True
 
     is_prohibited = await check_prohibited_channel(interaction.guild_id, interaction.channel_id)
