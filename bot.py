@@ -133,7 +133,7 @@ async def on_command_error(ctx, error):
 
 #コマンド実行時にチャンネルが禁止されているか確認
 @bot.tree.check
-async def prohibit_commands_in_channels_app(interaction: discord.Interaction) -> bool:
+async def app_commands_prohibit_commands(interaction: discord.Interaction) -> bool:
     import sqlite3
     DB_PATH = "prohibited_channels.db"
     with sqlite3.connect(DB_PATH) as conn:
@@ -144,7 +144,6 @@ async def prohibit_commands_in_channels_app(interaction: discord.Interaction) ->
         )
         prohibited_channels = [row[0] for row in cursor.fetchall()]
     if str(interaction.channel.id) in prohibited_channels:
-        # スラッシュコマンドの場合はエフェメラルなレスポンスがおすすめ
         await interaction.response.send_message("このチャンネルではコマンドの実行が禁止されています。", ephemeral=True)
         return False
     return True
