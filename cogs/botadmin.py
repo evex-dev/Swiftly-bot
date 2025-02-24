@@ -91,7 +91,8 @@ class BotAdmin(commands.Cog):
             elif interaction.data['custom_id'] == 'next_page':
                 await next_page(interaction)
 
-        view.on_click = button_callback
+        view.children[0].callback = button_callback
+        view.children[1].callback = button_callback
 
         await interaction.response.send_message(embed=embeds[current_page], view=view, ephemeral=True)
 
