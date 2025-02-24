@@ -52,7 +52,7 @@ class Voice(commands.Cog):
                 next_message = self.tts_queues[guild_id][channel_id].pop(0)
                 asyncio.run_coroutine_threadsafe(self.play_tts(guild_id, channel_id, next_message), self.bot.loop)
 
-        # Play the audio with volume reduced by 10%
+        # Play the audio with volume reduced by 6%
         voice_client.play(discord.FFmpegPCMAudio(temp_filename, options="-filter:a 'volume=0.6'"), after=after_playing)
 
     @discord.app_commands.command(name="join", description="ボイスチャンネルに参加します")
@@ -271,6 +271,11 @@ class Voice(commands.Cog):
                 sanitized_message = self.sanitize_message(message.content)
                 # 75文字を超える場合は、先頭75文字と「省略」に変更
                 sanitized_message = self.limit_message(sanitized_message)
+
+                # 画像が含まれている場合、画像の枚数を追加
+                if message.attachments:
+                    image_count = len(message.attachments)
+                    sanitized_message += f" {image_count}枚の画像"
 
                 async with self.locks[guild_id]:
                     try:
