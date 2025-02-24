@@ -123,6 +123,9 @@ class MemberWelcomeCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+        if member.bot:
+            return
+
         settings = self._get_guild_settings(member.guild.id)
         if not settings[0]:
             return
