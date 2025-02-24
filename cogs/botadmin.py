@@ -82,8 +82,16 @@ class BotAdmin(commands.Cog):
             await update_message()
 
         view = View()
-        view.add_item(Button(label="前へ", style=discord.ButtonStyle.primary, disabled=True, callback=previous_page))
-        view.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, callback=next_page))
+        view.add_item(Button(label="前へ", style=discord.ButtonStyle.primary, disabled=True, custom_id="previous_page"))
+        view.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next_page"))
+
+        async def button_callback(interaction):
+            if interaction.data['custom_id'] == 'previous_page':
+                await previous_page(interaction)
+            elif interaction.data['custom_id'] == 'next_page':
+                await next_page(interaction)
+
+        view.on_click = button_callback
 
         await interaction.response.send_message(embed=embeds[current_page], view=view, ephemeral=True)
 
