@@ -1,4 +1,3 @@
-import os
 import sqlite3
 import discord
 from discord.ext import commands
@@ -21,17 +20,21 @@ class Prohibited(commands.Cog):
         self.bot = bot
 
     @discord.app_commands.command(
-        name="set_prohibited_channel", 
+        name="set_mute_channel",
         description="特定のチャンネルでのコマンドの利用を禁止する"
     )
-    async def set_prohibited_channel(self, ctx, channel: discord.TextChannel):
+    async def set_mute_channel(self, ctx, channel: discord.TextChannel):
+        if not ctx.user.guild_permissions.administrator:
+            await ctx.response.send_message("このコマンドはサーバー管理者のみ実行可能です。", ephemeral=True)
+            return
+
         guild_id = str(ctx.guild.id)
         channel_id = str(channel.id)
-        
+
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT 1 FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?", 
+                "SELECT 1 FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?",
                 (guild_id, channel_id)
             )
             exists = cursor.fetchone()
