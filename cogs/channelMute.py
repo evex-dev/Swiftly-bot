@@ -24,6 +24,10 @@ class Prohibited(commands.Cog):
         description="特定のチャンネルでのコマンドの利用を禁止する"
     )
     async def set_mute_channel(self, ctx, channel: discord.TextChannel):
+        if not ctx.user.guild_permissions.administrator:
+            await ctx.response.send_message("このコマンドはサーバー管理者のみ実行可能です。", ephemeral=True)
+            return
+
         guild_id = str(ctx.guild.id)
         channel_id = str(channel.id)
 
