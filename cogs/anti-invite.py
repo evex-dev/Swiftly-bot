@@ -64,7 +64,7 @@ class AntiInvite(commands.Cog):
         if not urls:
             return False
         # 既知の短縮URLドメイン一覧
-        shorteners = ["x.gd", "bit.ly", "tinyurl.com", "goo.gl", "is.gd", "ow.ly", "buff.ly", "100m.in"]
+        shorteners = ["x.gd", "bit.ly", "tinyurl.com", "goo.gl", "is.gd", "ow.ly", "buff.ly", "00m.in"]
         for url in urls:
             try:
                 parsed = urlparse(url)
