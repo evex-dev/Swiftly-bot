@@ -40,11 +40,11 @@ bad_lang = {
     "TypeScript": "Java"
 }
 
-with open('./data/joke.json', 'r', encoding='utf-8') as f:
+with open("./data/joke.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
-cpus = data.get('cpus', [])
-gpus = data.get('gpus', [])
+cpus = data.get("cpus", [])
+gpus = data.get("gpus", [])
 
 
 class LoveCalculator(commands.Cog):

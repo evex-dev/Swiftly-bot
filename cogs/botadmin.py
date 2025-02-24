@@ -86,9 +86,9 @@ class BotAdmin(commands.Cog):
         view.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next_page"))
 
         async def button_callback(interaction):
-            if interaction.data['custom_id'] == 'previous_page':
+            if interaction.data["custom_id"] == "previous_page":
                 await previous_page(interaction)
-            elif interaction.data['custom_id'] == 'next_page':
+            elif interaction.data["custom_id"] == "next_page":
                 await next_page(interaction)
             await interaction.response.defer()  # インタラクションに対する応答を行う
 

@@ -208,7 +208,7 @@ class ServerBoard(commands.Cog):
                         if (current_time - last_up).total_seconds() < 7200:
                             remaining_time = last_up + datetime.timedelta(hours=2) - current_time
                             await interaction.followup.send(
-                                f"upコマンドは2時間に1回のみ使用できます。\n残り時間: {str(remaining_time).split('.')[0]}",
+                                f"upコマンドは2時間に1回のみ使用できます。\n残り時間: {str(remaining_time).split(".")[0]}",
                                 ephemeral=True
                             )
                             return

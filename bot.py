@@ -12,7 +12,7 @@ from discord.ext import commands
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
-logging.getLogger('discord').setLevel(logging.WARNING)
+logging.getLogger("discord").setLevel(logging.WARNING)
 
 last_status_update = 0
 
@@ -38,25 +38,25 @@ log_handler = TimedRotatingFileHandler(
     f"{log_dir}/logs.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
 log_handler.setLevel(logging.DEBUG)
 log_handler.setFormatter(logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
 # コマンド実行履歴のログ
 command_log_handler = TimedRotatingFileHandler(
     f"{log_dir}/commands.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
 command_log_handler.setLevel(logging.INFO)
 command_log_handler.setFormatter(logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
 # ロガーの設定
-logger = logging.getLogger('bot')
+logger = logging.getLogger("bot")
 logger.setLevel(logging.WARNING)
 logger.addHandler(log_handler)
 logger.addHandler(command_log_handler)
 
 # discord ロガーの設定を変更
-logging.getLogger('discord').setLevel(logging.WARNING)
-logging.getLogger('discord').addHandler(log_handler)
-logging.getLogger('discord').addHandler(command_log_handler)
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("discord").addHandler(log_handler)
+logging.getLogger("discord").addHandler(command_log_handler)
 
 
 @bot.event
@@ -129,12 +129,12 @@ async def update_bot_status():
 
 @bot.event
 async def on_command_completion(ctx):
-    logging.getLogger('commands').info(f"Command executed: {ctx.command}")
+    logging.getLogger("commands").info(f"Command executed: {ctx.command}")
 
 
 @bot.event
 async def on_command_error(ctx, error):
-    logging.getLogger('commands').error(f"Error: {error}")
+    logging.getLogger("commands").error(f"Error: {error}")
     await ctx.send("エラーが発生しました")
 
 # データベース接続をグローバルに保持
@@ -159,7 +159,7 @@ async def check_prohibited_channel(guild_id: int, channel_id: int) -> bool:
         )
         return cursor.fetchone() is not None
     except Exception as e:
-        logging.getLogger('bot').error(f"Prohibited channel check error: {e}")
+        logging.getLogger("bot").error(f"Prohibited channel check error: {e}")
         return False
 
 
@@ -180,13 +180,13 @@ async def prohibit_commands_in_channels(ctx):
         return True
 
     except Exception as e:
-        logging.getLogger('bot').error(f"Prohibited channel check error: {e}")
+        logging.getLogger("bot").error(f"Prohibited channel check error: {e}")
         return True
 
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    logging.getLogger('commands').error(f"App command error: {error}")
+    logging.getLogger("commands").error(f"App command error: {error}")
     await interaction.response.send_message("エラーが発生しました", ephemeral=True)
 
 
