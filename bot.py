@@ -3,6 +3,7 @@
 import asyncio
 import os
 import json
+import sqlite3
 import time
 
 import dotenv
@@ -131,22 +132,40 @@ async def on_command_error(ctx, error):
     logging.getLogger('commands').error(f"Error: {error}")
     await ctx.send("エラーが発生しました")
 
-#コマンド実行時にチャンネルが禁止されているか確認
+# データベース接続をグローバルに保持
+DB_PATH = "prohibited_channels.db"
+db_conn = None
+
+def get_db_connection():
+    global db_conn
+    if db_conn is None:
+        db_conn = sqlite3.connect(DB_PATH)
+    return db_conn
+
 @bot.check
 async def prohibit_commands_in_channels(ctx):
-    import sqlite3
-    DB_PATH = "prohibited_channels.db"
-    with sqlite3.connect(DB_PATH) as conn:
+    # DMの場合はコマンドを許可
+    if ctx.guild is None:
+        return True
+        
+    try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT channel_id FROM prohibited_channels WHERE guild_id = ?",
             (str(ctx.guild.id),)
         )
-        prohibited_channels = [row[0] for row in cursor.fetchall()]
-    if str(ctx.channel.id) in prohibited_channels:
-        await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
-        return False  # コマンド実行をキャンセル
-    return True
+        prohibited_channels = [int(row[0]) for row in cursor.fetchall()]
+        
+        if ctx.channel.id in prohibited_channels:
+            await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
+            return False
+        return True
+        
+    except Exception as e:
+        # エラーログを記録
+        logging.getLogger('bot').error(f"Prohibited channel check error: {e}")
+        return True  # エラーの場合はコマンドを許可
 
 
 
