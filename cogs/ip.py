@@ -39,7 +39,6 @@ class IP(commands.Cog):
                                 for name, value in fields:
                                     if value and value != "None (None)":
                                         embed.add_field(name=name, value=value, inline=True)
-                                embed.set_footer(text="Powered by Evex")
                                 await interaction.followup.send(embed=embed)
                             else:
                                 await interaction.followup.send("IPアドレスの情報取得に失敗しました。", ephemeral=True)
