@@ -218,7 +218,7 @@ class BotAdmin(commands.Cog):
                 )
 
         except Exception as e:
-            logger.error(f"Error in botadmin command: {e}", exc_info=True)
+            logger.error("Error in botadmin command: %s", e, exc_info=True)
             embed = discord.Embed(
                 title="エラー",
                 description=f"予期せぬエラーが発生しました: {e}",

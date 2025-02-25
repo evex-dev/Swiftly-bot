@@ -104,13 +104,13 @@ class Base64(commands.Cog):
                 await interaction.response.send_message(embed=embed)
 
         except base64.binascii.Error as e:
-            logger.warning(f"Invalid Base64 input: {e}")
+            logger.warning("Invalid Base64 input: %s", e)
             await interaction.response.send_message(
                 INVALID_BASE64_MESSAGE,
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Error in base64_command: {e}", exc_info=True)
+            logger.error("Error in base64_command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGE.format(str(e)),
                 ephemeral=True

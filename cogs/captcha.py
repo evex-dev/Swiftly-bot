@@ -99,7 +99,7 @@ class CaptchaView(ui.View):
                     ephemeral=True
                 )
         except Exception as e:
-            logger.error(f"Error in captcha timeout: {e}", exc_info=True)
+            logger.error("Error in captcha timeout: %s", e, exc_info=True)
 
 class Captcha(commands.Cog):
     """CAPTCHA機能を提供"""
@@ -151,10 +151,10 @@ class Captcha(commands.Cog):
                 return image_bytes, data["answer"], None
 
         except aiohttp.ClientError as e:
-            logger.error(f"HTTP error in captcha fetch: {e}", exc_info=True)
+            logger.error("HTTP error in captcha fetch: %s", e, exc_info=True)
             return None, None, ERROR_MESSAGES["http_error"].format(str(e))
         except Exception as e:
-            logger.error(f"Unexpected error in captcha fetch: {e}", exc_info=True)
+            logger.error("Unexpected error in captcha fetch: %s", e, exc_info=True)
             return None, None, ERROR_MESSAGES["unexpected_error"].format(str(e))
 
     @discord.app_commands.command(

@@ -49,7 +49,7 @@ class DescriptionModal(discord.ui.Modal):
                 await conn.commit()
             await interaction.response.send_message("サーバーの説明文を更新しました！", ephemeral=True)
         except Exception as e:
-            logger.error(f"Error updating description: {e}", exc_info=True)
+            logger.error("Error updating description: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True
@@ -88,7 +88,7 @@ class ConfirmView(discord.ui.View):
             await interaction.followup.send("サーバーを登録しました！", ephemeral=True)
             await interaction.message.delete()
         except Exception as e:
-            logger.error(f"Error confirming registration: {e}", exc_info=True)
+            logger.error("Error confirming registration: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True
@@ -106,7 +106,7 @@ class ConfirmView(discord.ui.View):
             await interaction.followup.send("登録をキャンセルしました。", ephemeral=True)
             await interaction.message.delete()
         except Exception as e:
-            logger.error(f"Error canceling registration: {e}", exc_info=True)
+            logger.error("Error canceling registration: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected_error"].format(str(e)),
                 ephemeral=True
@@ -116,7 +116,7 @@ class ConfirmView(discord.ui.View):
         try:
             await self.invite.delete()
         except Exception as e:
-            logger.error(f"Error deleting invite on timeout: {e}", exc_info=True)
+            logger.error("Error deleting invite on timeout: %s", e, exc_info=True)
 
 class UnregisterView(discord.ui.View):
     """登録削除確認用のビュー"""
@@ -147,7 +147,7 @@ class UnregisterView(discord.ui.View):
                 await interaction.followup.send(ERROR_MESSAGES["not_registered"], ephemeral=True)
             await interaction.message.delete()
         except Exception as e:
-            logger.error(f"Error confirming unregistration: {e}", exc_info=True)
+            logger.error("Error confirming unregistration: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True
@@ -171,7 +171,7 @@ class ServerBoard(commands.Cog):
         self.setup_database.start()
         self.check_up_reminder.start()
 
-    def cog_unload(self) -> None:
+    async def cog_unload(self) -> None:
         self.setup_database.cancel()
         self.check_up_reminder.cancel()
 
@@ -203,7 +203,7 @@ class ServerBoard(commands.Cog):
                 """)
                 await conn.commit()
         except Exception as e:
-            logger.error(f"Error setting up database: {e}", exc_info=True)
+            logger.error("Error setting up database: %s", e, exc_info=True)
 
     @tasks.loop(minutes=1)
     async def check_up_reminder(self) -> None:
@@ -225,7 +225,7 @@ class ServerBoard(commands.Cog):
                             )
                 await conn.commit()
         except Exception as e:
-            logger.error(f"Error in up reminder check: {e}", exc_info=True)
+            logger.error("Error in up reminder check: %s", e, exc_info=True)
 
     async def create_server_invite(
         self,
@@ -254,7 +254,7 @@ class ServerBoard(commands.Cog):
                 return None, ERROR_MESSAGES["invite_error"].format(str(e))
 
         except Exception as e:
-            logger.error(f"Error creating invite: {e}", exc_info=True)
+            logger.error("Error creating invite: %s", e, exc_info=True)
             return None, ERROR_MESSAGES["unexpected_error"].format(str(e))
 
     @app_commands.command(
@@ -306,7 +306,7 @@ class ServerBoard(commands.Cog):
             await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
         except Exception as e:
-            logger.error(f"Error in register command: {e}", exc_info=True)
+            logger.error("Error in register command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected_error"].format(str(e)),
                 ephemeral=True
@@ -381,7 +381,7 @@ class ServerBoard(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in up_rank command: {e}", exc_info=True)
+            logger.error("Error in up_rank command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected_error"].format(str(e)),
                 ephemeral=False
@@ -413,7 +413,7 @@ class ServerBoard(commands.Cog):
                     await interaction.response.send_modal(modal)
 
         except Exception as e:
-            logger.error(f"Error in board_setting command: {e}", exc_info=True)
+            logger.error("Error in board_setting command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected_error"].format(str(e)),
                 ephemeral=True
@@ -441,7 +441,7 @@ class ServerBoard(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in unregister command: {e}", exc_info=True)
+            logger.error("Error in unregister command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected_error"].format(str(e)),
                 ephemeral=True
