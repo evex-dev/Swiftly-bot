@@ -12,8 +12,7 @@ class BotAdmin(commands.Cog):
     @discord.app_commands.command(name="botadmin", description="Bot管理コマンド")
     async def botadmin_command(self, interaction: discord.Interaction, option: str):
         if interaction.user.id != 1241397634095120438:
-            embed = discord.Embed(
-                title="エラー", description="このコマンドを使用する権限がありません。", color=discord.Color.red())
+            embed = discord.Embed(title="エラー", description="このコマンドを使用する権限がありません。", color=discord.Color.red())
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -44,18 +43,15 @@ class BotAdmin(commands.Cog):
                 f"Loaded Cogs: {cogs}\n"
                 f"{shard_info}"
             )
-            embed = discord.Embed(
-                title="デバッグ情報", description=debug_info, color=discord.Color.green())
+            embed = discord.Embed(title="デバッグ情報", description=debug_info, color=discord.Color.green())
             await interaction.response.send_message(embed=embed, ephemeral=True)
         elif option.startswith("say:"):
             message = option[4:]
             await interaction.channel.send(message)
-            embed = discord.Embed(
-                title="Sayコマンド", description="sayを出力しました", color=discord.Color.green())
+            embed = discord.Embed(title="Sayコマンド", description="sayを出力しました", color=discord.Color.green())
             await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            embed = discord.Embed(
-                title="エラー", description="無効なオプションです。", color=discord.Color.red())
+            embed = discord.Embed(title="エラー", description="無効なオプションです。", color=discord.Color.red())
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def send_paginated_response(self, interaction, embeds):

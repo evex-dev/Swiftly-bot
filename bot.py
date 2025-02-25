@@ -4,6 +4,7 @@ import asyncio
 import os
 import json
 import sqlite3
+import threading
 import time
 
 import dotenv
@@ -34,18 +35,14 @@ if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
 # すべてのログを1つのファイルに記録
-log_handler = TimedRotatingFileHandler(
-    f"{log_dir}/logs.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
+log_handler = TimedRotatingFileHandler(f"{log_dir}/logs.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
 log_handler.setLevel(logging.DEBUG)
-log_handler.setFormatter(logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+log_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
 # コマンド実行履歴のログ
-command_log_handler = TimedRotatingFileHandler(
-    f"{log_dir}/commands.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
+command_log_handler = TimedRotatingFileHandler(f"{log_dir}/commands.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
 command_log_handler.setLevel(logging.INFO)
-command_log_handler.setFormatter(logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+command_log_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
 # ロガーの設定
 logger = logging.getLogger("bot")
@@ -137,27 +134,36 @@ async def on_command_error(ctx, error):
     logging.getLogger("commands").error("Error: %s", error)
     await ctx.send("エラーが発生しました")
 
-# データベース接続をグローバルに保持
+# データベース関連の管理
 DB_PATH = "prohibited_channels.db"
-db_conn = None
-
+db_pool = {}
 
 def get_db_connection():
-    global db_conn
-    if db_conn is None:
-        db_conn = sqlite3.connect(DB_PATH)
-    return db_conn
+    thread_id = threading.get_ident()
+    if thread_id not in db_pool:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        db_pool[thread_id] = conn
+    return db_pool[thread_id]
 
+def close_db_connections():
+    for conn in db_pool.values():
+        try:
+            conn.close()
+        except Exception as e:
+            logging.getLogger("bot").error("Error closing database connection: %s", e)
+    db_pool.clear()
 
 async def check_prohibited_channel(guild_id: int, channel_id: int) -> bool:
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT 1 FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?",
-            (str(guild_id), str(channel_id))
-        )
-        return cursor.fetchone() is not None
+        with conn:  # トランザクション
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?",
+                (str(guild_id), str(channel_id))
+            )
+            return cursor.fetchone() is not None
     except Exception as e:
         logging.getLogger("bot").error("Prohibited channel check error: %s", e)
         return False
@@ -205,5 +211,12 @@ async def check_slash_command(interaction: discord.Interaction) -> bool:
 
 bot.tree.interaction_check = check_slash_command
 
+def cleanup():
+    close_db_connections()
+
 if __name__ == "__main__":
-    asyncio.run(bot.start(TOKEN))
+    try:
+        asyncio.run(bot.start(TOKEN))
+    finally:
+        cleanup()
+
