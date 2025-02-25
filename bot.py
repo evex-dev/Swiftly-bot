@@ -211,13 +211,20 @@ class SwiftlyBot(commands.Bot):
 
     async def update_presence(self) -> None:
         """ステータスを更新"""
-        if self.user_count.should_update():
+        while True:
             count = self.user_count.get_count()
             await self.change_presence(
                 activity=discord.Game(
                     name=f"{count}人のユーザー数"
                 )
             )
+            await asyncio.sleep(3)
+            await self.change_presence(
+                activity=discord.Game(
+                    name=f"/help || {round(self.latency * 1000)}ms"
+                )
+            )
+            await asyncio.sleep(3)
 
     async def count_unique_users(self) -> None:
         """ユニークユーザー数を集計"""
