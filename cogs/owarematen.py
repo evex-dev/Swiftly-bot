@@ -83,7 +83,7 @@ class DiscowaremaTen(commands.Cog):
                   (session_id, ctx.channel.id, ctx.guild_id, theme))
         conn.commit()
         conn.close()
-        
+
         # セッション開始時のメッセージにタイムアウトの情報を追加
         embed = discord.Embed(title="終われまテン", description="V1.0 by K-Nana", color=discord.Color.blurple())
         embed.add_field(name="お題", value=theme, inline=False)
@@ -91,7 +91,7 @@ class DiscowaremaTen(commands.Cog):
         embed.add_field(name="注意", value="このセッションは1時間後に自動で終了し回答が公開されます。", inline=False)
         embed.set_footer(text=f"セッションID: {session_id}")
         await ctx.response.send_message(embed=embed)
-        
+
         # 1時間後に自動で回答を公開するタスクをスケジュール
         self.bot.loop.create_task(self.auto_open(session_id, ctx.channel.id, ctx.guild_id))
 
@@ -134,30 +134,30 @@ class DiscowaremaTen(commands.Cog):
             conn.close()
             await ctx.response.send_message("ゲームが開始されていません。/owarematen-start-customで開始してください。", ephemeral=True)
             return
-        
+
         session_id = session[0]
-        
+
         # 既に回答済みかチェック
         c.execute("SELECT * FROM answers WHERE session_id = ? AND user_id = ?", (session_id, ctx.user.id))
         if c.fetchone():
             conn.close()
             await ctx.response.send_message("既に回答済みです。一人一回のみ回答できます。", ephemeral=True)
             return
-            
+
         try:
-            c.execute("INSERT INTO answers (session_id, user_id, user_name, answer) VALUES (?, ?, ?, ?)", 
+            c.execute("INSERT INTO answers (session_id, user_id, user_name, answer) VALUES (?, ?, ?, ?)",
                      (session_id, ctx.user.id, ctx.user.name, answer))
             conn.commit()
             c.execute("SELECT COUNT(*) FROM answers WHERE session_id = ?", (session_id,))
             count = c.fetchone()[0]
             conn.close()
-            
+
             await ctx.response.send_message(f"{answer}で回答しました", ephemeral=True)
             notify_embed = discord.Embed(title="回答受付", description=f"{ctx.user.name}が回答しました。", color=discord.Color.orange())
             notify_embed.add_field(name="現在の回答数", value=str(count), inline=False)
             notify_embed.set_footer(text=f"セッションID: {session_id}")
             await ctx.channel.send(embed=notify_embed)
-            
+
         except sqlite3.IntegrityError:
             conn.close()
             await ctx.response.send_message("既に回答済みです。一人一回のみ回答できます。", ephemeral=True)

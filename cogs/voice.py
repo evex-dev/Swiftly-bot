@@ -213,7 +213,7 @@ class Voice(commands.Cog):
         if voice_client:
             if len(voice_client.channel.members) == 1:  # ボットだけが残っている場合
                 await voice_client.disconnect()
-        
+
         # 新しく参加したメンバーがいる場合
         if before.channel is None and after.channel is not None:
             guild_id = member.guild.id

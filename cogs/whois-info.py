@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-import whois
+from whois import whois
 
 class Whois(commands.Cog):
     def __init__(self, bot):
@@ -10,7 +10,7 @@ class Whois(commands.Cog):
     async def whois(self, interaction: discord.Interaction, domain: str) -> None:
         await interaction.response.defer(thinking=True)
         try:
-            domain_info = whois.whois(domain)
+            domain_info = whois(domain)
             embed = discord.Embed(
                 title=f"Whois情報: {domain}",
                 color=discord.Color.blue()

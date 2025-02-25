@@ -11,14 +11,14 @@ class CaptchaModal(ui.Modal, title="CAPTCHA 認証"):
     def __init__(self, answer: str):
         super().__init__()
         self.answer = answer
-        
+
     answer_input = ui.TextInput(
         label="画像に表示されている文字を入力してください",
         placeholder="ここに文字を入力",
         required=True,
         max_length=10
     )
-    
+
     async def on_submit(self, interaction: discord.Interaction):
         if self.answer_input.value.lower() == self.answer.lower():
             await interaction.response.send_message("✅ 正解です！CAPTCHAの認証に成功しました。", ephemeral=True)
@@ -44,7 +44,7 @@ class CaptchaView(ui.View):
     def __init__(self, answer: str):
         super().__init__(timeout=30)
         self.add_item(CaptchaButton(answer))
-    
+
     async def on_timeout(self):
         for item in self.children:
             item.disabled = True
@@ -77,21 +77,21 @@ class Captcha(commands.Cog):
                     image_bytes = base64.b64decode(image_data)
                     image_file = discord.File(BytesIO(image_bytes), filename="captcha.png")
                     answer = data["answer"]
-                    
+
                     embed = discord.Embed(
-                        title="CAPTCHA チャレンジ", 
-                        description=f"難易度: {difficulty}\n\n下のボタンを押して回答してください。\n制限時間: 30秒\n\nAPIエンドポイント: https://captcha.evex.land/api/captcha", 
+                        title="CAPTCHA チャレンジ",
+                        description=f"難易度: {difficulty}\n\n下のボタンを押して回答してください。\n制限時間: 30秒\n\nAPIエンドポイント: https://captcha.evex.land/api/captcha",
                         color=discord.Color.blue()
                     )
                     embed.set_image(url="attachment://captcha.png")
-                    
+
                     view = CaptchaView(answer)
                     message = await ctx.followup.send(embed=embed, file=image_file, view=view)
                     view.message = message
-                
+
                 else:
                     await ctx.followup.send("CAPTCHAの取得に失敗しました。", ephemeral=True)
-        
+
         except aiohttp.ClientError as e:
             await ctx.followup.send(f"HTTP エラーが発生しました: {e}", ephemeral=True)
         except Exception as e:
