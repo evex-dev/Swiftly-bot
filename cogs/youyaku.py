@@ -1,6 +1,6 @@
 import re
 from collections import Counter
-from typing import Final, Optional, List, Dict, Tuple
+from typing import Final, Optional, List, Tuple
 import logging
 from datetime import datetime, timedelta
 
