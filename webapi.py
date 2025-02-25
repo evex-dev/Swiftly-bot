@@ -65,14 +65,6 @@ class DatabaseManager:
         self.db_path = db_path
 
     def get_connection(self) -> sqlite3.Connection:
-        """
-        データベース接続を取得
-
-        Returns
-        -------
-        sqlite3.Connection
-            データベース接続
-        """
         if not self.db_path.exists():
             raise HTTPException(
                 status_code=500,
@@ -96,14 +88,6 @@ class DatabaseManager:
             )
 
     async def get_all_servers(self) -> List[Dict[str, Any]]:
-        """
-        全サーバー情報を取得
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            サーバー情報のリスト
-        """
         try:
             with self.get_connection() as conn:
                 self.check_table_exists(conn)
@@ -126,19 +110,6 @@ class DatabaseManager:
             ) from e
 
     async def get_server(self, server_id: int) -> Dict[str, Any]:
-        """
-        指定したサーバーの情報を取得
-
-        Parameters
-        ----------
-        server_id : int
-            サーバーID
-
-        Returns
-        -------
-        Dict[str, Any]
-            サーバー情報
-        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -166,19 +137,6 @@ class TimeCalculator:
 
     @staticmethod
     def calculate_time_ago(last_up: datetime) -> str:
-        """
-        経過時間を計算
-
-        Parameters
-        ----------
-        last_up : datetime
-            基準時刻
-
-        Returns
-        -------
-        str
-            経過時間の文字列表現
-        """
         delta = datetime.now() - last_up
 
         if delta.days > 0:
@@ -206,14 +164,6 @@ class UserCountManager:
         self.file_path = file_path
 
     async def get_total_users(self) -> int:
-        """
-        総ユーザー数を取得
-
-        Returns
-        -------
-        int
-            総ユーザー数
-        """
         if not self.file_path.exists():
             raise HTTPException(
                 status_code=500,
@@ -272,19 +222,6 @@ class ServerBoardAPI:
         self,
         servers: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """
-        サーバーデータを処理
-
-        Parameters
-        ----------
-        servers : List[Dict[str, Any]]
-            処理前のサーバーデータ
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            処理後のサーバーデータ
-        """
         for server in servers:
             if last_up_str := server.get("last_up_time"):
                 last_up = datetime.fromisoformat(last_up_str)
