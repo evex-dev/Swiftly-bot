@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-from whois import whois, parser
+import whois
 from typing import Final, Optional, Dict, Any
 import logging
 import re
@@ -36,7 +36,7 @@ class WhoisInfo:
 
     def __init__(self, domain: str) -> None:
         self.domain = domain
-        self.info: Optional[parser.WhoisEntry] = None
+        self.info: Optional[whois.WhoisEntry] = None
 
     def _validate_domain(self) -> bool:
         return bool(re.match(DOMAIN_PATTERN, self.domain))
@@ -64,7 +64,7 @@ class WhoisInfo:
             if not self._validate_domain():
                 raise ValueError(ERROR_MESSAGES["invalid_domain"])
 
-            self.info = whois(self.domain)
+            self.info = whois.whois(self.domain)
             return True
 
         except Exception as e:
