@@ -1,20 +1,128 @@
+import asyncio
 import json
 import time
-from typing import Optional
+from typing import Final, Optional, Tuple, Dict, Any
+import logging
+from datetime import datetime, timedelta
 
 import aiohttp
 import discord
 from discord.ext import commands
 
 # 定数定義
-API_URL = "https://js-sandbox.evex.land/"
-SUPPORT_FOOTER = "API Powered by EvexDevelopers"
+API_BASE_URL: Final[str] = "https://js-sandbox.evex.land/"
+SUPPORT_FOOTER: Final[str] = "API Powered by EvexDevelopers"
+RATE_LIMIT_SECONDS: Final[int] = 30
+MAX_CODE_LENGTH: Final[int] = 2000
+EXECUTION_TIMEOUT: Final[int] = 30
 
+ERROR_MESSAGES: Final[dict] = {
+    "no_code": "実行するJavaScriptコードを入力してください。",
+    "code_too_long": f"コードは{MAX_CODE_LENGTH}文字以内で指定してください。",
+    "rate_limit": "レート制限中です。{}秒後にお試しください。",
+    "execution_failed": "コードの実行に失敗しました。",
+    "api_error": "API通信エラー: {}",
+    "parse_error": "APIからの応答の解析に失敗しました。",
+    "timeout": "実行がタイムアウトしました。",
+    "unexpected": "予期せぬエラー: {}"
+}
+
+EMBED_COLORS: Final[dict] = {
+    "success": discord.Color.green(),
+    "error": discord.Color.red(),
+    "warning": discord.Color.orange()
+}
+
+logger = logging.getLogger(__name__)
+
+class CodeExecutor:
+    """JavaScriptコードの実行を管理するクラス"""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        self._validate_code()
+
+    def _validate_code(self) -> None:
+        """コードのバリデーション"""
+        if len(self.code) > MAX_CODE_LENGTH:
+            raise ValueError(ERROR_MESSAGES["code_too_long"])
+
+        # 危険な操作のチェック
+        dangerous_keywords = [
+            "require(", "process.", "global.",
+            "__dirname", "__filename", "module."
+        ]
+        for keyword in dangerous_keywords:
+            if keyword in self.code:
+                self.code = f"// 安全性の理由で{keyword}は使用できません\n{self.code}"
+
+    async def execute(
+        self,
+        session: aiohttp.ClientSession
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str], float]:
+        headers = {"Content-Type": "application/json"}
+        payload = {"code": self.code}
+
+        try:
+            start_time = time.monotonic()
+            async with session.post(
+                API_BASE_URL,
+                json=payload,
+                headers=headers,
+                timeout=EXECUTION_TIMEOUT
+            ) as response:
+                end_time = time.monotonic()
+                elapsed_time = end_time - start_time
+
+                if response.status == 200:
+                    result = await response.text()
+                    return json.loads(result), None, elapsed_time
+
+                logger.warning(
+                    f"API error: {response.status} - {await response.text()}"
+                )
+                return None, ERROR_MESSAGES["execution_failed"], elapsed_time
+
+        except aiohttp.ClientError as e:
+            logger.error(f"API communication error: {e}", exc_info=True)
+            return None, ERROR_MESSAGES["api_error"].format(str(e)), 0.0
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {e}", exc_info=True)
+            return None, ERROR_MESSAGES["parse_error"], 0.0
+        except asyncio.TimeoutError:
+            logger.warning("Execution timeout")
+            return None, ERROR_MESSAGES["timeout"], EXECUTION_TIMEOUT
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            return None, ERROR_MESSAGES["unexpected"].format(str(e)), 0.0
 
 class Sandbox(commands.Cog):
-    def __init__(self, bot):
+    """JavaScriptサンドボックス機能を提供"""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.session = aiohttp.ClientSession()
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._last_uses = {}
+
+    async def cog_load(self) -> None:
+        self._session = aiohttp.ClientSession()
+
+    async def cog_unload(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+
+    def _check_rate_limit(
+        self,
+        user_id: int
+    ) -> tuple[bool, Optional[int]]:
+        now = datetime.now()
+        if user_id in self._last_uses:
+            time_diff = now - self._last_uses[user_id]
+            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
+                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
+                return True, remaining
+        return False, None
 
     async def create_result_embed(
         self,
@@ -26,24 +134,42 @@ class Sandbox(commands.Cog):
             embed = discord.Embed(
                 title="エラー",
                 description=error,
-                color=discord.Color.red()
+                color=EMBED_COLORS["error"]
             )
         else:
             embed = discord.Embed(
                 title="実行結果",
-                color=discord.Color.green()
+                color=EMBED_COLORS["success"]
             )
             if result:
+                # 終了コードに応じて色を変更
+                exit_code = result.get("exitcode", 0)
+                if exit_code != 0:
+                    embed.color = EMBED_COLORS["warning"]
+
                 embed.add_field(
                     name="終了コード",
-                    value=result.get("exitcode", "N/A"),
+                    value=str(exit_code),
                     inline=False
                 )
-                embed.add_field(
-                    name="出力",
-                    value=f"```{result.get('message', '')}```",
-                    inline=False
-                )
+
+                # 出力の整形
+                output = result.get("message", "").strip()
+                if output:
+                    # 長すぎる出力を切り詰める
+                    if len(output) > 1000:
+                        output = output[:997] + "..."
+                    embed.add_field(
+                        name="出力",
+                        value=f"```javascript\n{output}\n```",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="出力",
+                        value="(出力なし)",
+                        inline=False
+                    )
 
         embed.add_field(
             name="実行時間",
@@ -53,56 +179,122 @@ class Sandbox(commands.Cog):
         embed.set_footer(text=SUPPORT_FOOTER)
         return embed
 
-    async def execute_code(self, code: str) -> tuple[Optional[dict], Optional[str], float]:
-        headers = {"Content-Type": "application/json"}
-        payload = {"code": code}
-
-        try:
-            start_time = time.monotonic()
-            async with self.session.post(API_URL, json=payload, headers=headers) as response:
-                end_time = time.monotonic()
-                elapsed_time = end_time - start_time
-
-                if response.status == 200:
-                    result = await response.text()
-                    return json.loads(result), None, elapsed_time
-                return None, "コードの実行に失敗しました。", elapsed_time
-        except aiohttp.ClientError as e:
-            return None, f"API通信エラー: {e}", 0.0
-        except json.JSONDecodeError:
-            return None, "APIからの応答の解析に失敗しました。", 0.0
-        except Exception as e:
-            return None, f"予期せぬエラー: {e}", 0.0
-
     @discord.app_commands.command(
         name="sandbox",
         description="JavaScript コードをサンドボックスで実行し、結果を返します。"
     )
-    async def sandbox(self, ctx: discord.Interaction, code: str) -> None:
-        await ctx.response.defer(thinking=True)
-        result, error, elapsed_time = await self.execute_code(code)
-        embed = await self.create_result_embed(result, error, elapsed_time)
-        await ctx.followup.send(embed=embed)
+    @discord.app_commands.describe(
+        code="実行するJavaScriptコード"
+    )
+    async def sandbox(
+        self,
+        interaction: discord.Interaction,
+        code: str
+    ) -> None:
+        try:
+            # レート制限のチェック
+            is_limited, remaining = self._check_rate_limit(
+                interaction.user.id
+            )
+            if is_limited:
+                await interaction.response.send_message(
+                    ERROR_MESSAGES["rate_limit"].format(remaining),
+                    ephemeral=True
+                )
+                return
+
+            await interaction.response.defer(thinking=True)
+
+            # コードの実行
+            executor = CodeExecutor(code)
+            if not self._session:
+                self._session = aiohttp.ClientSession()
+
+            result, error, elapsed_time = await executor.execute(
+                self._session
+            )
+
+            # レート制限の更新
+            self._last_uses[interaction.user.id] = datetime.now()
+
+            # 結果の送信
+            embed = await self.create_result_embed(
+                result,
+                error,
+                elapsed_time
+            )
+            await interaction.followup.send(embed=embed)
+
+        except ValueError as e:
+            await interaction.response.send_message(
+                str(e),
+                ephemeral=True
+            )
+        except Exception as e:
+            logger.error(f"Error in sandbox command: {e}", exc_info=True)
+            await interaction.followup.send(
+                ERROR_MESSAGES["unexpected"].format(str(e)),
+                ephemeral=True
+            )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
             return
 
-        if message.content.startswith("?sandbox"):
-            code = message.content[len("?sandbox "):].strip()
-            if not code:
-                await message.channel.send("実行するコードを入力してください。")
+        if not message.content.startswith("?sandbox"):
+            return
+
+        try:
+            # レート制限のチェック
+            is_limited, remaining = self._check_rate_limit(
+                message.author.id
+            )
+            if is_limited:
+                await message.channel.send(
+                    ERROR_MESSAGES["rate_limit"].format(remaining)
+                )
                 return
 
-            progress_message = await message.channel.send("実行中...")
-            result, error, elapsed_time = await self.execute_code(code)
-            embed = await self.create_result_embed(result, error, elapsed_time)
+            code = message.content[len("?sandbox "):].strip()
+            if not code:
+                await message.channel.send(
+                    ERROR_MESSAGES["no_code"]
+                )
+                return
+
+            # 進捗表示
+            progress_message = await message.channel.send(
+                "実行中..."
+            )
+
+            # コードの実行
+            executor = CodeExecutor(code)
+            if not self._session:
+                self._session = aiohttp.ClientSession()
+
+            result, error, elapsed_time = await executor.execute(
+                self._session
+            )
+
+            # レート制限の更新
+            self._last_uses[message.author.id] = datetime.now()
+
+            # 結果の送信
+            embed = await self.create_result_embed(
+                result,
+                error,
+                elapsed_time
+            )
             await progress_message.edit(content=None, embed=embed)
 
-    async def cog_unload(self) -> None:
-        if not self.session.closed:
-            await self.session.close()
+        except ValueError as e:
+            await message.channel.send(str(e))
+        except Exception as e:
+            logger.error(f"Error in message handler: {e}", exc_info=True)
+            await message.channel.send(
+                ERROR_MESSAGES["unexpected"].format(str(e))
+            )
 
 
 async def setup(bot: commands.Bot) -> None:
