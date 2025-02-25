@@ -9,7 +9,7 @@ import logging
 
 # 定数定義
 JST: Final[timezone] = timezone(timedelta(hours=9))
-DB_PATH: Final[Path] = Path("anticheat.db")
+DB_PATH: Final[Path] = Path("data/anticheat.db")
 BUTTON_TIMEOUT: Final[int] = 60
 WARNING_DELETE_DELAY: Final[int] = 5
 
