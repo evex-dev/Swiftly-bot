@@ -30,7 +30,8 @@ class AnonyVote(commands.Cog):
                     session_id TEXT PRIMARY KEY,
                     channel_id INTEGER,
                     topic TEXT,
-                    options TEXT
+                    options TEXT,
+                    message_id INTEGER
                 )
             ''')
             self.conn.execute('''
@@ -80,12 +81,16 @@ class AnonyVote(commands.Cog):
             button.callback = self.create_button_callback(session_id, option)
             view.add_item(button)
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+        message = await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+        self.conn.execute(
+            'UPDATE votes SET message_id = ? WHERE session_id = ?',
+            (message.id, session_id)
+        )
 
     def create_button_callback(self, session_id: str, answer: str):
         async def button_callback(interaction: discord.Interaction):
             vote = self.conn.execute(
-                'SELECT channel_id FROM votes WHERE session_id = ?',
+                'SELECT channel_id, message_id FROM votes WHERE session_id = ?',
                 (session_id,)
             ).fetchone()
 
@@ -120,6 +125,17 @@ class AnonyVote(commands.Cog):
                     'INSERT INTO answers (session_id, user_id, answer) VALUES (?, ?, ?)',
                     (session_id, interaction.user.id, answer)
                 )
+
+            # 投票人数を更新
+            total_votes = self.conn.execute(
+                'SELECT COUNT(*) FROM answers WHERE session_id = ?',
+                (session_id,)
+            ).fetchone()[0]
+
+            message = await interaction.channel.fetch_message(vote[1])
+            embed = message.embeds[0]
+            embed.set_footer(text=f"投票人数: {total_votes}人")
+            await message.edit(embed=embed)
 
             embed = discord.Embed(
                 title="投票に回答しました",
