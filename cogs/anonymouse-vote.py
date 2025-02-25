@@ -7,6 +7,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 import io
 import matplotlib
+import japanize_matplotlib
 matplotlib.rcParams['font.family'] = 'DejaVu Sans'
 matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
@@ -185,6 +186,11 @@ class AnonyVote(commands.Cog):
         )
         embed.set_image(url="attachment://vote_result.png")
         await interaction.response.send_message(embed=embed, file=file, ephemeral=False)
+
+        # セッションをDBから削除
+        with self.conn:
+            self.conn.execute('DELETE FROM votes WHERE session_id = ?', (session_id,))
+            self.conn.execute('DELETE FROM answers WHERE session_id = ?', (session_id,))
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(AnonyVote(bot))
