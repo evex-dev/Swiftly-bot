@@ -3,9 +3,6 @@ from discord.ext import commands
 from typing import Final, Optional
 import logging
 from datetime import datetime, timedelta
-import platform
-import psutil
-import os
 
 # 定数定義
 RATE_LIMIT_SECONDS: Final[int] = 5
@@ -60,15 +57,6 @@ class Ping(commands.Cog):
                 return status, LATENCY_COLORS[status]
         return "poor", LATENCY_COLORS["poor"]
 
-    def _get_system_info(self) -> dict:
-        return {
-            "OS": platform.system(),
-            "Python": platform.python_version(),
-            "Discord.py": discord.__version__,
-            "CPU使用率": f"{psutil.cpu_percent()}%",
-            "メモリ使用率": f"{psutil.Process(os.getpid()).memory_percent():.1f}%"
-        }
-
     def _create_ping_embed(
         self,
         latency: float
@@ -87,26 +75,8 @@ class Ping(commands.Cog):
             inline=False
         )
 
-        # システム情報
-        system_info = self._get_system_info()
-        for name, value in system_info.items():
-            embed.add_field(
-                name=name,
-                value=value,
-                inline=True
-            )
-
-        # シャード情報（シャーディングが有効な場合）
-        if self.bot.shard_id is not None:
-            embed.add_field(
-                name="シャード情報",
-                value=f"ID: {self.bot.shard_id}/{self.bot.shard_count}",
-                inline=False
-            )
-
         embed.set_footer(
-            text="💚 excellent < 100ms | 💙 good < 200ms | "
-                 "💛 fair < 500ms | ❤️ poor > 500ms"
+            text="excellent < 100ms | good < 200ms | fair < 500ms"
         )
 
         return embed
