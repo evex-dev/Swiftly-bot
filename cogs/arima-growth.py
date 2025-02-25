@@ -53,7 +53,7 @@ class ARIMAGrowth(commands.Cog):
                     best_aic = temp_fit.aic
                     best_order = order
             except Exception as e:
-                logger.warning(f"Failed to fit ARIMA model with order {order}: {e}")
+                logger.warning("Failed to fit ARIMA model with order %s: %s", order, e)
                 continue
 
         return best_order, best_aic
@@ -212,7 +212,7 @@ class ARIMAGrowth(commands.Cog):
                 await interaction.followup.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in arima_growth command: {e}", exc_info=True)
+            logger.error("Error in arima_growth command: %s", e, exc_info=True)
             await interaction.followup.send(ERROR_MESSAGES["general_error"].format(str(e)))
 
 

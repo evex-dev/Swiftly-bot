@@ -112,7 +112,7 @@ class DatabaseManager:
                 return [dict(row) for row in cursor.fetchall()]
 
         except sqlite3.Error as e:
-            logger.error(f"Database error: {e}", exc_info=True)
+            logger.error("Database error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
@@ -148,7 +148,7 @@ class DatabaseManager:
                 )
 
         except sqlite3.Error as e:
-            logger.error(f"Database error: {e}", exc_info=True)
+            logger.error("Database error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
@@ -220,7 +220,7 @@ class UserCountManager:
             return data.get("total_users", 0)
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}", exc_info=True)
+            logger.error("JSON decode error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["json_error"].format(str(e))
@@ -296,7 +296,7 @@ class ServerBoardAPI:
             return [Server(**server) for server in processed_servers]
 
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["unexpected"].format(str(e))
@@ -316,7 +316,7 @@ class ServerBoardAPI:
             return Server(**server)
 
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["unexpected"].format(str(e))
@@ -329,7 +329,7 @@ class ServerBoardAPI:
             return {"total_users": total}
 
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["unexpected"].format(str(e))
@@ -341,6 +341,6 @@ app = api.app
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info(f"Database path: {PATHS['db']}")
-    logger.info(f"Database exists: {PATHS['db'].exists()}")
+    logger.info("Database path: %s", PATHS['db'])
+    logger.info("Database exists: %s", PATHS['db'].exists())
     uvicorn.run(app, host=HOST, port=PORT)

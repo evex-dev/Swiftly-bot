@@ -97,7 +97,7 @@ class DatabaseManager:
                 return bool(await cursor.fetchone())
 
         except Exception as e:
-            logger.error(f"Database error: {e}", exc_info=True)
+            logger.error("Database error: %s", e, exc_info=True)
             return False
 
 class UserCountManager:
@@ -117,7 +117,7 @@ class UserCountManager:
                 return data.get("total_users", 0)
             return 0
         except Exception as e:
-            logger.error(f"Error reading user count: {e}", exc_info=True)
+            logger.error("Error reading user count: %s", e, exc_info=True)
             return 0
 
     def _write_count(self, count: int) -> None:
@@ -132,7 +132,7 @@ class UserCountManager:
                 encoding="utf-8"
             )
         except Exception as e:
-            logger.error(f"Error writing user count: {e}", exc_info=True)
+            logger.error("Error writing user count: %s", e, exc_info=True)
 
     def get_count(self) -> int:
         """現在のユーザー数を取得"""
@@ -221,12 +221,9 @@ class SwiftlyBot(commands.Bot):
 
             try:
                 await self.load_extension(f"cogs.{file.stem}")
-                logger.info(f"Loaded: cogs.{file.stem}")
+                logger.info("Loaded: cogs.%s", file.stem)
             except Exception as e:
-                logger.error(
-                    f"Failed to load: cogs.{file.stem} - {e}",
-                    exc_info=True
-                )
+                logger.error("Failed to load: cogs.%s - %s", file.stem, e, exc_info=True)
 
     async def update_presence(self) -> None:
         """ステータスを更新"""
@@ -245,13 +242,13 @@ class SwiftlyBot(commands.Bot):
             unique_users.update(member.id for member in guild.members)
 
         count = len(unique_users)
-        logger.info(f"Unique user count: {count}")
+        logger.info("Unique user count: %s", count)
         self.user_count.update_count(count)
         await self.update_presence()
 
     async def on_ready(self) -> None:
         """準備完了時の処理"""
-        logger.info(f"Logged in as {self.user}")
+        logger.info("Logged in as %s", self.user)
         await self.count_unique_users()
 
     async def on_member_join(self, _) -> None:
