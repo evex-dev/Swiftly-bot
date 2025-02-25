@@ -50,14 +50,14 @@ class LoggingCog(commands.Cog):
         self.logger.error(f"Command error: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {guild_name} - {error}")
         # デバッグ用に標準出力にも出力
         print(f"Command error: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {guild_name} - {error}")
-    
+
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command: discord.app_commands.Command) -> None:
         guild_name = interaction.guild.name if interaction.guild else "DM"
         self.logger.info(f"Command executed: {command.name} by {interaction.user.name} (ID: {interaction.user.id}) in guild: {guild_name}")
         # デバッグ用に標準出力にも出力
         print(f"Command executed: {command.name} by {interaction.user.name} (ID: {interaction.user.id}) in guild: {guild_name}")
-    
+
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
         guild_name = interaction.guild.name if interaction.guild else "DM"
