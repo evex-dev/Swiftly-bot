@@ -132,10 +132,12 @@ class AnonyVote(commands.Cog):
                 (session_id,)
             ).fetchone()[0]
 
-            message = await interaction.channel.fetch_message(vote[1])
-            embed = message.embeds[0]
-            embed.set_footer(text=f"投票人数: {total_votes}人")
-            await message.edit(embed=embed)
+            message_id = vote[1]
+            if message_id is not None:
+                message = await interaction.channel.fetch_message(message_id)
+                embed = message.embeds[0]
+                embed.set_footer(text=f"投票人数: {total_votes}人")
+                await message.edit(embed=embed)
 
             embed = discord.Embed(
                 title="投票に回答しました",
