@@ -61,7 +61,7 @@ class TimeAlert(commands.Cog):
     async def before_check_alerts(self):
         await self.bot.wait_until_ready()
 
-    def cog_unload(self):
+    async def cog_unload(self):
         self.check_alerts.cancel()
         self.conn.close()
 
