@@ -167,25 +167,17 @@ class AnonyVote(commands.Cog):
         for answer, count in answers:
             answer_counts[answer] = count
 
-        # グラフを生成
-        fig, ax = plt.subplots()
-        ax.bar(answer_counts.keys(), answer_counts.values())
-        ax.set_title(f"投票結果: {topic}")
-        ax.set_xlabel("選択肢")
-        ax.set_ylabel("票数")
+        # 結果を文字で表示
+        result_str = f"投票結果: {topic}\n"
+        for option, count in answer_counts.items():
+            result_str += f"{option}: {'█' * count} ({count}票)\n"
 
-        # 画像をバイトストリームに保存
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-
-        file = discord.File(buf, filename="vote_result.png")
         embed = discord.Embed(
             title="投票結果",
+            description=result_str,
             color=discord.Color.purple()
         )
-        embed.set_image(url="attachment://vote_result.png")
-        await interaction.response.send_message(embed=embed, file=file, ephemeral=False)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
         # セッションをDBから削除
         with self.conn:
