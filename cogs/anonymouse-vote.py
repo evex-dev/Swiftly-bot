@@ -44,9 +44,10 @@ class AnonyVote(commands.Cog):
         self,
         interaction: discord.Interaction,
         topic: str,
-        *options: str
+        options: str
     ) -> None:
-        if len(options) < 2 or len(options) > MAX_OPTIONS:
+        options_list = options.split(',')
+        if len(options_list) < 2 or len(options_list) > MAX_OPTIONS:
             await interaction.response.send_message(
                 f"選択肢は2個以上{MAX_OPTIONS}個以下で指定してください。",
                 ephemeral=True
@@ -54,7 +55,7 @@ class AnonyVote(commands.Cog):
             return
 
         session_id = str(datetime.now().timestamp())
-        options_str = ",".join(options)
+        options_str = ",".join(options_list)
         with self.conn:
             self.conn.execute(
                 'INSERT INTO votes (session_id, channel_id, topic, options) VALUES (?, ?, ?, ?)',
