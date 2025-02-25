@@ -8,15 +8,16 @@ from datetime import datetime
 import logging
 from pathlib import Path
 import json
+import uvicorn
 
 # 定数定義
 APP_TITLE: Final[str] = "Server Board API"
-HOST: Final[str] = "0.0.0.0"
+HOST: Final[str] = "localhost"
 PORT: Final[int] = 8000
 
 PATHS: Final[dict] = {
-    "db": Path(__file__).parent / "server_board.db",
-    "user_count": Path(__file__).parent / "user_count.json",
+    "db": Path(__file__).parent / "data/server_board.db",
+    "user_count": Path(__file__).parent / "data/user_count.json",
     "public": Path(__file__).parent / "public"
 }
 
@@ -38,6 +39,12 @@ ERROR_MESSAGES: Final[dict] = {
 }
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(levelname)s:     %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 class Server(BaseModel):
     """サーバー情報モデル"""
@@ -236,6 +243,9 @@ class ServerBoardAPI:
         self.time_calc = TimeCalculator()
         self._setup_middleware()
         self._setup_routes()
+        logger.info("Database path: %s", PATHS['db'])
+        logger.info("User count file path: %s", PATHS['user_count'])
+        logger.info("Public directory path: %s", PATHS['public'])
 
     def _setup_middleware(self) -> None:
         """ミドルウェアの設定"""
@@ -340,7 +350,4 @@ api = ServerBoardAPI()
 app = api.app
 
 if __name__ == "__main__":
-    import uvicorn
-    logger.info("Database path: %s", PATHS['db'])
-    logger.info("Database exists: %s", PATHS['db'].exists())
     uvicorn.run(app, host=HOST, port=PORT)
