@@ -1,33 +1,65 @@
 import base64
 from io import BytesIO
+from typing import Final, Optional
+import logging
 
 import aiohttp
 import discord
 from discord.ext import commands
 from discord import ui
 
+# 定数定義
+API_BASE_URL: Final[str] = "https://captcha.evex.land/api/captcha"
+TIMEOUT_SECONDS: Final[int] = 30
+MIN_DIFFICULTY: Final[int] = 1
+MAX_DIFFICULTY: Final[int] = 10
 
-class CaptchaModal(ui.Modal, title="CAPTCHA 認証"):
-    def __init__(self, answer: str):
-        super().__init__()
+ERROR_MESSAGES: Final[dict] = {
+    "invalid_difficulty": "難易度は1から10の間で指定してください。",
+    "fetch_failed": "CAPTCHAの取得に失敗しました。",
+    "http_error": "HTTP エラーが発生しました: {}",
+    "unexpected_error": "予期せぬエラーが発生しました: {}"
+}
+
+SUCCESS_MESSAGES: Final[dict] = {
+    "correct": "✅ 正解です！CAPTCHAの認証に成功しました。",
+    "incorrect": "❌ 不正解です。正解は `{}` でした。",
+    "timeout": "⏰ 時間切れです。もう一度試してください。"
+}
+
+logger = logging.getLogger(__name__)
+
+class CaptchaModal(ui.Modal):
+    """CAPTCHA回答用のモーダル"""
+
+    def __init__(self, answer: str) -> None:
+        super().__init__(title="CAPTCHA 認証")
         self.answer = answer
+        self.answer_input = ui.TextInput(
+            label="画像に表示されている文字を入力してください",
+            placeholder="ここに文字を入力",
+            required=True,
+            max_length=10
+        )
+        self.add_item(self.answer_input)
 
-    answer_input = ui.TextInput(
-        label="画像に表示されている文字を入力してください",
-        placeholder="ここに文字を入力",
-        required=True,
-        max_length=10
-    )
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """
+        回答の検証を行う
 
-    async def on_submit(self, interaction: discord.Interaction):
-        if self.answer_input.value.lower() == self.answer.lower():
-            await interaction.response.send_message("✅ 正解です！CAPTCHAの認証に成功しました。", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"❌ 不正解です。正解は `{self.answer}` でした。", ephemeral=True)
-
+        Parameters
+        ----------
+        interaction : discord.Interaction
+            インタラクションコンテキスト
+        """
+        is_correct = self.answer_input.value.lower() == self.answer.lower()
+        message = SUCCESS_MESSAGES["correct"] if is_correct else SUCCESS_MESSAGES["incorrect"].format(self.answer)
+        await interaction.response.send_message(message, ephemeral=True)
 
 class CaptchaButton(ui.Button):
-    def __init__(self, answer: str):
+    """CAPTCHA回答ボタン"""
+
+    def __init__(self, answer: str) -> None:
         super().__init__(
             label="回答する",
             style=discord.ButtonStyle.primary,
@@ -35,71 +67,136 @@ class CaptchaButton(ui.Button):
         )
         self.answer = answer
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """
+        ボタンクリック時の処理
+
+        Parameters
+        ----------
+        interaction : discord.Interaction
+            インタラクションコンテキスト
+        """
         modal = CaptchaModal(self.answer)
         await interaction.response.send_modal(modal)
 
-
 class CaptchaView(ui.View):
-    def __init__(self, answer: str):
-        super().__init__(timeout=30)
+    """CAPTCHA表示用のビュー"""
+
+    def __init__(self, answer: str) -> None:
+        super().__init__(timeout=TIMEOUT_SECONDS)
         self.add_item(CaptchaButton(answer))
+        self.message: Optional[discord.Message] = None
 
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
+    async def on_timeout(self) -> None:
+        """タイムアウト時の処理"""
         try:
-            await self.message.edit(view=self)
-            await self.message.reply("⏰ 時間切れです。もう一度試してください。", ephemeral=True)
-        except:
-            pass
-
+            for item in self.children:
+                item.disabled = True
+            if self.message:
+                await self.message.edit(view=self)
+                await self.message.reply(
+                    SUCCESS_MESSAGES["timeout"],
+                    ephemeral=True
+                )
+        except Exception as e:
+            logger.error(f"Error in captcha timeout: {e}", exc_info=True)
 
 class Captcha(commands.Cog):
-    def __init__(self, bot):
+    """CAPTCHA機能を提供"""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.session = aiohttp.ClientSession()
+        self._session: Optional[aiohttp.ClientSession] = None
 
-    @discord.app_commands.command(name="captcha", description="CAPTCHA画像を生成し、解答を検証します")
-    @discord.app_commands.describe(difficulty="CAPTCHAの難易度 (1-10)")
-    async def captcha(self, ctx: discord.Interaction, difficulty: int = 1) -> None:
-        if difficulty < 1 or difficulty > 10:
-            await ctx.response.send_message("難易度は1から10の間で指定してください。", ephemeral=True)
-            return
+    async def cog_load(self) -> None:
+        self._session = aiohttp.ClientSession()
 
-        await ctx.response.defer(thinking=True)
+    async def cog_unload(self) -> None:
+        if self._session:
+            await self._session.close()
+            self._session = None
+
+    def _create_captcha_embed(
+        self,
+        difficulty: int
+    ) -> discord.Embed:
+        return discord.Embed(
+            title="CAPTCHA チャレンジ",
+            description=(
+                f"難易度: {difficulty}\n\n"
+                "下のボタンを押して回答してください。\n"
+                f"制限時間: {TIMEOUT_SECONDS}秒\n\n"
+                f"APIエンドポイント: {API_BASE_URL}"
+            ),
+            color=discord.Color.blue()
+        ).set_image(url="attachment://captcha.png")
+
+    async def _fetch_captcha(
+        self,
+        difficulty: int
+    ) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
+        if not self._session:
+            self._session = aiohttp.ClientSession()
 
         try:
-            async with self.session.get(f"https://captcha.evex.land/api/captcha?difficulty={difficulty}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    image_data = data["image"].split(",")[1]
-                    image_bytes = base64.b64decode(image_data)
-                    image_file = discord.File(BytesIO(image_bytes), filename="captcha.png")
-                    answer = data["answer"]
+            async with self._session.get(
+                f"{API_BASE_URL}?difficulty={difficulty}"
+            ) as response:
+                if response.status != 200:
+                    return None, None, ERROR_MESSAGES["fetch_failed"]
 
-                    embed = discord.Embed(
-                        title="CAPTCHA チャレンジ",
-                        description=f"難易度: {difficulty}\n\n下のボタンを押して回答してください。\n制限時間: 30秒\n\nAPIエンドポイント: https://captcha.evex.land/api/captcha",
-                        color=discord.Color.blue()
-                    )
-                    embed.set_image(url="attachment://captcha.png")
-
-                    view = CaptchaView(answer)
-                    message = await ctx.followup.send(embed=embed, file=image_file, view=view)
-                    view.message = message
-
-                else:
-                    await ctx.followup.send("CAPTCHAの取得に失敗しました。", ephemeral=True)
+                data = await response.json()
+                image_data = data["image"].split(",")[1]
+                image_bytes = base64.b64decode(image_data)
+                return image_bytes, data["answer"], None
 
         except aiohttp.ClientError as e:
-            await ctx.followup.send(f"HTTP エラーが発生しました: {e}", ephemeral=True)
+            logger.error(f"HTTP error in captcha fetch: {e}", exc_info=True)
+            return None, None, ERROR_MESSAGES["http_error"].format(str(e))
         except Exception as e:
-            await ctx.followup.send(f"予期せぬエラーが発生しました: {e}", ephemeral=True)
+            logger.error(f"Unexpected error in captcha fetch: {e}", exc_info=True)
+            return None, None, ERROR_MESSAGES["unexpected_error"].format(str(e))
 
-    async def cog_unload(self):
-        await self.session.close()
+    @discord.app_commands.command(
+        name="captcha",
+        description="CAPTCHA画像を生成し、解答を検証します"
+    )
+    @discord.app_commands.describe(
+        difficulty="CAPTCHAの難易度 (1-10)"
+    )
+    async def captcha(
+        self,
+        interaction: discord.Interaction,
+        difficulty: int = MIN_DIFFICULTY
+    ) -> None:
+        if not MIN_DIFFICULTY <= difficulty <= MAX_DIFFICULTY:
+            await interaction.response.send_message(
+                ERROR_MESSAGES["invalid_difficulty"],
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(thinking=True)
+
+        image_bytes, answer, error = await self._fetch_captcha(difficulty)
+        if error:
+            await interaction.followup.send(error, ephemeral=True)
+            return
+
+        image_file = discord.File(
+            BytesIO(image_bytes),
+            filename="captcha.png"
+        )
+        embed = self._create_captcha_embed(difficulty)
+        view = CaptchaView(answer)
+
+        message = await interaction.followup.send(
+            embed=embed,
+            file=image_file,
+            view=view
+        )
+        view.message = message
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Captcha(bot))
