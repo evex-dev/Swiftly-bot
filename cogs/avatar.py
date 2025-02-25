@@ -27,13 +27,6 @@ class Avatar(commands.Cog):
         )
         embed.set_image(url=avatar_url)
 
-        # 追加情報
-        embed.add_field(
-            name="ユーザー情報",
-            value=f"ID: {user.id}\n"
-                  f"アカウント作成日: {user.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-
         return embed
 
     @discord.app_commands.command(
