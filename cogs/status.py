@@ -129,12 +129,12 @@ class Status(commands.Cog):
 
         # レイテンシー情報
         embed.add_field(
-            name="Discord APIレイテンシ",
+            name="APIレイテンシ",
             value=f"{discord_latency}ms",
             inline=True
         )
         embed.add_field(
-            name="ネットワークルーターレイテンシ",
+            name="ネットワークレイテンシ",
             value=router_latency,
             inline=True
         )
