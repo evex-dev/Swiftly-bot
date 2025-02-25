@@ -79,21 +79,21 @@ class CodeExecutor:
                     return json.loads(result), None, elapsed_time
 
                 logger.warning(
-                    f"API error: {response.status} - {await response.text()}"
+                    "API error: %d - %s", response.status, await response.text()
                 )
                 return None, ERROR_MESSAGES["execution_failed"], elapsed_time
 
         except aiohttp.ClientError as e:
-            logger.error(f"API communication error: {e}", exc_info=True)
+            logger.error("API communication error: %s", e, exc_info=True)
             return None, ERROR_MESSAGES["api_error"].format(str(e)), 0.0
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e}", exc_info=True)
+            logger.error("JSON parse error: %s", e, exc_info=True)
             return None, ERROR_MESSAGES["parse_error"], 0.0
         except asyncio.TimeoutError:
             logger.warning("Execution timeout")
             return None, ERROR_MESSAGES["timeout"], EXECUTION_TIMEOUT
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             return None, ERROR_MESSAGES["unexpected"].format(str(e)), 0.0
 
 class Sandboxpy(commands.Cog):
@@ -231,7 +231,7 @@ class Sandboxpy(commands.Cog):
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Error in sandbox command: {e}", exc_info=True)
+            logger.error("Error in sandbox command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
@@ -291,7 +291,7 @@ class Sandboxpy(commands.Cog):
         except ValueError as e:
             await message.channel.send(str(e))
         except Exception as e:
-            logger.error(f"Error in message handler: {e}", exc_info=True)
+            logger.error("Error in message handler: %s", e, exc_info=True)
             await message.channel.send(
                 ERROR_MESSAGES["unexpected"].format(str(e))
             )

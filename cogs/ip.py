@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import aiohttp
 import asyncio
-import json
 import re
 from typing import Final, Optional, Dict, List, Tuple
 import logging
@@ -118,7 +117,7 @@ class IP(commands.Cog):
             ) as response:
                 if response.status != 200:
                     logger.warning(
-                        f"API error for IP {ip_addr}: {response.status}"
+                        "API error for IP %s: %d", ip_addr, response.status
                     )
                     return None
 
@@ -129,7 +128,7 @@ class IP(commands.Cog):
                 return data
 
         except Exception as e:
-            logger.error(f"Error fetching IP info: {e}", exc_info=True)
+            logger.error("Error fetching IP info: %s", e, exc_info=True)
             return None
 
     @discord.app_commands.command(
@@ -183,19 +182,19 @@ class IP(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error: {e}", exc_info=True)
+            logger.error("Network error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["network_error"].format(str(e)),
                 ephemeral=True
             )
         except asyncio.TimeoutError:
-            logger.warning(f"Request timeout for IP {ip_addr}")
+            logger.warning("Request timeout for IP %s", ip_addr)
             await interaction.followup.send(
                 ERROR_MESSAGES["timeout"],
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True

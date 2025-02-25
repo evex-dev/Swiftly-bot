@@ -220,7 +220,7 @@ class TimeAlert(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in time_signal: {e}", exc_info=True)
+            logger.error("Error in time_signal: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
@@ -276,7 +276,7 @@ class TimeAlert(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in remove_time_signal: {e}", exc_info=True)
+            logger.error("Error in remove_time_signal: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
@@ -298,7 +298,7 @@ class TimeAlert(commands.Cog):
                     await channel.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in check_alerts: {e}", exc_info=True)
+            logger.error("Error in check_alerts: %s", e, exc_info=True)
 
     @check_alerts.before_loop
     async def before_check_alerts(self) -> None:

@@ -142,7 +142,7 @@ class Ping(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in ping command: {e}", exc_info=True)
+            logger.error("Error in ping command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True

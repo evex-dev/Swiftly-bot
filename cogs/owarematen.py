@@ -215,7 +215,7 @@ class DiscowaremaTen(commands.Cog):
                 await channel.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in auto_open: {e}", exc_info=True)
+            logger.error("Error in auto_open: %s", e, exc_info=True)
 
     @discord.app_commands.command(
         name="owarematen-start-custom",
@@ -292,7 +292,7 @@ class DiscowaremaTen(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in start_custom: {e}", exc_info=True)
+            logger.error("Error in start_custom: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True
@@ -330,7 +330,7 @@ class DiscowaremaTen(commands.Cog):
                 await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in open_answers: {e}", exc_info=True)
+            logger.error("Error in open_answers: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True
@@ -427,7 +427,7 @@ class DiscowaremaTen(commands.Cog):
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Error in answer: {e}", exc_info=True)
+            logger.error("Error in answer: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True

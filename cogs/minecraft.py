@@ -3,7 +3,7 @@ import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Final, Optional, Dict, List
+from typing import Final, Optional
 import re
 from datetime import datetime, timedelta
 
@@ -154,13 +154,15 @@ class Minecraft(commands.Cog):
             ) as response:
                 if response.status != 200:
                     logger.warning(
-                        f"API error for server {address}: {response.status}"
+                        "API error for server %s: %s",
+                        address,
+                        response.status
                     )
                     return None
                 return await response.json()
 
         except Exception as e:
-            logger.error(f"Error fetching server info: {e}", exc_info=True)
+            logger.error("Error fetching server info: %s", e, exc_info=True)
             return None
 
     @app_commands.command(
@@ -215,13 +217,13 @@ class Minecraft(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error: {e}", exc_info=True)
+            logger.error("Network error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["network_error"].format(str(e)),
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["api_error"].format(str(e)),
                 ephemeral=True

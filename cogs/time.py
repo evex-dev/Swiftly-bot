@@ -55,18 +55,18 @@ class TimeAPI:
                 if response.status == 200:
                     return await response.json()
                 logger.warning(
-                    f"API error: {response.status} - {await response.text()}"
+                    "API error: %s - %s", response.status, await response.text()
                 )
                 return None
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error: {e}", exc_info=True)
+            logger.error("Network error: %s", e, exc_info=True)
             raise
         except asyncio.TimeoutError:
             logger.warning("Request timeout")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             raise
 
 class Time(commands.Cog):
@@ -103,7 +103,7 @@ class Time(commands.Cog):
             jst = dt.astimezone(pytz.timezone(TIMEZONE))
             return jst.strftime("%Y年%m月%d日 %H:%M:%S")
         except Exception as e:
-            logger.error(f"Error formatting time: {e}", exc_info=True)
+            logger.error("Error formatting time: %s", e, exc_info=True)
             return time_str
 
     def _create_time_embed(
@@ -178,7 +178,7 @@ class Time(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error: {e}", exc_info=True)
+            logger.error("Network error: %s", e, exc_info=True)
             await interaction.followup.send(
                 embed=self._create_time_embed(
                     ERROR_MESSAGES["network_error"].format(str(e)),
@@ -194,7 +194,7 @@ class Time(commands.Cog):
                 )
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(
                 embed=self._create_time_embed(
                     ERROR_MESSAGES["unexpected"].format(str(e)),

@@ -67,7 +67,7 @@ class WikipediaAPI:
             )
             return page.title, summary, page.url
         except Exception as e:
-            logger.error(f"Error getting page info: {e}", exc_info=True)
+            logger.error("Error getting page info: %s", e, exc_info=True)
             raise
 
 class MessageProcessor:
@@ -182,18 +182,18 @@ class WikipediaCog(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except DisambiguationError as e:
-            logger.info(f"Disambiguation for query '{query}': {e.options}")
+            logger.info("Disambiguation for query '%s': %s", query, e.options)
             embed = self._create_disambiguation_embed(e.options)
             await interaction.followup.send(embed=embed)
 
         except PageError:
-            logger.warning(f"Page not found for query '{query}'")
+            logger.warning("Page not found for query '%s'", query)
             await interaction.followup.send(
                 ERROR_MESSAGES["page_not_found"].format(query)
             )
 
         except Exception as e:
-            logger.error(f"Error in wikipedia search: {e}", exc_info=True)
+            logger.error("Error in wikipedia search: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True

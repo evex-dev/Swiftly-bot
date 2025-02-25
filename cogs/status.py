@@ -64,13 +64,13 @@ class SystemStatus:
             return f"{round((time.time() - start_time) * 1000, 2)}ms"
 
         except aiohttp.ClientError as e:
-            logger.error(f"Router connection error: {e}", exc_info=True)
+            logger.error("Router connection error: %s", e, exc_info=True)
             return ERROR_MESSAGES["connection_error"]
         except asyncio.TimeoutError:
-            logger.warning(f"Router timeout after {TIMEOUT_SECONDS}s")
+            logger.warning("Router timeout after %ds", TIMEOUT_SECONDS)
             return ERROR_MESSAGES["timeout"]
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             return ERROR_MESSAGES["unexpected"].format(str(e))
 
     def get_system_info(self) -> Dict[str, str]:
@@ -198,7 +198,7 @@ class Status(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in status command: {e}", exc_info=True)
+            logger.error("Error in status command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True

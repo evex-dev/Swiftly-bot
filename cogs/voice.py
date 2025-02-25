@@ -55,7 +55,7 @@ class TTSManager:
                     os.remove(file)
                     self.temp_files.remove(file)
                 except Exception as e:
-                    logger.error(f"Error removing temp file: {e}", exc_info=True)
+                    logger.error("Error removing temp file: %s", e, exc_info=True)
 
     async def generate_audio(
         self,
@@ -71,7 +71,7 @@ class TTSManager:
             return temp_path
 
         except Exception as e:
-            logger.error(f"Error generating audio: {e}", exc_info=True)
+            logger.error("Error generating audio: %s", e, exc_info=True)
             return None
 
 class MessageProcessor:
@@ -134,7 +134,7 @@ class VoiceState:
 
         def after_playing(error: Optional[Exception]) -> None:
             if error:
-                logger.error(f"Error playing audio: {error}", exc_info=True)
+                logger.error("Error playing audio: %s", error, exc_info=True)
 
             # 次のメッセージを再生
             if (guild_id in self.tts_queues and
@@ -244,7 +244,7 @@ class Voice(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in join command: {e}", exc_info=True)
+            logger.error("Error in join command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
@@ -316,7 +316,7 @@ class Voice(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in leave command: {e}", exc_info=True)
+            logger.error("Error in leave command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
@@ -389,7 +389,7 @@ class Voice(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in vc_tts command: {e}", exc_info=True)
+            logger.error("Error in vc_tts command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
@@ -454,7 +454,8 @@ class Voice(commands.Cog):
 
         except Exception as e:
             logger.error(
-                f"Error in voice state update: {e}",
+                "Error in voice state update: %s",
+                e,
                 exc_info=True
             )
 
@@ -500,7 +501,8 @@ class Voice(commands.Cog):
 
         except Exception as e:
             logger.error(
-                f"Error in message handler: {e}",
+                "Error in message handler: %s",
+                e,
                 exc_info=True
             )
 

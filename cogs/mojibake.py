@@ -148,13 +148,13 @@ class MojiBake(commands.Cog):
             )
 
         except UnicodeError as e:
-            logger.error(f"Unicode error: {e}", exc_info=True)
+            logger.error("Unicode error: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["decode_error"].format(str(e)),
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected_error"].format(str(e)),
                 ephemeral=True

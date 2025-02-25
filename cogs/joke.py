@@ -4,7 +4,7 @@ import random
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Final, Dict, List, Tuple, Optional
+from typing import Final, Dict, List, Tuple
 import logging
 
 import discord
@@ -109,7 +109,7 @@ class JokeCommands(commands.Cog):
                 self.cpus = data.get("cpus", [])
                 self.gpus = data.get("gpus", [])
         except Exception as e:
-            logger.error(f"Error loading joke data: {e}", exc_info=True)
+            logger.error("Error loading joke data: %s", e, exc_info=True)
             self.cpus = []
             self.gpus = []
 
@@ -265,7 +265,7 @@ class JokeCommands(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in love calculator: {e}", exc_info=True)
+            logger.error("Error in love calculator: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"エラーが発生しました: {e}",
                 ephemeral=True
@@ -287,7 +287,7 @@ class JokeCommands(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in fantasy status: {e}", exc_info=True)
+            logger.error("Error in fantasy status: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"エラーが発生しました: {e}",
                 ephemeral=True
@@ -322,7 +322,7 @@ class JokeCommands(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in cpu/gpu command: {e}", exc_info=True)
+            logger.error("Error in cpu/gpu command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"エラーが発生しました: {e}",
                 ephemeral=True
@@ -427,7 +427,7 @@ class JokeCommands(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in versus command: {e}", exc_info=True)
+            logger.error("Error in versus command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"エラーが発生しました: {e}",
                 ephemeral=True

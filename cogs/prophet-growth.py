@@ -1,7 +1,7 @@
 import asyncio
 import io
 from datetime import datetime
-from typing import Final, Optional, List, Dict, Any
+from typing import Final, Optional, List
 import logging
 
 import discord

@@ -68,7 +68,7 @@ class WhoisInfo:
             return True
 
         except Exception as e:
-            logger.error(f"Error fetching whois info: {e}", exc_info=True)
+            logger.error("Error fetching whois info: %s", e, exc_info=True)
             raise
 
     def get_formatted_info(self) -> Dict[str, str]:
@@ -186,7 +186,7 @@ class Whois(commands.Cog):
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Error in whois command: {e}", exc_info=True)
+            logger.error("Error in whois command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True

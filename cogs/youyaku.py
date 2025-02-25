@@ -186,12 +186,12 @@ class Youyaku(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except discord.DiscordException as e:
-            logger.error(f"Discord error: {e}", exc_info=True)
+            logger.error("Discord error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["discord_error"].format(str(e))
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e))
             )

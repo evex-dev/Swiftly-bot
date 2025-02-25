@@ -476,7 +476,7 @@ class Tetri(commands.Cog):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"Error in auto_drop: {e}", exc_info=True)
+            logger.error("Error in auto_drop: %s", e, exc_info=True)
 
     @app_commands.command(
         name="tetri",
@@ -540,7 +540,7 @@ class Tetri(commands.Cog):
             )
 
         except Exception as e:
-            logger.error(f"Error in tetri command: {e}", exc_info=True)
+            logger.error("Error in tetri command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
