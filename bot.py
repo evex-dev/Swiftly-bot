@@ -182,6 +182,11 @@ class SwiftlyBot(commands.Bot):
         """ロギングの設定"""
         PATHS["log_dir"].mkdir(exist_ok=True)
 
+        # コンソール出力用のハンドラを追加
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt='%Y-%m-%d %H:%M:%S'))
+
         # 共通のログハンドラ設定
         handlers = []
         for name, level in [("logs", logging.DEBUG), ("commands", logging.DEBUG)]:
@@ -193,19 +198,21 @@ class SwiftlyBot(commands.Bot):
                 encoding="utf-8"
             )
             handler.setLevel(level)
-            handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt='%Y-%m-%d %H:%M:%S'))
             handlers.append(handler)
 
         # ボットのロガー設定
-        logger.setLevel(logging.WARNING)
+        logger.setLevel(logging.INFO)
         for handler in handlers:
             logger.addHandler(handler)
+        logger.addHandler(console_handler)
 
         # Discordのロガー設定
         discord_logger = logging.getLogger("discord")
-        discord_logger.setLevel(logging.WARNING)
+        discord_logger.setLevel(logging.INFO)
         for handler in handlers:
             discord_logger.addHandler(handler)
+        discord_logger.addHandler(console_handler)
 
     async def setup_hook(self) -> None:
         """ボットのセットアップ処理"""
@@ -291,19 +298,6 @@ class SwiftlyBot(commands.Bot):
         self,
         ctx: commands.Context
     ) -> bool:
-        """
-        コマンド実行権限をチェック
-
-        Parameters
-        ----------
-        ctx : commands.Context
-            コマンドコンテキスト
-
-        Returns
-        -------
-        bool
-            実行可能ならTrue
-        """
         if not ctx.guild:
             return True
 
@@ -323,19 +317,6 @@ class SwiftlyBot(commands.Bot):
         self,
         interaction: discord.Interaction
     ) -> bool:
-        """
-        スラッシュコマンドの実行権限をチェック
-
-        Parameters
-        ----------
-        interaction : discord.Interaction
-            インタラクションコンテキスト
-
-        Returns
-        -------
-        bool
-            実行可能ならTrue
-        """
         if not interaction.guild:
             return True
 
