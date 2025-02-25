@@ -277,7 +277,7 @@ class Growth(commands.Cog):
                 await interaction.followup.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in growth command: {e}", exc_info=True)
+            logger.error("Error in growth command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e))
             )

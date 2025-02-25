@@ -135,7 +135,7 @@ class EnableAnticheatView(View):
             )
 
         except Exception as e:
-            logger.error(f"Error in enable confirmation: {e}", exc_info=True)
+            logger.error("Error in enable confirmation: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["interaction_failed"].format(str(e)),
                 ephemeral=True
@@ -292,7 +292,7 @@ class IconCheck(commands.Cog):
 
         except Exception as e:
             logger.error(
-                f"Error processing message in anti-raid: {e}",
+                "Error processing message in anti-raid: %s", e,
                 exc_info=True
             )
 

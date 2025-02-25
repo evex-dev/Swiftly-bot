@@ -213,7 +213,7 @@ class MemberWelcomeCog(commands.Cog):
                 )
 
         except Exception as e:
-            logger.error(f"Error in welcome command: {e}", exc_info=True)
+            logger.error("Error in welcome command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"エラーが発生しました: {e}",
                 ephemeral=True
@@ -269,7 +269,7 @@ class MemberWelcomeCog(commands.Cog):
 
         except Exception as e:
             logger.error(
-                f"Error processing member join: {e}",
+                "Error processing member join: %s", e,
                 exc_info=True
             )
 

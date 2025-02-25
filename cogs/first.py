@@ -107,12 +107,12 @@ class FirstComment(commands.Cog):
 
         except discord.Forbidden:
             logger.warning(
-                f"No permission to read message history in channel {channel.id}"
+                "No permission to read message history in channel %d", channel.id
             )
             raise
         except Exception as e:
             logger.error(
-                f"Error fetching first message in channel {channel.id}: {e}",
+                "Error fetching first message in channel %d: %s", channel.id, e,
                 exc_info=True
             )
             raise
@@ -158,7 +158,7 @@ class FirstComment(commands.Cog):
             )
         except Exception as e:
             logger.error(
-                f"Error in first_comment command: {e}",
+                "Error in first_comment command: %s", e,
                 exc_info=True
             )
             await interaction.response.send_message(

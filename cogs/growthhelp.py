@@ -121,7 +121,7 @@ class GrowthHelp(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in growth_help command: {e}", exc_info=True)
+            logger.error("Error in growth_help command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"ヘルプの表示中にエラーが発生しました: {e}",
                 ephemeral=True

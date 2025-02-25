@@ -143,7 +143,7 @@ class PackageSearch(commands.Cog):
                 )
 
         except Exception as e:
-            logger.error(f"Error fetching package info: {e}", exc_info=True)
+            logger.error("Error fetching package info: %s", e, exc_info=True)
             return None
 
     @discord.app_commands.command(
@@ -208,13 +208,13 @@ class PackageSearch(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error: {e}", exc_info=True)
+            logger.error("Network error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["network_error"].format(str(e)),
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["api_error"].format(str(e)),
                 ephemeral=True

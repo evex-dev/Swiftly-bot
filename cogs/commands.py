@@ -127,7 +127,7 @@ class CommandListView(discord.ui.View):
             else:
                 await interaction.response.defer()
         except Exception as e:
-            logger.error(f"Error in previous button: {e}", exc_info=True)
+            logger.error("Error in previous button: %s", e, exc_info=True)
             await interaction.response.defer()
 
     @discord.ui.button(
@@ -152,7 +152,7 @@ class CommandListView(discord.ui.View):
             else:
                 await interaction.response.defer()
         except Exception as e:
-            logger.error(f"Error in next button: {e}", exc_info=True)
+            logger.error("Error in next button: %s", e, exc_info=True)
             await interaction.response.defer()
 
     @discord.ui.select(
@@ -190,7 +190,7 @@ class CommandListView(discord.ui.View):
                 view=self
             )
         except Exception as e:
-            logger.error(f"Error in category select: {e}", exc_info=True)
+            logger.error("Error in category select: %s", e, exc_info=True)
             await interaction.response.defer()
 
     async def on_timeout(self) -> None:
@@ -202,7 +202,7 @@ class CommandListView(discord.ui.View):
             if hasattr(self, "message"):
                 await self.message.edit(view=self)
         except Exception as e:
-            logger.error(f"Error in timeout handling: {e}", exc_info=True)
+            logger.error("Error in timeout handling: %s", e, exc_info=True)
 
 class CommandList(commands.Cog):
     """コマンド一覧を提供"""
@@ -235,7 +235,7 @@ class CommandList(commands.Cog):
             if isinstance(message, discord.Message):
                 view.message = message
         except Exception as e:
-            logger.error(f"Error in command_list: {e}", exc_info=True)
+            logger.error("Error in command_list: %s", e, exc_info=True)
             await interaction.response.send_message(
                 "コマンド一覧の取得中にエラーが発生しました。",
                 ephemeral=True

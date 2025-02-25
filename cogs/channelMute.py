@@ -41,7 +41,7 @@ class Prohibited(commands.Cog):
                 await db.execute(CREATE_TABLE_SQL)
                 await db.commit()
         except Exception as e:
-            logger.error(f"Error initializing database: {e}", exc_info=True)
+            logger.error("Error initializing database: %s", e, exc_info=True)
             raise
 
     async def is_channel_prohibited(
@@ -61,7 +61,7 @@ class Prohibited(commands.Cog):
                     return await cursor.fetchone() is not None
         except Exception as e:
             logger.error(
-                f"Error checking prohibited channel: {e}",
+                "Error checking prohibited channel: %s", e,
                 exc_info=True
             )
             return False
@@ -98,7 +98,7 @@ class Prohibited(commands.Cog):
                 return not is_prohibited
         except Exception as e:
             logger.error(
-                f"Error toggling channel prohibition: {e}",
+                "Error toggling channel prohibition: %s", e,
                 exc_info=True
             )
             raise
@@ -148,7 +148,7 @@ class Prohibited(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in set_mute_channel: {e}", exc_info=True)
+            logger.error("Error in set_mute_channel: %s", e, exc_info=True)
             await interaction.response.send_message(
                 ERROR_MESSAGES["db_error"].format(str(e)),
                 ephemeral=True

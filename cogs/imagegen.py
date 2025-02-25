@@ -99,11 +99,11 @@ class ImageGen(commands.Cog):
                 if response.status == 200:
                     return await response.read()
                 logger.warning(
-                    f"Image generation failed with status {response.status}"
+                    "Image generation failed with status %d", response.status
                 )
                 return None
         except Exception as e:
-            logger.error(f"Error generating image: {e}", exc_info=True)
+            logger.error("Error generating image: %s", e, exc_info=True)
             return None
 
     @discord.app_commands.command(
@@ -162,7 +162,7 @@ class ImageGen(commands.Cog):
             await interaction.followup.send(embed=embed, file=file)
 
         except Exception as e:
-            logger.error(f"Error in imagegen command: {e}", exc_info=True)
+            logger.error("Error in imagegen command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["api_error"].format(str(e)),
                 ephemeral=True

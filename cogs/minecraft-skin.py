@@ -74,7 +74,8 @@ class MinecraftSkin(commands.Cog):
                 return response.status == 200
         except Exception as e:
             logger.error(
-                f"Error verifying Minecraft user: {e}",
+                "Error verifying Minecraft user: %s",
+                e,
                 exc_info=True
             )
             return False
@@ -157,13 +158,13 @@ class MinecraftSkin(commands.Cog):
             await interaction.followup.send(embed=embed)
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error: {e}", exc_info=True)
+            logger.error("Network error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["network_error"].format(str(e)),
                 ephemeral=True
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["api_error"].format(str(e)),
                 ephemeral=True
