@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Final, Optional, Tuple
+from typing import Final, Literal, Optional, Tuple
 import logging
 import aiosqlite
 
@@ -18,7 +18,7 @@ JOIN_COOLDOWN: Final[int] = 3  # seconds
 
 ERROR_MESSAGES: Final[dict] = {
     "no_permission": "コマンドを使用するにはサーバーの管理権限が必要です。",
-    "invalid_action": "onまたはoffを指定してください。",
+    "invalid_action": "enableまたはdisableを指定してください。",
     "invalid_increment": f"{MIN_INCREMENT}～{MAX_INCREMENT}人の間で指定してください。",
     "no_channel": "ONにする場合はチャンネルを指定してください。"
 }
@@ -145,14 +145,18 @@ class MemberWelcomeCog(commands.Cog):
         description="参加メッセージの設定"
     )
     @app_commands.describe(
-        action="on/off - 参加メッセージをON/OFFにします",
+        action="参加メッセージをON/OFFにします",
         increment="何人ごとにお祝いメッセージを送信するか設定 (デフォルト: 100)",
         channel="メッセージを送信するチャンネル"
     )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="ON", value="enable"),
+        app_commands.Choice(name="OFF", value="disable")
+    ])
     async def welcome_command(
         self,
         interaction: discord.Interaction,
-        action: str,
+        action: Literal["enable", "disable"],
         increment: Optional[int] = None,
         channel: Optional[discord.TextChannel] = None
     ) -> None:
@@ -165,15 +169,7 @@ class MemberWelcomeCog(commands.Cog):
                 )
                 return
 
-            action = action.lower()
-            if action not in ["on", "off"]:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["invalid_action"],
-                    ephemeral=True
-                )
-                return
-
-            is_enabled = action == "on"
+            is_enabled = action == "enable"
             increment = increment or DEFAULT_INCREMENT
 
             if increment < MIN_INCREMENT or increment > MAX_INCREMENT:
