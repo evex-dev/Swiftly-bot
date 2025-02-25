@@ -6,6 +6,9 @@ from datetime import datetime
 import sqlite3
 import matplotlib.pyplot as plt
 import io
+import matplotlib
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
 # 定数定義
 MAX_OPTIONS: Final[int] = 10
