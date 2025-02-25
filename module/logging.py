@@ -32,12 +32,6 @@ class LoggingCog(commands.Cog):
         logging.info(f"Member left: {member.name} (ID: {member.id}) from guild: {member.guild.name}")
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
-        if message.author == self.bot.user:
-            return
-        logging.info(f"Message from {message.author.name} (ID: {message.author.id}) in guild: {message.guild.name} - {message.content}")
-
-    @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
         logging.info(f"Command executed: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {ctx.guild.name}")
 
