@@ -10,7 +10,6 @@ prophet
 edge-tts
 wikipedia
 opencv-python
-pyyaml
 fastapi
 uvicorn
 plotly
