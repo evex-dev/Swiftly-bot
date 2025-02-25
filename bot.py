@@ -254,22 +254,6 @@ class SwiftlyBot(commands.Bot):
         """メンバー退出時の処理"""
         await self.count_unique_users()
 
-    async def on_command_completion(
-        self,
-        ctx: commands.Context
-    ) -> None:
-        """コマンド完了時の処理"""
-        logger.info("Command executed: %s", ctx.command)
-
-    async def on_command_error(
-        self,
-        ctx: commands.Context,
-        error: Exception
-    ) -> None:
-        """コマンドエラー時の処理"""
-        logger.error("Command error: %s", error, exc_info=True)
-        await ctx.send(ERROR_MESSAGES["command_error"])
-
     async def on_app_command_error(
         self,
         interaction: discord.Interaction,
