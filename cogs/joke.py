@@ -2,226 +2,437 @@ import json
 import math
 import random
 import time
+from datetime import datetime
+from pathlib import Path
+from typing import Final, Dict, List, Tuple, Optional
+import logging
 
 import discord
 from discord.ext import commands
 
-
-prog_langs = [
+# 定数定義
+PROG_LANGS: Final[List[str]] = [
     "C++", "Go", "Java", "JavaScript", "Kotlin",
     "PHP", "Python", "Ruby", "Rust", "Swift", "TypeScript"
 ]
 
-nice_lang = {
-    "C++": "Rust",
-    "Go": "Java",
-    "Java": "TypeScript",
-    "JavaScript": "Go",
-    "Kotlin": "PHP",
-    "PHP": "Ruby",
-    "Python": "JavaScript",
-    "Ruby": "C++",
-    "Rust": "Python",
-    "Swift": "Kotlin",
-    "TypeScript": "Swift"
+NICE_LANG: Final[Dict[str, str]] = {
+    "C++": "Rust", "Go": "Java", "Java": "TypeScript",
+    "JavaScript": "Go", "Kotlin": "PHP", "PHP": "Ruby",
+    "Python": "JavaScript", "Ruby": "C++", "Rust": "Python",
+    "Swift": "Kotlin", "TypeScript": "Swift"
 }
 
-bad_lang = {
-    "C++": "Ruby",
-    "Go": "JavaScript",
-    "Java": "Go",
-    "JavaScript": "Python",
-    "Kotlin": "Swift",
-    "PHP": "Kotlin",
-    "Python": "Rust",
-    "Ruby": "PHP",
-    "Rust": "C++",
-    "Swift": "TypeScript",
-    "TypeScript": "Java"
+BAD_LANG: Final[Dict[str, str]] = {
+    "C++": "Ruby", "Go": "JavaScript", "Java": "Go",
+    "JavaScript": "Python", "Kotlin": "Swift", "PHP": "Kotlin",
+    "Python": "Rust", "Ruby": "PHP", "Rust": "C++",
+    "Swift": "TypeScript", "TypeScript": "Java"
 }
 
-with open("./data/joke.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
+BATTLE_CONFIG: Final[dict] = {
+    "max_turns": 20,
+    "crit_rates": {
+        "normal": 0.1,
+        "advantage": 0.2,
+        "disadvantage": 0.05
+    },
+    "damage_multipliers": {
+        "advantage": 1.2,
+        "disadvantage": 0.87,
+        "critical": 2.0
+    }
+}
 
-cpus = data.get("cpus", [])
-gpus = data.get("gpus", [])
+LOVE_MESSAGES: Final[Dict[str, str]] = {
+    "one_sided_high": "{}よ、諦めろ。",
+    "one_sided_medium": "視界に入れてない可能性があります。",
+    "one_sided_low": "片思いの可能性があります。💔",
+    "mutual_excellent": "素晴らしい相性です！💞",
+    "mutual_good": "とても良い相性です！😊",
+    "mutual_average": "まあまあの相性です。🙂",
+    "mutual_poor": "ちょっと微妙かも...😕",
+    "mutual_bad": "残念ながら、相性はあまり良くないようです。😢"
+}
 
+logger = logging.getLogger(__name__)
 
-class LoveCalculator(commands.Cog):
-    def __init__(self, bot):
+class BattleSystem:
+    """戦闘システムを管理するクラス"""
+
+    def __init__(
+        self,
+        attacker: Tuple[str, List],
+        defender: Tuple[str, List]
+    ) -> None:
+        self.attacker_name, self.attacker_stats = attacker
+        self.defender_name, self.defender_stats = defender
+        self.turn_log = []
+
+    def calculate_damage(
+        self,
+        atk: int,
+        def_: int,
+        attacker_lang: str,
+        defender_lang: str
+    ) -> Tuple[int, bool]:
+        crit_rate = BATTLE_CONFIG["crit_rates"]["normal"]
+        damage_mult = 1.0
+
+        if NICE_LANG[attacker_lang] == defender_lang:
+            crit_rate = BATTLE_CONFIG["crit_rates"]["advantage"]
+            damage_mult = BATTLE_CONFIG["damage_multipliers"]["advantage"]
+        elif BAD_LANG[attacker_lang] == defender_lang:
+            crit_rate = BATTLE_CONFIG["crit_rates"]["disadvantage"]
+            damage_mult = BATTLE_CONFIG["damage_multipliers"]["disadvantage"]
+
+        is_crit = random.random() <= crit_rate
+        if is_crit:
+            damage_mult = BATTLE_CONFIG["damage_multipliers"]["critical"]
+            def_ = 0
+
+        damage = math.floor(max(0, atk * damage_mult * (1 - (def_ / 100))))
+        return damage, is_crit
+
+class JokeCommands(commands.Cog):
+    """ジョーク系コマンドを提供"""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self._load_data()
 
-    @discord.app_commands.command(name="love-calculator", description="2人のユーザーを選択して愛の相性を計算します")
-    async def love_calculator(self, interaction: discord.Interaction, user1: discord.User, user2: discord.User):
-        if user1 == user2:
-            embed = discord.Embed(title="💖 Love Calculator 💖", color=discord.Color.pink())
-            embed.add_field(name="メッセージ", value="1人目と2人目で同じユーザーが選択されています。", inline=False)
-            await interaction.response.send_message(embed=embed)
-        else:
-            name1 = user1.name
-            name2 = user2.name
-            love_score = self.K7LoveCalc(name1, name2)
-            message = self.get_love_message(name1, name2, love_score[0], love_score[1], love_score[2])
-            embed = discord.Embed(title="💖 Love Calculator 💖", color=discord.Color.pink())
-            embed.add_field(name="ユーザー1", value=name1, inline=True)
-            embed.add_field(name="ユーザー2", value=name2, inline=True)
-            embed.add_field(name="相性結果", value=f"**{name1} → {name2}**\n好感度：{love_score[1]}%\n**{name2} → {name1}**\n好感度：{love_score[2]}%", inline=False)
-            embed.add_field(name="総合相性（好感度平均）", value=f"{love_score[0]}%", inline=False)
-            embed.add_field(name="メッセージ", value=message, inline=False)
-            await interaction.response.send_message(embed=embed)
+    def _load_data(self) -> None:
+        """データファイルを読み込む"""
+        try:
+            with open(Path("data/joke.json"), encoding="utf-8") as f:
+                data = json.load(f)
+                self.cpus = data.get("cpus", [])
+                self.gpus = data.get("gpus", [])
+        except Exception as e:
+            logger.error(f"Error loading joke data: {e}", exc_info=True)
+            self.cpus = []
+            self.gpus = []
 
-    @discord.app_commands.command(name="fantasy-status", description="特定の人の装備品、攻撃力、守備力、体力を表示する")
-    async def fantasy_status(self, interaction: discord.Interaction, user: discord.User):
-        name = user.name
-        stats = self.K7StatsCalc(name)
-        embed = discord.Embed(title="⚔ 異世界ステータスジェネレーター ⚔", color=discord.Color.blue())
-        embed.add_field(name="名前", value=name, inline=False)
+    def _create_love_embed(
+        self,
+        user1: discord.User,
+        user2: discord.User,
+        scores: List[int]
+    ) -> discord.Embed:
+        """Love Calculator用のEmbedを作成"""
+        embed = discord.Embed(
+            title="💖 Love Calculator 💖",
+            color=discord.Color.pink()
+        )
+        embed.add_field(name="ユーザー1", value=user1.name, inline=True)
+        embed.add_field(name="ユーザー2", value=user2.name, inline=True)
+        embed.add_field(
+            name="相性結果",
+            value=(
+                f"**{user1.name} → {user2.name}**\n"
+                f"好感度：{scores[1]}%\n"
+                f"**{user2.name} → {user1.name}**\n"
+                f"好感度：{scores[2]}%"
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="総合相性（好感度平均）",
+            value=f"{scores[0]}%",
+            inline=False
+        )
+        embed.add_field(
+            name="メッセージ",
+            value=self._get_love_message(
+                user1.name, user2.name,
+                scores[0], scores[1], scores[2]
+            ),
+            inline=False
+        )
+        return embed
+
+    def _create_status_embed(
+        self,
+        user: discord.User,
+        stats: List
+    ) -> discord.Embed:
+        """ステータス表示用のEmbedを作成"""
+        embed = discord.Embed(
+            title="⚔ 異世界ステータスジェネレーター ⚔",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="名前", value=user.name, inline=False)
         embed.add_field(name="装備", value=stats[0], inline=True)
         embed.add_field(name="攻撃力", value=stats[1], inline=True)
         embed.add_field(name="守備力", value=stats[2], inline=True)
         embed.add_field(name="最大HP", value=stats[3], inline=True)
-        embed.add_field(name="相性の良い言語（攻撃力 x1.2）", value=nice_lang[stats[0]], inline=True)
-        embed.add_field(name="相性の悪い言語（攻撃力 x0.87）", value=bad_lang[stats[0]], inline=True)
-        await interaction.response.send_message(embed=embed)
+        embed.add_field(
+            name="相性の良い言語（攻撃力 x1.2）",
+            value=NICE_LANG[stats[0]],
+            inline=True
+        )
+        embed.add_field(
+            name="相性の悪い言語（攻撃力 x0.87）",
+            value=BAD_LANG[stats[0]],
+            inline=True
+        )
+        return embed
 
-    @discord.app_commands.command(name="your-cpu-gpu", description="特定の人をCPU、GPUで例えると...？")
-    async def your_cpu(self, interaction: discord.Interaction, user: discord.User):
-        try:
-            name = user.name
-            random.seed(name)
-            cpu = random.choice(cpus)
-            gpu = random.choice(gpus)
-            embed = discord.Embed(title="💻 "+name+"をCPU、GPUで例えると...？ 🖥", color=discord.Color.blue())
-            embed.add_field(name="CPU", value=cpu, inline=True)
-            embed.add_field(name="GPU", value=gpu, inline=True)
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            await interaction.response.send_message(f"エラーが発生しました: {e}")
-
-    @discord.app_commands.command(name="versus", description="fantasy-statusのステータスをもとに対戦させます。ステータスは固定ですがそれ以外はランダム。")
-    async def versus(self, interaction: discord.Interaction, user1: discord.User, user2: discord.User):
-        try:
-            if user1 == user2:
-                embed = discord.Embed(title="⚔ Versus ⚔", color=discord.Color.dark_red())
-                embed.add_field(name="メッセージ", value="1人目と2人目で同じユーザーが選択されています。", inline=False)
-                await interaction.response.send_message(embed=embed)
-            else:
-                random.seed(time.time())
-                name1 = user1.name
-                name2 = user2.name
-                stats1 = self.K7StatsCalc(name1)
-                stats2 = self.K7StatsCalc(name2)
-                hp1 = stats1[3]
-                hp2 = stats2[3]
-                embed = discord.Embed(title="⚔ Versus ⚔", color=discord.Color.dark_red())
-                turn = random.randint(0, 1)
-                for _ in range(20):
-                    crit = False
-                    crit_chance = 0.1
-                    if turn:
-                        turn_atk = stats1[1]
-                        turn_def = stats2[2]
-                        if nice_lang[stats1[0]] == stats2[0]:
-                            crit_chance = 0.2
-                            turn_atk *= 1.2
-                        elif bad_lang[stats1[0]] == stats2[0]:
-                            crit_chance = 0.05
-                            turn_atk *= 0.87
-                        if random.random() <= crit_chance:
-                            turn_atk *= 2
-                            turn_def = 0
-                            crit = True
-                        damage = math.floor(max(0, turn_atk*(1-(turn_def/100))))
-                        hp2 -= damage
-                        if crit:
-                            embed.add_field(name=f"{name1}のターン", value=f"クリティカルヒット！{name2}に{damage}のダメージ！残りHP：{hp2}", inline=False)
-                        else:
-                            embed.add_field(name=f"{name1}のターン", value=f"{name2}に{damage}のダメージ！残りHP：{hp2}", inline=False)
-                        if hp2 <= 0:
-                            embed.add_field(name=f"{name1}の勝利！", value=f"{name1}は{hp1}の体力を残して勝利した！", inline=False)
-                            break
-                    else:
-                        turn_atk = stats2[1]
-                        crit_chance = 0.1
-                        turn_def = stats1[2]
-                        if nice_lang[stats2[0]] == stats1[0]:
-                            crit_chance = 0.2
-                            turn_atk *= 1.2
-                        elif bad_lang[stats2[0]] == stats1[0]:
-                            crit_chance = 0.05
-                            turn_atk *= 0.87
-                        if random.random() <= crit_chance:
-                            turn_atk *= 2
-                            turn_def = 0
-                            crit = True
-                        damage = math.floor(max(0, turn_atk*(1-(turn_def/100))))
-                        hp1 -= damage
-                        if crit:
-                            embed.add_field(name=f"{name2}のターン", value=f"クリティカルヒット！{name1}に{damage}のダメージ！残りHP：{hp1}", inline=False)
-                        else:
-                            embed.add_field(name=f"{name2}のターン", value=f"{name1}に{damage}のダメージ！残りHP：{hp1}", inline=False)
-                        if hp1 <= 0:
-                            embed.add_field(name=f"{name2}の勝利！", value=f"{name2}は{hp2}の体力を残して勝利した！", inline=False)
-                            break
-                    turn = not turn
-                if hp1 > 0 and hp2 > 0:
-                    embed.add_field(name="引き分け", value=f"20ターン以内に戦いが終わらなかった。\n{name1}の体力：{hp1}\n{name2}の体力：{hp2}", inline=False)
-                await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            await interaction.response.send_message(f"エラーが発生しました: {e}")
-
-    def K7LoveCalc(self, name1: str, name2: str):
-        # Use only day of the current date (1～31) as a slight influence
-        current_day = int(time.strftime("%d"))
-        if name1 > name2:
-            base = name1 + name2
-        else:
-            base = name2 + name1
-        # The date adds only a small offset to the seed
+    def _calculate_love_score(
+        self,
+        name1: str,
+        name2: str
+    ) -> List[int]:
+        current_day = datetime.now().day
+        base = max(name1, name2) + min(name1, name2)
         seed_value = hash(base) + current_day
         random.seed(seed_value)
 
-        user1_to_user2_friend = random.randint(0, 100)
-        user2_to_user1_friend = random.randint(0, 100)
-        love_score = (user1_to_user2_friend + user2_to_user1_friend) // 2
-        if name1 > name2:
-            return [love_score, user1_to_user2_friend, user2_to_user1_friend]
+        score1 = random.randint(0, 100)
+        score2 = random.randint(0, 100)
+        total = (score1 + score2) // 2
 
-        return [love_score, user2_to_user1_friend, user1_to_user2_friend]
+        return [
+            total,
+            score1 if name1 > name2 else score2,
+            score2 if name1 > name2 else score1
+        ]
 
-    def K7StatsCalc(self, name: str):
-        # ユーザー名のハッシュ値をシードにして乱数生成
+    def _calculate_stats(self, name: str) -> List:
+        """ユーザーのステータスを計算"""
         random.seed(hash(name))
-        # 装備はプログラミング言語リストからランダムに選択
-        equip = random.choice(prog_langs)
-        # 攻撃力は50～150の範囲
-        attack = random.randint(50, 150)
-        # 守備力は0～100の範囲
-        defense = random.randint(0, 100)
-        # 最大HPは200～1000の範囲
-        max_hp = random.randint(200, 1000)
-        return [equip, attack, defense, max_hp]
+        return [
+            random.choice(PROG_LANGS),
+            random.randint(50, 150),
+            random.randint(0, 100),
+            random.randint(200, 1000)
+        ]
 
-    def get_love_message(self, user1_name, user2_name, score, user1_to_user2, user2_to_user1):
-        if user1_to_user2 - user2_to_user1 > 70:
-            return user1_name + "よ、諦めろ。"
-        elif user2_to_user1 - user1_to_user2 > 70:
-            return user2_name + "よ、諦めろ。"
-        elif abs(user1_to_user2 - user2_to_user1) > 50:
-            return "視界に入れてない可能性があります。"
-        elif abs(user1_to_user2 - user2_to_user1) > 30:
-            return "片思いの可能性があります。💔"
-        elif score > 80:
-            return "素晴らしい相性です！💞"
+    def _get_love_message(
+        self,
+        user1_name: str,
+        user2_name: str,
+        score: int,
+        score1: int,
+        score2: int
+    ) -> str:
+        """相性に応じたメッセージを取得"""
+        diff = abs(score1 - score2)
+
+        if score1 - score2 > 70:
+            return LOVE_MESSAGES["one_sided_high"].format(user1_name)
+        elif score2 - score1 > 70:
+            return LOVE_MESSAGES["one_sided_high"].format(user2_name)
+        elif diff > 50:
+            return LOVE_MESSAGES["one_sided_medium"]
+        elif diff > 30:
+            return LOVE_MESSAGES["one_sided_low"]
+
+        if score > 80:
+            return LOVE_MESSAGES["mutual_excellent"]
         elif score > 60:
-            return "とても良い相性です！😊"
+            return LOVE_MESSAGES["mutual_good"]
         elif score > 40:
-            return "まあまあの相性です。🙂"
+            return LOVE_MESSAGES["mutual_average"]
         elif score > 20:
-            return "ちょっと微妙かも...😕"
+            return LOVE_MESSAGES["mutual_poor"]
 
-        return "残念ながら、相性はあまり良くないようです。😢"
+        return LOVE_MESSAGES["mutual_bad"]
+
+    @discord.app_commands.command(
+        name="love-calculator",
+        description="2人のユーザーを選択して愛の相性を計算します"
+    )
+    async def love_calculator(
+        self,
+        interaction: discord.Interaction,
+        user1: discord.User,
+        user2: discord.User
+    ) -> None:
+        """愛の相性を計算するコマンド"""
+        try:
+            if user1 == user2:
+                embed = discord.Embed(
+                    title="💖 Love Calculator 💖",
+                    description="1人目と2人目で同じユーザーが選択されています。",
+                    color=discord.Color.pink()
+                )
+                await interaction.response.send_message(embed=embed)
+                return
+
+            scores = self._calculate_love_score(user1.name, user2.name)
+            embed = self._create_love_embed(user1, user2, scores)
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in love calculator: {e}", exc_info=True)
+            await interaction.response.send_message(
+                f"エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
+    @discord.app_commands.command(
+        name="fantasy-status",
+        description="特定の人の装備品、攻撃力、守備力、体力を表示する"
+    )
+    async def fantasy_status(
+        self,
+        interaction: discord.Interaction,
+        user: discord.User
+    ) -> None:
+        """ファンタジーステータスを表示するコマンド"""
+        try:
+            stats = self._calculate_stats(user.name)
+            embed = self._create_status_embed(user, stats)
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in fantasy status: {e}", exc_info=True)
+            await interaction.response.send_message(
+                f"エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
+    @discord.app_commands.command(
+        name="your-cpu-gpu",
+        description="特定の人をCPU、GPUで例えると...？"
+    )
+    async def your_cpu(
+        self,
+        interaction: discord.Interaction,
+        user: discord.User
+    ) -> None:
+        """ユーザーに対応するCPU/GPUを表示するコマンド"""
+        try:
+            random.seed(user.name)
+            embed = discord.Embed(
+                title=f"💻 {user.name}をCPU、GPUで例えると...？ 🖥",
+                color=discord.Color.blue()
+            )
+            embed.add_field(
+                name="CPU",
+                value=random.choice(self.cpus),
+                inline=True
+            )
+            embed.add_field(
+                name="GPU",
+                value=random.choice(self.gpus),
+                inline=True
+            )
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in cpu/gpu command: {e}", exc_info=True)
+            await interaction.response.send_message(
+                f"エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
+    @discord.app_commands.command(
+        name="versus",
+        description="fantasy-statusのステータスをもとに対戦させます。"
+    )
+    async def versus(
+        self,
+        interaction: discord.Interaction,
+        user1: discord.User,
+        user2: discord.User
+    ) -> None:
+        """ユーザー同士の対戦を実行するコマンド"""
+        try:
+            if user1 == user2:
+                embed = discord.Embed(
+                    title="⚔ Versus ⚔",
+                    description="1人目と2人目で同じユーザーが選択されています。",
+                    color=discord.Color.dark_red()
+                )
+                await interaction.response.send_message(embed=embed)
+                return
+
+            random.seed(time.time())
+            stats1 = self._calculate_stats(user1.name)
+            stats2 = self._calculate_stats(user2.name)
+
+            battle = BattleSystem(
+                (user1.name, stats1),
+                (user2.name, stats2)
+            )
+
+            embed = discord.Embed(
+                title="⚔ Versus ⚔",
+                color=discord.Color.dark_red()
+            )
+
+            hp1 = stats1[3]
+            hp2 = stats2[3]
+            turn = random.randint(0, 1)
+
+            for _ in range(BATTLE_CONFIG["max_turns"]):
+                if turn:
+                    damage, is_crit = battle.calculate_damage(
+                        stats1[1], stats2[2],
+                        stats1[0], stats2[0]
+                    )
+                    hp2 -= damage
+                    msg = (
+                        "クリティカルヒット！" if is_crit else ""
+                    ) + f"{user2.name}に{damage}のダメージ！残りHP：{hp2}"
+                    embed.add_field(
+                        name=f"{user1.name}のターン",
+                        value=msg,
+                        inline=False
+                    )
+                    if hp2 <= 0:
+                        embed.add_field(
+                            name=f"{user1.name}の勝利！",
+                            value=f"{user1.name}は{hp1}の体力を残して勝利した！",
+                            inline=False
+                        )
+                        break
+                else:
+                    damage, is_crit = battle.calculate_damage(
+                        stats2[1], stats1[2],
+                        stats2[0], stats1[0]
+                    )
+                    hp1 -= damage
+                    msg = (
+                        "クリティカルヒット！" if is_crit else ""
+                    ) + f"{user1.name}に{damage}のダメージ！残りHP：{hp1}"
+                    embed.add_field(
+                        name=f"{user2.name}のターン",
+                        value=msg,
+                        inline=False
+                    )
+                    if hp1 <= 0:
+                        embed.add_field(
+                            name=f"{user2.name}の勝利！",
+                            value=f"{user2.name}は{hp2}の体力を残して勝利した！",
+                            inline=False
+                        )
+                        break
+                turn = not turn
+
+            if hp1 > 0 and hp2 > 0:
+                embed.add_field(
+                    name="引き分け",
+                    value=(
+                        f"{BATTLE_CONFIG['max_turns']}ターン以内に"
+                        f"戦いが終わらなかった。\n"
+                        f"{user1.name}の体力：{hp1}\n"
+                        f"{user2.name}の体力：{hp2}"
+                    ),
+                    inline=False
+                )
+
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in versus command: {e}", exc_info=True)
+            await interaction.response.send_message(
+                f"エラーが発生しました: {e}",
+                ephemeral=True
+            )
 
 
-async def setup(bot):
-    await bot.add_cog(LoveCalculator(bot))
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(JokeCommands(bot))
