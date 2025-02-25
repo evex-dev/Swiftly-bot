@@ -4,6 +4,8 @@ from typing import Final, Optional
 import logging
 from datetime import datetime
 import sqlite3
+import matplotlib.pyplot as plt
+import io
 
 # 定数定義
 MAX_OPTIONS: Final[int] = 10
@@ -121,6 +123,65 @@ class AnonyVote(commands.Cog):
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.app_commands.command(
+        name="anony-end",
+        description="投票を終了し、結果を表示します"
+    )
+    async def anony_end(
+        self,
+        interaction: discord.Interaction,
+        session_id: str
+    ) -> None:
+        vote = self.conn.execute(
+            'SELECT topic, options FROM votes WHERE session_id = ?',
+            (session_id,)
+        ).fetchone()
+
+        if not vote:
+            await interaction.response.send_message(
+                "無効なセッションIDです。",
+                ephemeral=True
+            )
+            return
+
+        answers = self.conn.execute(
+            'SELECT answer, COUNT(*) FROM answers WHERE session_id = ? GROUP BY answer',
+            (session_id,)
+        ).fetchall()
+
+        if not answers:
+            await interaction.response.send_message(
+                "投票がありません。",
+                ephemeral=True
+            )
+            return
+
+        topic, options_str = vote
+        options_list = options_str.split(',')
+        answer_counts = {option: 0 for option in options_list}
+        for answer, count in answers:
+            answer_counts[answer] = count
+
+        # グラフを生成
+        fig, ax = plt.subplots()
+        ax.bar(answer_counts.keys(), answer_counts.values())
+        ax.set_title(f"投票結果: {topic}")
+        ax.set_xlabel("選択肢")
+        ax.set_ylabel("票数")
+
+        # 画像をバイトストリームに保存
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+
+        file = discord.File(buf, filename="vote_result.png")
+        embed = discord.Embed(
+            title="投票結果",
+            color=discord.Color.purple()
+        )
+        embed.set_image(url="attachment://vote_result.png")
+        await interaction.response.send_message(embed=embed, file=file, ephemeral=False)
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(AnonyVote(bot))
