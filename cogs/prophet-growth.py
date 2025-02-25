@@ -296,7 +296,7 @@ class ProphetGrowth(commands.Cog):
                 await progress.edit(content=None, embed=embed)
 
         except Exception as e:
-            logger.error(f"Error in prophet_growth: {e}", exc_info=True)
+            logger.error("Error in prophet_growth: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e))
             )

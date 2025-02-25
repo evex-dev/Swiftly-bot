@@ -156,7 +156,7 @@ class PackageSearch(commands.Cog):
     )
     @discord.app_commands.choices(manager=[
         discord.app_commands.Choice(name=m, value=m)
-        for m in PACKAGE_MANAGERS.keys()
+        for m in PACKAGE_MANAGERS
     ])
     async def search_package(
         self,

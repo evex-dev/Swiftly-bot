@@ -112,7 +112,7 @@ class MinecraftSkin(commands.Cog):
     )
     @discord.app_commands.choices(view_type=[
         discord.app_commands.Choice(name=k, value=k)
-        for k in SKIN_VIEWS.keys()
+        for k in SKIN_VIEWS
     ])
     async def skin(
         self,

@@ -2,7 +2,7 @@ import asyncio
 import time
 import platform
 import psutil
-from typing import Final, Optional, Dict, Any
+from typing import Final, Optional, Dict
 import logging
 from datetime import datetime, timedelta
 

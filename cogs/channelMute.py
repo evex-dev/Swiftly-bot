@@ -2,7 +2,7 @@ import aiosqlite
 import discord
 from discord.ext import commands
 from pathlib import Path
-from typing import Final, Optional
+from typing import Final
 import logging
 
 # 定数定義

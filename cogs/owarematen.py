@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import aiosqlite
 import uuid
-import os
 import asyncio
 from pathlib import Path
 from typing import Final, Optional, List, Tuple
