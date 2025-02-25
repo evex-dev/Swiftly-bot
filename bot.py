@@ -298,6 +298,12 @@ class SwiftlyBot(commands.Bot):
         self,
         ctx: commands.Context
     ) -> bool:
+        # DEV_USER_IDが設定されている場合、開発のためそのユーザーのみコマンドを実行可能
+        dev_user_id = os.getenv("DEV_USER_ID")
+        if dev_user_id and str(ctx.author.id) != dev_user_id:
+            await ctx.send("現在、開発者のみが実行できます。")
+            return False
+
         if not ctx.guild:
             return True
 
@@ -317,6 +323,15 @@ class SwiftlyBot(commands.Bot):
         self,
         interaction: discord.Interaction
     ) -> bool:
+        # DEV_USER_IDが設定されている場合、そのユーザーのみコマンドを実行可能
+        dev_user_id = os.getenv("DEV_USER_ID")
+        if dev_user_id and str(interaction.user.id) != dev_user_id:
+            await interaction.response.send_message(
+                "このコマンドは開発者のみが実行できます。",
+                ephemeral=True
+            )
+            return False
+
         if not interaction.guild:
             return True
 
