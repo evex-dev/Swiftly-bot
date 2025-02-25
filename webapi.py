@@ -2,138 +2,345 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import sqlite3
-from typing import List, Optional
-from pydantic import BaseModel
+from typing import Final, Optional, List, Dict, Any
+from pydantic import BaseModel, Field
 from datetime import datetime
-import os
+import logging
+from pathlib import Path
 import json
 
-app = FastAPI(title="Server Board API")
+# 定数定義
+APP_TITLE: Final[str] = "Server Board API"
+HOST: Final[str] = "0.0.0.0"
+PORT: Final[int] = 8000
 
-# データベースファイルのパスを絶対パスで設定
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server_board.db")
-USER_COUNT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_count.json")
+PATHS: Final[dict] = {
+    "db": Path(__file__).parent / "server_board.db",
+    "user_count": Path(__file__).parent / "user_count.json",
+    "public": Path(__file__).parent / "public"
+}
 
-# CORSミドルウェアの設定
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+TIME_UNITS: Final[Dict[str, int]] = {
+    "days": 24 * 60 * 60,
+    "hours": 60 * 60,
+    "minutes": 60,
+    "seconds": 1
+}
 
+ERROR_MESSAGES: Final[dict] = {
+    "db_not_found": "データベースファイルが見つかりません: {}",
+    "table_not_found": "サーバーテーブルが存在しません",
+    "server_not_found": "サーバーが見つかりません",
+    "user_count_not_found": "ユーザー数ファイルが見つかりません: {}",
+    "db_error": "データベースエラー: {}",
+    "json_error": "JSONデコードエラー: {}",
+    "unexpected": "予期せぬエラー: {}"
+}
+
+logger = logging.getLogger(__name__)
 
 class Server(BaseModel):
-    server_id: int
-    server_name: str
-    icon_url: Optional[str] = None
-    description: Optional[str] = None
-    last_up_time: Optional[datetime] = None
-    registered_at: datetime
-    invite_url: Optional[str] = None
-    time_since_last_up: Optional[str] = None  # 最後のupからの経過時間を文字列で保持
+    """サーバー情報モデル"""
 
+    server_id: int = Field(..., description="サーバーID")
+    server_name: str = Field(..., description="サーバー名")
+    icon_url: Optional[str] = Field(None, description="アイコンURL")
+    description: Optional[str] = Field(None, description="説明")
+    last_up_time: Optional[datetime] = Field(None, description="最終アップ時間")
+    registered_at: datetime = Field(..., description="登録日時")
+    invite_url: Optional[str] = Field(None, description="招待URL")
+    time_since_last_up: Optional[str] = Field(None, description="最終アップからの経過時間")
 
-@app.get("/api/servers", response_model=List[Server])
-async def get_servers():
-    if not os.path.exists(DB_PATH):
-        raise HTTPException(status_code=500, detail=f"Database file not found at {DB_PATH}")
+class DatabaseManager:
+    """データベース操作を管理するクラス"""
 
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
 
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='servers'")
-            if not cursor.fetchone():
-                raise HTTPException(status_code=500, detail="Servers table does not exist")
+    def get_connection(self) -> sqlite3.Connection:
+        """
+        データベース接続を取得
 
-            cursor.execute("""
-                SELECT * FROM servers
-                ORDER BY
-                    CASE WHEN last_up_time IS NULL THEN 0 ELSE 1 END DESC,
-                    last_up_time DESC,
-                    registered_at DESC
-            """)
-            servers = cursor.fetchall()
+        Returns
+        -------
+        sqlite3.Connection
+            データベース接続
+        """
+        if not self.db_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["db_not_found"].format(self.db_path)
+            )
 
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def check_table_exists(self, conn: sqlite3.Connection) -> None:
+        """テーブルの存在確認"""
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='servers'"
+        )
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["table_not_found"]
+            )
+
+    async def get_all_servers(self) -> List[Dict[str, Any]]:
+        """
+        全サーバー情報を取得
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            サーバー情報のリスト
+        """
+        try:
+            with self.get_connection() as conn:
+                self.check_table_exists(conn)
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT * FROM servers
+                    ORDER BY
+                        CASE WHEN last_up_time IS NULL THEN 0 ELSE 1 END DESC,
+                        last_up_time DESC,
+                        registered_at DESC
+                """)
+                return [dict(row) for row in cursor.fetchall()]
+
+        except sqlite3.Error as e:
+            logger.error(f"Database error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["db_error"].format(str(e))
+            ) from e
+
+    async def get_server(self, server_id: int) -> Dict[str, Any]:
+        """
+        指定したサーバーの情報を取得
+
+        Parameters
+        ----------
+        server_id : int
+            サーバーID
+
+        Returns
+        -------
+        Dict[str, Any]
+            サーバー情報
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM servers WHERE server_id = ?",
+                    (server_id,)
+                )
+                if server := cursor.fetchone():
+                    return dict(server)
+
+                raise HTTPException(
+                    status_code=404,
+                    detail=ERROR_MESSAGES["server_not_found"]
+                )
+
+        except sqlite3.Error as e:
+            logger.error(f"Database error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["db_error"].format(str(e))
+            ) from e
+
+class TimeCalculator:
+    """時間計算を行うクラス"""
+
+    @staticmethod
+    def calculate_time_ago(last_up: datetime) -> str:
+        """
+        経過時間を計算
+
+        Parameters
+        ----------
+        last_up : datetime
+            基準時刻
+
+        Returns
+        -------
+        str
+            経過時間の文字列表現
+        """
+        delta = datetime.now() - last_up
+
+        if delta.days > 0:
+            return f"{delta.days}日前"
+
+        seconds = delta.seconds
+        for unit, threshold in TIME_UNITS.items():
+            if seconds >= threshold:
+                value = seconds // threshold
+                if unit == "days":
+                    return f"{value}日前"
+                elif unit == "hours":
+                    return f"{value}時間前"
+                elif unit == "minutes":
+                    return f"{value}分前"
+                else:
+                    return f"{value}秒前"
+
+        return "たった今"
+
+class UserCountManager:
+    """ユーザー数管理を行うクラス"""
+
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
+
+    async def get_total_users(self) -> int:
+        """
+        総ユーザー数を取得
+
+        Returns
+        -------
+        int
+            総ユーザー数
+        """
+        if not self.file_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["user_count_not_found"].format(
+                    self.file_path
+                )
+            )
+
+        try:
+            data = json.loads(self.file_path.read_text(encoding="utf-8"))
+            return data.get("total_users", 0)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["json_error"].format(str(e))
+            ) from e
+
+class ServerBoardAPI:
+    """サーバーボードAPIを管理するクラス"""
+
+    def __init__(self) -> None:
+        self.app = FastAPI(title=APP_TITLE)
+        self.db = DatabaseManager(PATHS["db"])
+        self.user_count = UserCountManager(PATHS["user_count"])
+        self.time_calc = TimeCalculator()
+        self._setup_middleware()
+        self._setup_routes()
+
+    def _setup_middleware(self) -> None:
+        """ミドルウェアの設定"""
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"]
+        )
+
+    def _setup_routes(self) -> None:
+        """ルーティングの設定"""
+        self.app.get("/api/servers")(self.get_servers)
+        self.app.get("/api/servers/{server_id}")(self.get_server)
+        self.app.get("/api/users")(self.get_total_users)
+        self.app.mount(
+            "/",
+            StaticFiles(directory=PATHS["public"], html=True),
+            name="static"
+        )
+
+    def _process_server_data(
+        self,
+        servers: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        サーバーデータを処理
+
+        Parameters
+        ----------
+        servers : List[Dict[str, Any]]
+            処理前のサーバーデータ
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            処理後のサーバーデータ
+        """
+        for server in servers:
+            if last_up_str := server.get("last_up_time"):
+                last_up = datetime.fromisoformat(last_up_str)
+                server["time_since_last_up"] = self.time_calc.calculate_time_ago(
+                    last_up
+                )
+            else:
+                server["time_since_last_up"] = None
+        return servers
+
+    async def get_servers(self) -> List[Server]:
+        """全サーバー情報を取得するエンドポイント"""
+        try:
+            servers = await self.db.get_all_servers()
             if not servers:
                 return []
 
-            current_time = datetime.now()
-            result = []
+            processed_servers = self._process_server_data(servers)
+            return [Server(**server) for server in processed_servers]
 
-            for server in servers:
-                server_dict = dict(server)
-                if server_dict["last_up_time"]:
-                    last_up = datetime.fromisoformat(
-                        server_dict["last_up_time"])
-                    delta = current_time - last_up
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["unexpected"].format(str(e))
+            ) from e
 
-                    if delta.days > 0:
-                        time_str = f"{delta.days}日前"
-                    elif delta.seconds >= 3600:
-                        hours = delta.seconds // 3600
-                        time_str = f"{hours}時間前"
-                    elif delta.seconds >= 60:
-                        minutes = delta.seconds // 60
-                        time_str = f"{minutes}分前"
-                    else:
-                        time_str = f"{delta.seconds}秒前"
+    async def get_server(self, server_id: int) -> Server:
+        """
+        指定したサーバーの情報を取得するエンドポイント
 
-                    server_dict["time_since_last_up"] = time_str
-                else:
-                    server_dict["time_since_last_up"] = None
+        Parameters
+        ----------
+        server_id : int
+            サーバーID
+        """
+        try:
+            server = await self.db.get_server(server_id)
+            return Server(**server)
 
-                result.append(server_dict)
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["unexpected"].format(str(e))
+            ) from e
 
-            return result
+    async def get_total_users(self) -> Dict[str, int]:
+        """総ユーザー数を取得するエンドポイント"""
+        try:
+            total = await self.user_count.get_total_users()
+            return {"total_users": total}
 
-    except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["unexpected"].format(str(e))
+            ) from e
 
-
-@app.get("/api/servers/{server_id}", response_model=Server)
-async def get_server(server_id: int):
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM servers WHERE server_id = ?", (server_id,))
-            server = cursor.fetchone()
-
-            if server is None:
-                raise HTTPException(status_code=404, detail="Server not found")
-
-            return dict(server)
-    except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
-
-@app.get("/api/users")
-async def get_total_users():
-    if not os.path.exists(USER_COUNT_PATH):
-        raise HTTPException(status_code=500, detail=f"User count file not found at {USER_COUNT_PATH}")
-
-    try:
-        with open(USER_COUNT_PATH, "r", encoding="utf-8") as file:
-            data = json.load(file)
-            return {"total_users": data.get("total_users", 0)}
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Error reading user count file: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
-# 静的ファイルの設定（APIエンドポイントの後に配置）
-app.mount("/", StaticFiles(directory="public", html=True), name="static")
+# APIインスタンスの作成
+api = ServerBoardAPI()
+app = api.app
 
 if __name__ == "__main__":
-    print(f"Database path: {DB_PATH}")
-    print(f"Database exists: {os.path.exists(DB_PATH)}")
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    logger.info(f"Database path: {PATHS['db']}")
+    logger.info(f"Database exists: {PATHS['db'].exists()}")
+    uvicorn.run(app, host=HOST, port=PORT)
