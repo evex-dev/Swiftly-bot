@@ -14,6 +14,9 @@ import dotenv
 import discord
 from discord.ext import commands
 
+# logging.pyをインポート
+from module.logging import LoggingCog
+
 # 定数定義
 SHARD_COUNT: Final[int] = 10
 COMMAND_PREFIX: Final[str] = "sw!"
@@ -195,6 +198,7 @@ class SwiftlyBot(commands.Bot):
         """ボットのセットアップ処理"""
         await self.db.initialize()
         await self._load_extensions()
+        await self.add_cog(LoggingCog(self))  # LoggingCogを追加
         await self.tree.sync()
 
     async def _load_extensions(self) -> None:
