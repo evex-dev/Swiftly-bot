@@ -49,7 +49,7 @@ class AnonyVote(commands.Cog):
         options_list = options.split(',')
         if len(options_list) < 2 or len(options_list) > MAX_OPTIONS:
             await interaction.response.send_message(
-                f"選択肢は2個以上{MAX_OPTIONS}個以下で指定してください。",
+                f"選択肢は2個以上{MAX_OPTIONS}個以下で指定してください。「,」で区切ってください。",
                 ephemeral=True
             )
             return
@@ -62,10 +62,12 @@ class AnonyVote(commands.Cog):
                 (session_id, interaction.channel_id, topic, options_str)
             )
 
-        await interaction.response.send_message(
-            f"投票が開始されました。\nトピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}\n\n/anony-answer {session_id} <選択肢> で回答してください。",
-            ephemeral=False
+        embed = discord.Embed(
+            title="投票が開始されました",
+            description=f"トピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}\n\n/anony-answer session_id:{session_id} <選択肢> で回答してください。",
+            color=discord.Color.blue()
         )
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @discord.app_commands.command(
         name="anony-answer",
@@ -114,10 +116,11 @@ class AnonyVote(commands.Cog):
                 (session_id, interaction.user.id, answer)
             )
 
-        await interaction.response.send_message(
-            "投票に回答しました。",
-            ephemeral=True
+        embed = discord.Embed(
+            title="投票に回答しました",
+            color=discord.Color.green()
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(AnonyVote(bot))
