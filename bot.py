@@ -1,21 +1,21 @@
 # Swiftly DiscordBot.
 # Developed by: TechFish_1
+# Standard library imports
 import asyncio
-import os
 import json
-import time
-from typing import Final, Optional, Set, Dict, Any
 import logging
+import os
+import time
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+from typing import Any, Dict, Final, Optional, Set
 
+# Third-party imports
 import aiosqlite
-import dotenv
 import discord
+import dotenv
 from discord.ext import commands
-
-# logging.pyをインポート
-from module.logging import LoggingCog
+from module.logger import LoggingCog
 
 # 定数定義
 SHARD_COUNT: Final[int] = 10
@@ -186,6 +186,13 @@ class SwiftlyBot(commands.Bot):
         for handler in handlers:
             logger.addHandler(handler)
         logger.addHandler(console_handler)
+
+        # LoggingCog用のロガー設定
+        bot_logger = logging.getLogger("bot")
+        bot_logger.setLevel(logging.INFO)
+        for handler in handlers:
+            bot_logger.addHandler(handler)
+        bot_logger.addHandler(console_handler)
 
         # Discordのロガー設定
         discord_logger = logging.getLogger("discord")
