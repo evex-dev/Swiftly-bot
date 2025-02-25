@@ -54,11 +54,11 @@ CREATE TABLE IF NOT EXISTS welcome_settings (
 logger = logging.getLogger(__name__)
 
 class WelcomeDatabase:
-    """ウェルカムメッセージの設定を管理するデータベース"""
+    """ウェルカムメッセージの設定を管理するDB"""
 
     @staticmethod
     async def init_database() -> None:
-        """データベースを初期化"""
+        """DBを初期化"""
         os.makedirs(DB_PATH.parent, exist_ok=True)
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(CREATE_TABLE_SQL)
@@ -121,7 +121,7 @@ class MemberWelcomeCog(commands.Cog):
         self.last_welcome_time = {}
 
     async def cog_load(self) -> None:
-        """Cogのロード時にデータベースを初期化"""
+        """Cogのロード時にDBを初期化"""
         await WelcomeDatabase.init_database()
 
     def _create_welcome_embed(

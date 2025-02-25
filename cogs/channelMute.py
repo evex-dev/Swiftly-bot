@@ -11,7 +11,7 @@ TABLE_NAME: Final[str] = "prohibited_channels"
 
 ERROR_MESSAGES: Final[dict] = {
     "no_permission": "このコマンドはサーバー管理者のみ実行可能です。",
-    "db_error": "データベースエラーが発生しました: {}"
+    "db_error": "DBエラーが発生しました: {}"
 }
 
 SUCCESS_MESSAGES: Final[dict] = {

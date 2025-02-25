@@ -14,7 +14,7 @@ UP_COOLDOWN: Final[int] = 7200  # 2時間（秒）
 REMINDER_MESSAGE: Final[str] = "2時間経ちました！/upしてね！"
 ERROR_MESSAGES: Final[dict] = {
     "already_registered": "このサーバーは既に登録されています。",
-    "db_error": "データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {}",
+    "db_error": "DBエラーが発生しました。時間をおいて再度お試しください。\nエラー: {}",
     "no_invite_channel": "招待リンクを作成できるチャンネルがありません。ボットの権限を確認してください。",
     "no_invite_permission": "招待リンクを作成する権限がありません。ボットに「招待リンクの作成」権限があることを確認してください。",
     "invite_error": "招待リンクの作成中にエラーが発生しました。時間をおいて再度お試しください。\nエラー: {}",

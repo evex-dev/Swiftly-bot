@@ -29,11 +29,11 @@ TIME_UNITS: Final[Dict[str, int]] = {
 }
 
 ERROR_MESSAGES: Final[dict] = {
-    "db_not_found": "データベースファイルが見つかりません: {}",
+    "db_not_found": "DBファイルが見つかりません: {}",
     "table_not_found": "サーバーテーブルが存在しません",
     "server_not_found": "サーバーが見つかりません",
     "user_count_not_found": "ユーザー数ファイルが見つかりません: {}",
-    "db_error": "データベースエラー: {}",
+    "db_error": "DBエラー: {}",
     "json_error": "JSONデコードエラー: {}",
     "unexpected": "予期せぬエラー: {}"
 }
@@ -59,7 +59,7 @@ class Server(BaseModel):
     time_since_last_up: Optional[str] = Field(None, description="最終アップからの経過時間")
 
 class DatabaseManager:
-    """データベース操作を管理するクラス"""
+    """DB操作を管理するクラス"""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path

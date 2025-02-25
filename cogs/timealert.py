@@ -27,7 +27,7 @@ ERROR_MESSAGES: Final[dict] = {
     "invalid_time": "時間のフォーマットが正しくありません。正しいフォーマットは HH:MM です。",
     "max_alerts": "このチャンネルにはすでに{}つの時報が設定されています。",
     "rate_limit": "レート制限中です。{}秒後にお試しください。",
-    "db_error": "データベースエラーが発生しました: {}",
+    "db_error": "DBエラーが発生しました: {}",
     "unexpected": "予期せぬエラーが発生しました: {}"
 }
 
@@ -40,7 +40,7 @@ SUCCESS_MESSAGES: Final[dict] = {
 logger = logging.getLogger(__name__)
 
 class AlertDatabase:
-    """時報データベースを管理するクラス"""
+    """時報DBを管理するクラス"""
 
     def __init__(self) -> None:
         self._db: Optional[aiosqlite.Connection] = None

@@ -44,7 +44,7 @@ ERROR_MESSAGES: Final[dict] = {
     "game_in_progress": "他のゲームが進行中です。先に/owarematen-open-answersでゲームを終了してください。",
     "no_game": "ゲームが開始されていません。/owarematen-start-customで開始してください。",
     "already_answered": "既に回答済みです。一人一回のみ回答できます。",
-    "db_error": "データベースエラーが発生しました: {}"
+    "db_error": "DBエラーが発生しました: {}"
 }
 
 logger = logging.getLogger(__name__)
@@ -73,11 +73,11 @@ class DiscowaremaTen(commands.Cog):
         DB_DIR.mkdir(exist_ok=True)
 
     async def cog_load(self) -> None:
-        """Cogのロード時にデータベースを初期化"""
+        """Cogのロード時にDBを初期化"""
         await self._init_db()
 
     async def _init_db(self) -> None:
-        """データベースを初期化"""
+        """DBを初期化"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(CREATE_SESSIONS_TABLE)
             await db.execute(CREATE_ANSWERS_TABLE)

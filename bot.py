@@ -30,7 +30,7 @@ PATHS: Final[dict] = {
 ERROR_MESSAGES: Final[dict] = {
     "command_error": "エラーが発生しました",
     "prohibited_channel": "このチャンネルではコマンドの実行が禁止されています。",
-    "db_error": "データベースエラーが発生しました: {}"
+    "db_error": "DBエラーが発生しました: {}"
 }
 
 LOG_FORMAT: Final[str] = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -38,7 +38,7 @@ LOG_FORMAT: Final[str] = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
-    """データベース操作を管理するクラス"""
+    """DB操作を管理するクラス"""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -46,7 +46,7 @@ class DatabaseManager:
         self._connection: Optional[aiosqlite.Connection] = None
 
     async def initialize(self) -> None:
-        """データベースを初期化"""
+        """DBを初期化"""
         self._connection = await aiosqlite.connect(self.db_path)
         await self._connection.execute("""
             CREATE TABLE IF NOT EXISTS prohibited_channels (
@@ -58,7 +58,7 @@ class DatabaseManager:
         await self._connection.commit()
 
     async def cleanup(self) -> None:
-        """データベース接続を閉じる"""
+        """DB接続を閉じる"""
         if self._connection:
             await self._connection.close()
             self._connection = None

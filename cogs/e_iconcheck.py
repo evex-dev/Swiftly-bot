@@ -43,11 +43,11 @@ FEATURE_DESCRIPTION: Final[str] = (
 logger = logging.getLogger(__name__)
 
 class AntiRaidDatabase:
-    """荒らし対策のデータベース操作を管理"""
+    """荒らし対策のDB操作を管理"""
 
     @staticmethod
     async def init_db() -> None:
-        """データベースを初期化"""
+        """DBを初期化"""
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
                 """
@@ -150,7 +150,7 @@ class IconCheck(commands.Cog):
         self.bot = bot
 
     async def cog_load(self) -> None:
-        """Cogのロード時にデータベースを初期化"""
+        """Cogのロード時にDBを初期化"""
         await AntiRaidDatabase.init_db()
 
     def _create_embed(
