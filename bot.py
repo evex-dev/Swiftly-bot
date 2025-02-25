@@ -224,7 +224,7 @@ class SwiftlyBot(commands.Bot):
                     name=f"/help || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(3)
+            await asyncio.sleep(10)
 
     async def count_unique_users(self) -> None:
         """ユニークユーザー数を集計"""
