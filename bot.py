@@ -129,12 +129,12 @@ async def update_bot_status():
 
 @bot.event
 async def on_command_completion(ctx):
-    logging.getLogger("commands").info(f"Command executed: {ctx.command}")
+    logging.getLogger("commands").info("Command executed: %s", ctx.command)
 
 
 @bot.event
 async def on_command_error(ctx, error):
-    logging.getLogger("commands").error(f"Error: {error}")
+    logging.getLogger("commands").error("Error: %s", error)
     await ctx.send("エラーが発生しました")
 
 # データベース接続をグローバルに保持
@@ -159,7 +159,7 @@ async def check_prohibited_channel(guild_id: int, channel_id: int) -> bool:
         )
         return cursor.fetchone() is not None
     except Exception as e:
-        logging.getLogger("bot").error(f"Prohibited channel check error: {e}")
+        logging.getLogger("bot").error("Prohibited channel check error: %s", e)
         return False
 
 
@@ -180,13 +180,13 @@ async def prohibit_commands_in_channels(ctx):
         return True
 
     except Exception as e:
-        logging.getLogger("bot").error(f"Prohibited channel check error: {e}")
+        logging.getLogger("bot").error("Prohibited channel check error: %s", e)
         return True
 
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    logging.getLogger("commands").error(f"App command error: {error}")
+    logging.getLogger("commands").error("App command error: %s", error)
     await interaction.response.send_message("エラーが発生しました", ephemeral=True)
 
 

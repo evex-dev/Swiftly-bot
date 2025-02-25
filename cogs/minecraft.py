@@ -20,12 +20,12 @@ class Minecraft(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
-                    logger.debug(f"Request URL: {url}")
-                    logger.debug(f"Response status: {response.status}")
+                    logger.debug("Request URL: %s", url)
+                    logger.debug("Response status: %s", response.status)
                     if response.status != 200:
                         raise aiohttp.ClientError(f"HTTP Error: {response.status}")
                     data = await response.json()
-                    logger.debug(f"Response data: {data}")
+                    logger.debug("Response data: %s", data)
 
                     if data["online"]:
                         embed = discord.Embed(title=f"Server Status for {address}", color=discord.Color.green())
@@ -51,10 +51,10 @@ class Minecraft(commands.Cog):
 
                     await interaction.followup.send(embed=embed)
         except aiohttp.ClientError as e:
-            logger.error(f"ClientError: {e}")
+            logger.error("ClientError: %s", e)
             await interaction.followup.send(f"Failed to retrieve server status: {e}", ephemeral=True)
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
+            logger.error("Unexpected error: %s", e, exc_info=True)
             await interaction.followup.send(f"An unexpected error occurred: {e}", ephemeral=True)
 
 async def setup(bot):
