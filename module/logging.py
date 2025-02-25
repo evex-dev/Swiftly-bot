@@ -31,7 +31,7 @@ class LoggingCog(commands.Cog):
     async def on_member_remove(self, member: discord.Member) -> None:
         logging.info(f"Member left: {member.name} (ID: {member.id}) from guild: {member.guild.name}")
 
-    @bot.event()
+    @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
         logging.info(f"Command executed: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {ctx.guild.name}")
 
