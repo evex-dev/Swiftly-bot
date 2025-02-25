@@ -45,13 +45,13 @@ async def get_servers():
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute("SELECT name FROM sqlite_master WHERE type="table" AND name="servers"")
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='servers'")
             if not cursor.fetchone():
                 raise HTTPException(status_code=500, detail="Servers table does not exist")
 
             cursor.execute("""
-                SELECT * FROM servers 
-                ORDER BY 
+                SELECT * FROM servers
+                ORDER BY
                     CASE WHEN last_up_time IS NULL THEN 0 ELSE 1 END DESC,
                     last_up_time DESC,
                     registered_at DESC
