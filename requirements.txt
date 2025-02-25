@@ -13,3 +13,7 @@ opencv-python
 pyyaml
 fastapi
 uvicorn
+plotly
+aiosqlite
+pytz
+python-whois
