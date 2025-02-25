@@ -30,7 +30,7 @@ class Whois(commands.Cog):
 
             await interaction.followup.send(embed=embed)
         except Exception as e:
-            await interaction.followup.send(f"エラーが発生しました: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"エラーが発生しました: {e}", ephemeral=True)
 
 
 async def setup(bot):

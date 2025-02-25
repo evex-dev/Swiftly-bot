@@ -47,11 +47,11 @@ class IP(commands.Cog):
                     else:
                         await interaction.followup.send(f"APIエラー: ステータスコード {response.status}", ephemeral=True)
         except aiohttp.ClientError as e:
-            await interaction.followup.send(f"ネットワークエラーが発生しました: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"ネットワークエラーが発生しました: {e}", ephemeral=True)
         except asyncio.TimeoutError:
             await interaction.followup.send("リクエストがタイムアウトしました。", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"予期せぬエラーが発生しました: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"予期せぬエラーが発生しました: {e}", ephemeral=True)
 
 
 async def setup(bot):

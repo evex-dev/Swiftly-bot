@@ -91,9 +91,9 @@ async def get_servers():
             return result
 
     except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {e}") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
 @app.get("/api/servers/{server_id}", response_model=Server)
@@ -110,9 +110,9 @@ async def get_server(server_id: int):
 
             return dict(server)
     except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {e}") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
 @app.get("/api/users")
@@ -125,9 +125,9 @@ async def get_total_users():
             data = json.load(file)
             return {"total_users": data.get("total_users", 0)}
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Error reading user count file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reading user count file: {e}") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 # 静的ファイルの設定（APIエンドポイントの後に配置）
 app.mount("/", StaticFiles(directory="public", html=True), name="static")

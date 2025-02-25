@@ -96,7 +96,7 @@ class LoveCalculator(commands.Cog):
             embed.add_field(name="GPU", value=gpu, inline=True)
             await interaction.response.send_message(embed=embed)
         except Exception as e:
-            await interaction.response.send_message(f"エラーが発生しました: {str(e)}")
+            await interaction.response.send_message(f"エラーが発生しました: {e}")
 
     @discord.app_commands.command(name="versus", description="fantasy-statusのステータスをもとに対戦させます。ステータスは固定ですがそれ以外はランダム。")
     async def versus(self, interaction: discord.Interaction, user1: discord.User, user2: discord.User):
@@ -115,7 +115,7 @@ class LoveCalculator(commands.Cog):
                 hp2 = stats2[3]
                 embed = discord.Embed(title="⚔ Versus ⚔", color=discord.Color.dark_red())
                 turn = random.randint(0, 1)
-                for i in range(20):
+                for _ in range(20):
                     crit = False
                     crit_chance = 0.1
                     if turn:
@@ -168,7 +168,7 @@ class LoveCalculator(commands.Cog):
                     embed.add_field(name="引き分け", value=f"20ターン以内に戦いが終わらなかった。\n{name1}の体力：{hp1}\n{name2}の体力：{hp2}", inline=False)
                 await interaction.response.send_message(embed=embed)
         except Exception as e:
-            await interaction.response.send_message(f"エラーが発生しました: {str(e)}")
+            await interaction.response.send_message(f"エラーが発生しました: {e}")
 
     def K7LoveCalc(self, name1: str, name2: str):
         # Use only day of the current date (1～31) as a slight influence

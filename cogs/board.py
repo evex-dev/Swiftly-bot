@@ -91,7 +91,7 @@ class ServerBoard(commands.Cog):
                         await interaction.followup.send("このサーバーは既に登録されています。", ephemeral=True)
                         return
             except sqlite3.Error as e:
-                await interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                await interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
                 return
 
             try:
@@ -106,11 +106,11 @@ class ServerBoard(commands.Cog):
                     await interaction.followup.send("招待リンクを作成する権限がありません。ボットに「招待リンクの作成」権限があることを確認してください。", ephemeral=True)
                     return
                 except discord.HTTPException as e:
-                    await interaction.followup.send(f"招待リンクの作成中にエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                    await interaction.followup.send(f"招待リンクの作成中にエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
                     return
 
             except Exception as e:
-                await interaction.followup.send(f"招待リンク作成時に予期せぬエラーが発生しました。\nエラー: {str(e)}", ephemeral=True)
+                await interaction.followup.send(f"招待リンク作成時に予期せぬエラーが発生しました。\nエラー: {e}", ephemeral=True)
                 return
 
             embed = discord.Embed(
@@ -144,7 +144,7 @@ class ServerBoard(commands.Cog):
                                 """, (guild.id, guild.name, guild.icon.url if guild.icon else None, invite.url))
                                 conn.commit()
                         except sqlite3.Error as e:
-                            await button_interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                            await button_interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
                             return
 
                         await button_interaction.followup.send("サーバーを登録しました！", ephemeral=True)
@@ -153,7 +153,7 @@ class ServerBoard(commands.Cog):
                         except:
                             pass
                     except Exception as e:
-                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {str(e)}", ephemeral=True)
+                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {e}", ephemeral=True)
 
                 @discord.ui.button(style=discord.ButtonStyle.danger, emoji="❌", custom_id="cancel")
                 async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
@@ -169,7 +169,7 @@ class ServerBoard(commands.Cog):
                         except:
                             pass
                     except Exception as e:
-                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {str(e)}", ephemeral=True)
+                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {e}", ephemeral=True)
 
                 async def on_timeout(self):
                     try:
@@ -182,7 +182,7 @@ class ServerBoard(commands.Cog):
 
         except Exception as e:
             try:
-                await interaction.followup.send(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                await interaction.followup.send(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
             except:
                 pass
 
@@ -208,7 +208,7 @@ class ServerBoard(commands.Cog):
                         if (current_time - last_up).total_seconds() < 7200:
                             remaining_time = last_up + datetime.timedelta(hours=2) - current_time
                             await interaction.followup.send(
-                                f"upコマンドは2時間に1回のみ使用できます。\n残り時間: {str(remaining_time).split(".")[0]}",
+                                f"upコマンドは2時間に1回のみ使用できます。\n残り時間: {str(remaining_time).split('.')[0]}",
                                 ephemeral=True
                             )
                             return
@@ -232,12 +232,12 @@ class ServerBoard(commands.Cog):
                     await interaction.followup.send("サーバーの表示順位を上げました！2時間後にこの場所で/upを通知します。", ephemeral=False)
 
             except sqlite3.Error as e:
-                await interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=False)
+                await interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=False)
                 return
 
         except Exception as e:
             try:
-                await interaction.followup.send(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=False)
+                await interaction.followup.send(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=False)
             except:
                 pass
 
@@ -262,12 +262,12 @@ class ServerBoard(commands.Cog):
                 await interaction.response.send_modal(modal)
 
             except sqlite3.Error as e:
-                await interaction.response.send_message(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                await interaction.response.send_message(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
                 return
 
         except Exception as e:
             try:
-                await interaction.response.send_message(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                await interaction.response.send_message(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
             except:
                 pass
 
@@ -305,11 +305,11 @@ class ServerBoard(commands.Cog):
                                     pass
 
                         except sqlite3.Error as e:
-                            await button_interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                            await button_interaction.followup.send(f"データベースエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
                             return
 
                     except Exception as e:
-                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {str(e)}", ephemeral=True)
+                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {e}", ephemeral=True)
 
                 @discord.ui.button(style=discord.ButtonStyle.secondary, emoji="❌", custom_id="cancel")
                 async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
@@ -321,14 +321,14 @@ class ServerBoard(commands.Cog):
                         except:
                             pass
                     except Exception as e:
-                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {str(e)}", ephemeral=True)
+                        await button_interaction.followup.send(f"予期せぬエラーが発生しました。\nエラー: {e}", ephemeral=True)
 
             view = UnregisterView()
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         except Exception as e:
             try:
-                await interaction.response.send_message(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {str(e)}", ephemeral=True)
+                await interaction.response.send_message(f"予期せぬエラーが発生しました。時間をおいて再度お試しください。\nエラー: {e}", ephemeral=True)
             except:
                 pass
 

@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Button
+from discord.ui import View
 from datetime import datetime, timezone, timedelta
 import sqlite3
 
@@ -71,7 +71,7 @@ class EnableAnticheatView(View):
             await interaction.edit_original_response(content="荒らし対策を有効にしました。")
             self.stop()
         except Exception as e:
-            await interaction.followup.send(f"インタラクションに失敗しました: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"インタラクションに失敗しました: {e}", ephemeral=True)
             self.stop()
 
 class IconCheck(commands.Cog):

@@ -68,11 +68,11 @@ class Sandbox(commands.Cog):
                     return json.loads(result), None, elapsed_time
                 return None, "コードの実行に失敗しました。", elapsed_time
         except aiohttp.ClientError as e:
-            return None, f"API通信エラー: {str(e)}", 0.0
+            return None, f"API通信エラー: {e}", 0.0
         except json.JSONDecodeError:
             return None, "APIからの応答の解析に失敗しました。", 0.0
         except Exception as e:
-            return None, f"予期せぬエラー: {str(e)}", 0.0
+            return None, f"予期せぬエラー: {e}", 0.0
 
     @discord.app_commands.command(
         name="sandbox",
