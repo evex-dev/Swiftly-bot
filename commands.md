@@ -147,7 +147,7 @@
     ユーザー権限: なし
     bot権限: 指定したチャンネルを見る権限
 
-- /welcome action:on/off increment:5~1000 | サーバーへの参加メッセージを設定します。
+- /welcome action:enable/disable increment:5~1000 | サーバーへの参加メッセージを設定します。
     ユーザー権限: サーバー管理者
     bot権限: メッセージ送信
     備考: incrementは何人ごとにお祝いメッセージを送信するか設定（デフォルト: 100人）。
