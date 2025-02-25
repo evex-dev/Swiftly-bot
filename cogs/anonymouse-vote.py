@@ -63,7 +63,7 @@ class AnonyVote(commands.Cog):
             )
 
         await interaction.response.send_message(
-            f"投票が開始されました。\nトピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}",
+            f"投票が開始されました。\nトピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}\n\n/anony-answer {session_id} <選択肢> で回答してください。",
             ephemeral=False
         )
 
