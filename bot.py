@@ -3,220 +3,382 @@
 import asyncio
 import os
 import json
-import sqlite3
-import threading
 import time
+from typing import Final, Optional, Set, Dict, Any
+import logging
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 
+import aiosqlite
 import dotenv
 import discord
 from discord.ext import commands
-import logging
-from logging.handlers import TimedRotatingFileHandler
 
-logging.getLogger("discord").setLevel(logging.WARNING)
+# 定数定義
+SHARD_COUNT: Final[int] = 10
+COMMAND_PREFIX: Final[str] = "sw!"
+STATUS_UPDATE_COOLDOWN: Final[int] = 5
+LOG_RETENTION_DAYS: Final[int] = 7
 
-last_status_update = 0
+PATHS: Final[dict] = {
+    "log_dir": Path("./log"),
+    "db": Path("data/prohibited_channels.db"),
+    "user_count": Path("data/user_count.json"),
+    "cogs_dir": Path("./cogs")
+}
 
-intents = discord.Intents.default()
-intents.members = True
-intents.messages = True
-intents.message_content = True
+ERROR_MESSAGES: Final[dict] = {
+    "command_error": "エラーが発生しました",
+    "prohibited_channel": "このチャンネルではコマンドの実行が禁止されています。",
+    "db_error": "データベースエラーが発生しました: {}"
+}
 
-client = discord.AutoShardedClient(intents=intents, shard_count=10)
-bot = commands.Bot(command_prefix="sw!", intents=intents, client=client)
+LOG_FORMAT: Final[str] = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-# tokenを.envファイルから取得
-dotenv.load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
+logger = logging.getLogger(__name__)
 
-# ログの設定
-log_dir = "./log"
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
+class DatabaseManager:
+    """データベース操作を管理するクラス"""
 
-# すべてのログを1つのファイルに記録
-log_handler = TimedRotatingFileHandler(f"{log_dir}/logs.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
-log_handler.setLevel(logging.DEBUG)
-log_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._connection: Optional[aiosqlite.Connection] = None
 
-# コマンド実行履歴のログ
-command_log_handler = TimedRotatingFileHandler(f"{log_dir}/commands.log", when="midnight", interval=1, backupCount=7, encoding="utf-8")
-command_log_handler.setLevel(logging.INFO)
-command_log_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-
-# ロガーの設定
-logger = logging.getLogger("bot")
-logger.setLevel(logging.WARNING)
-logger.addHandler(log_handler)
-logger.addHandler(command_log_handler)
-
-# discord ロガーの設定を変更
-logging.getLogger("discord").setLevel(logging.WARNING)
-logging.getLogger("discord").addHandler(log_handler)
-logging.getLogger("discord").addHandler(command_log_handler)
-
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}!")
-
-    # cogsフォルダからCogを非同期でロード
-    for filename in os.listdir("./cogs"):
-        if filename.endswith(".py"):
-            extension_name = filename[:-3]
-            try:
-                await bot.load_extension(f"cogs.{extension_name}")
-                print(f"Loaded: cogs.{extension_name}")
-            except Exception as e:
-                print(f"Failed to load: cogs.{extension_name} - {e}")
-
-    # アプリコマンドを同期（slashコマンド等）
-    await bot.tree.sync()
-
-    # 初回のユーザー数を集計して書き込み
-    await update_user_count()
-
-    # JSONファイルからユーザー数を読み込み、ステータスを更新
-    with open("user_count.json", "r", encoding="utf-8") as fp:
-        data = json.load(fp)
-        user_count = data.get("total_users", 0)
-        await bot.change_presence(activity=discord.Game(name=f"{user_count}人のユーザー数"))
-
-
-@bot.event
-async def on_member_join(_):
-    await update_user_count()
-    await update_bot_status()
-
-
-@bot.event
-async def on_member_remove(_):
-    await update_user_count()
-    await update_bot_status()
-
-
-async def update_user_count():
-    # サーバー参加者を集計（重複ユーザーは1度のみカウント）
-    unique_users = set()
-    for guild in bot.guilds:
-        for member in guild.members:
-            unique_users.add(member.id)
-    user_count = len(unique_users)
-    print(f"Unique user count: {user_count}")
-
-    # JSONファイルに書き込み
-    with open("user_count.json", "w", encoding="utf-8") as f:
-        json.dump({"total_users": user_count}, f, ensure_ascii=False, indent=4)
-
-
-# 連続で参加した時に頻繁に更新するとあれなので5秒
-async def update_bot_status():
-    global last_status_update
-    current_time = time.time()
-    if current_time - last_status_update < 5:
-        return
-
-    with open("user_count.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-        user_count = data.get("total_users", 0)
-        await bot.change_presence(activity=discord.Game(name=f"{user_count}人のユーザー数"))
-
-    last_status_update = current_time
-
-
-@bot.event
-async def on_command_completion(ctx):
-    logging.getLogger("commands").info("Command executed: %s", ctx.command)
-
-
-@bot.event
-async def on_command_error(ctx, error):
-    logging.getLogger("commands").error("Error: %s", error)
-    await ctx.send("エラーが発生しました")
-
-# データベース関連の管理
-DB_PATH = "prohibited_channels.db"
-db_pool = {}
-
-def get_db_connection():
-    thread_id = threading.get_ident()
-    if thread_id not in db_pool:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        db_pool[thread_id] = conn
-    return db_pool[thread_id]
-
-def close_db_connections():
-    for conn in db_pool.values():
-        try:
-            conn.close()
-        except Exception as e:
-            logging.getLogger("bot").error("Error closing database connection: %s", e)
-    db_pool.clear()
-
-async def check_prohibited_channel(guild_id: int, channel_id: int) -> bool:
-    try:
-        conn = get_db_connection()
-        with conn:  # トランザクション
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT 1 FROM prohibited_channels WHERE guild_id = ? AND channel_id = ?",
-                (str(guild_id), str(channel_id))
+    async def initialize(self) -> None:
+        """データベースを初期化"""
+        self._connection = await aiosqlite.connect(self.db_path)
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS prohibited_channels (
+                guild_id TEXT,
+                channel_id TEXT,
+                PRIMARY KEY (guild_id, channel_id)
             )
-            return cursor.fetchone() is not None
-    except Exception as e:
-        logging.getLogger("bot").error("Prohibited channel check error: %s", e)
-        return False
+        """)
+        await self._connection.commit()
 
+    async def cleanup(self) -> None:
+        """データベース接続を閉じる"""
+        if self._connection:
+            await self._connection.close()
+            self._connection = None
 
-@bot.check
-async def prohibit_commands_in_channels(ctx):
-    # DMの場合はコマンドを許可
-    if ctx.guild is None:
-        return True
+    async def is_channel_prohibited(
+        self,
+        guild_id: int,
+        channel_id: int
+    ) -> bool:
+        """
+        チャンネルが禁止されているかチェック
 
-    try:
+        Parameters
+        ----------
+        guild_id : int
+            ギルドID
+        channel_id : int
+            チャンネルID
+
+        Returns
+        -------
+        bool
+            禁止されているならTrue
+        """
+        try:
+            if not self._connection:
+                await self.initialize()
+
+            async with self._connection.execute(
+                """
+                SELECT 1 FROM prohibited_channels
+                WHERE guild_id = ? AND channel_id = ?
+                """,
+                (str(guild_id), str(channel_id))
+            ) as cursor:
+                return bool(await cursor.fetchone())
+
+        except Exception as e:
+            logger.error(f"Database error: {e}", exc_info=True)
+            return False
+
+class UserCountManager:
+    """ユーザー数管理を行うクラス"""
+
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self._last_update = 0
+        self._cache: Dict[str, Any] = {}
+
+    def _read_count(self) -> int:
+        """ファイルからユーザー数を読み込み"""
+        try:
+            if self.file_path.exists():
+                data = json.loads(self.file_path.read_text(encoding="utf-8"))
+                return data.get("total_users", 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error reading user count: {e}", exc_info=True)
+            return 0
+
+    def _write_count(self, count: int) -> None:
+        """ユーザー数をファイルに書き込み"""
+        try:
+            self.file_path.write_text(
+                json.dumps(
+                    {"total_users": count},
+                    ensure_ascii=False,
+                    indent=4
+                ),
+                encoding="utf-8"
+            )
+        except Exception as e:
+            logger.error(f"Error writing user count: {e}", exc_info=True)
+
+    def get_count(self) -> int:
+        """現在のユーザー数を取得"""
+        return self._read_count()
+
+    def update_count(self, count: int) -> None:
+        """
+        ユーザー数を更新
+
+        Parameters
+        ----------
+        count : int
+            新しいユーザー数
+        """
+        self._write_count(count)
+        self._last_update = time.time()
+
+    def should_update(self) -> bool:
+        """更新が必要かどうかを判定"""
+        return time.time() - self._last_update >= STATUS_UPDATE_COOLDOWN
+
+class SwiftlyBot(commands.Bot):
+    """Swiftlyボットのメインクラス"""
+
+    def __init__(self) -> None:
+        intents = discord.Intents.default()
+        intents.members = True
+        intents.messages = True
+        intents.message_content = True
+
+        client = discord.AutoShardedClient(
+            intents=intents,
+            shard_count=SHARD_COUNT
+        )
+
+        super().__init__(
+            command_prefix=COMMAND_PREFIX,
+            intents=intents,
+            client=client
+        )
+
+        self.db = DatabaseManager(PATHS["db"])
+        self.user_count = UserCountManager(PATHS["user_count"])
+        self._setup_logging()
+
+    def _setup_logging(self) -> None:
+        """ロギングの設定"""
+        PATHS["log_dir"].mkdir(exist_ok=True)
+
+        # 共通のログハンドラ設定
+        handlers = []
+        for name, level in [("logs", logging.DEBUG), ("commands", logging.DEBUG)]:
+            handler = TimedRotatingFileHandler(
+                PATHS["log_dir"] / f"{name}.log",
+                when="midnight",
+                interval=1,
+                backupCount=LOG_RETENTION_DAYS,
+                encoding="utf-8"
+            )
+            handler.setLevel(level)
+            handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            handlers.append(handler)
+
+        # ボットのロガー設定
+        logger.setLevel(logging.WARNING)
+        for handler in handlers:
+            logger.addHandler(handler)
+
+        # Discordのロガー設定
+        discord_logger = logging.getLogger("discord")
+        discord_logger.setLevel(logging.WARNING)
+        for handler in handlers:
+            discord_logger.addHandler(handler)
+
+    async def setup_hook(self) -> None:
+        """ボットのセットアップ処理"""
+        await self.db.initialize()
+        await self._load_extensions()
+        await self.tree.sync()
+
+    async def _load_extensions(self) -> None:
+        """Cogを読み込み"""
+        for file in PATHS["cogs_dir"].glob("*.py"):
+            if file.stem == "__init__":
+                continue
+
+            try:
+                await self.load_extension(f"cogs.{file.stem}")
+                logger.info(f"Loaded: cogs.{file.stem}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to load: cogs.{file.stem} - {e}",
+                    exc_info=True
+                )
+
+    async def update_presence(self) -> None:
+        """ステータスを更新"""
+        if self.user_count.should_update():
+            count = self.user_count.get_count()
+            await self.change_presence(
+                activity=discord.Game(
+                    name=f"{count}人のユーザー数"
+                )
+            )
+
+    async def count_unique_users(self) -> None:
+        """ユニークユーザー数を集計"""
+        unique_users: Set[int] = set()
+        for guild in self.guilds:
+            unique_users.update(member.id for member in guild.members)
+
+        count = len(unique_users)
+        logger.info(f"Unique user count: {count}")
+        self.user_count.update_count(count)
+        await self.update_presence()
+
+    async def on_ready(self) -> None:
+        """準備完了時の処理"""
+        logger.info(f"Logged in as {self.user}")
+        await self.count_unique_users()
+
+    async def on_member_join(self, _) -> None:
+        """メンバー参加時の処理"""
+        await self.count_unique_users()
+
+    async def on_member_remove(self, _) -> None:
+        """メンバー退出時の処理"""
+        await self.count_unique_users()
+
+    async def on_command_completion(
+        self,
+        ctx: commands.Context
+    ) -> None:
+        """コマンド完了時の処理"""
+        logger.info("Command executed: %s", ctx.command)
+
+    async def on_command_error(
+        self,
+        ctx: commands.Context,
+        error: Exception
+    ) -> None:
+        """コマンドエラー時の処理"""
+        logger.error("Command error: %s", error, exc_info=True)
+        await ctx.send(ERROR_MESSAGES["command_error"])
+
+    async def on_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: discord.app_commands.AppCommandError
+    ) -> None:
+        """アプリケーションコマンドエラー時の処理"""
+        logger.error("App command error: %s", error, exc_info=True)
+        await interaction.response.send_message(
+            ERROR_MESSAGES["command_error"],
+            ephemeral=True
+        )
+
+    async def check_command_permissions(
+        self,
+        ctx: commands.Context
+    ) -> bool:
+        """
+        コマンド実行権限をチェック
+
+        Parameters
+        ----------
+        ctx : commands.Context
+            コマンドコンテキスト
+
+        Returns
+        -------
+        bool
+            実行可能ならTrue
+        """
+        if not ctx.guild:
+            return True
+
         if ctx.command and ctx.command.name == "set_mute_channel":
             return True
 
-        is_prohibited = await check_prohibited_channel(ctx.guild.id, ctx.channel.id)
+        is_prohibited = await self.db.is_channel_prohibited(
+            ctx.guild.id,
+            ctx.channel.id
+        )
         if is_prohibited:
-            await ctx.send("このチャンネルではコマンドの実行が禁止されています。")
+            await ctx.send(ERROR_MESSAGES["prohibited_channel"])
             return False
         return True
 
+    async def check_slash_command(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        """
+        スラッシュコマンドの実行権限をチェック
+
+        Parameters
+        ----------
+        interaction : discord.Interaction
+            インタラクションコンテキスト
+
+        Returns
+        -------
+        bool
+            実行可能ならTrue
+        """
+        if not interaction.guild:
+            return True
+
+        if (interaction.command and
+            interaction.command.name == "set_mute_channel"):
+            return True
+
+        is_prohibited = await self.db.is_channel_prohibited(
+            interaction.guild_id,
+            interaction.channel_id
+        )
+        if is_prohibited:
+            await interaction.response.send_message(
+                ERROR_MESSAGES["prohibited_channel"],
+                ephemeral=True
+            )
+            return False
+        return True
+
+def main() -> None:
+    """メイン処理"""
+    # 環境変数の読み込み
+    dotenv.load_dotenv()
+    token = os.getenv("DISCORD_TOKEN")
+    if not token:
+        raise ValueError("DISCORD_TOKEN not found in .env file")
+
+    # ボットの起動
+    bot = SwiftlyBot()
+    bot.tree.interaction_check = bot.check_slash_command
+    bot.check(bot.check_command_permissions)
+
+    try:
+        asyncio.run(bot.start(token))
+    except KeyboardInterrupt:
+        logger.info("Bot shutdown requested")
     except Exception as e:
-        logging.getLogger("bot").error("Prohibited channel check error: %s", e)
-        return True
-
-
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    logging.getLogger("commands").error("App command error: %s", error)
-    await interaction.response.send_message("エラーが発生しました", ephemeral=True)
-
-
-async def check_slash_command(interaction: discord.Interaction) -> bool:
-    if not interaction.guild:
-        return True
-
-    if interaction.command and interaction.command.name == "set_mute_channel":
-        return True
-
-    is_prohibited = await check_prohibited_channel(interaction.guild_id, interaction.channel_id)
-    if is_prohibited:
-        await interaction.response.send_message("このチャンネルではコマンドの実行が禁止されています。", ephemeral=True)
-        return False
-    return True
-
-bot.tree.interaction_check = check_slash_command
-
-def cleanup():
-    close_db_connections()
+        logger.error("Bot crashed: %s", e, exc_info=True)
+    finally:
+        asyncio.run(bot.db.cleanup())
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(bot.start(TOKEN))
-    finally:
-        cleanup()
-
+    main()
