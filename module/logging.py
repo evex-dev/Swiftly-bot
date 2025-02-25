@@ -33,11 +33,13 @@ class LoggingCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
-        logging.info(f"Command executed: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {ctx.guild.name}")
+        guild_name = ctx.guild.name if ctx.guild else "DM"
+        logging.info(f"Command executed: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {guild_name}")
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
-        logging.error(f"Command error: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {ctx.guild.name} - {error}")
+        guild_name = ctx.guild.name if ctx.guild else "DM"
+        logging.error(f"Command error: {ctx.command} by {ctx.author.name} (ID: {ctx.author.id}) in guild: {guild_name} - {error}")
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(LoggingCog(bot))
