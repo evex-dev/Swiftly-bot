@@ -215,10 +215,10 @@ class SwiftlyBot(commands.Bot):
             count = self.user_count.get_count()
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"{count}人のユーザー数"
+                    name=f"{count}人のユーザー数 || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(3)
+            await asyncio.sleep(10)
             await self.change_presence(
                 activity=discord.Game(
                     name=f"/help || {round(self.latency * 1000)}ms"
