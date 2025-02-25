@@ -1,18 +1,21 @@
 # Swiftly DiscordBot.
 # Developed by: TechFish_1
+# Standard library imports
 import asyncio
-import os
 import json
-import time
-from typing import Final, Optional, Set, Dict, Any
 import logging
+import os
+import time
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+from typing import Any, Dict, Final, Optional, Set
 
+# Third-party imports
 import aiosqlite
-import dotenv
 import discord
+import dotenv
 from discord.ext import commands
+from module.logger import LoggingCog
 
 # 定数定義
 SHARD_COUNT: Final[int] = 10
@@ -184,6 +187,13 @@ class SwiftlyBot(commands.Bot):
             logger.addHandler(handler)
         logger.addHandler(console_handler)
 
+        # LoggingCog用のロガー設定
+        bot_logger = logging.getLogger("bot")
+        bot_logger.setLevel(logging.INFO)
+        for handler in handlers:
+            bot_logger.addHandler(handler)
+        bot_logger.addHandler(console_handler)
+
         # Discordのロガー設定
         discord_logger = logging.getLogger("discord")
         discord_logger.setLevel(logging.INFO)
@@ -195,6 +205,7 @@ class SwiftlyBot(commands.Bot):
         """ボットのセットアップ処理"""
         await self.db.initialize()
         await self._load_extensions()
+        await self.add_cog(LoggingCog(self))  # LoggingCogを追加
         await self.tree.sync()
 
     async def _load_extensions(self) -> None:
@@ -211,13 +222,20 @@ class SwiftlyBot(commands.Bot):
 
     async def update_presence(self) -> None:
         """ステータスを更新"""
-        if self.user_count.should_update():
+        while True:
             count = self.user_count.get_count()
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"{count}人のユーザー数"
+                    name=f"{count}人のユーザー数 || {round(self.latency * 1000)}ms"
                 )
             )
+            await asyncio.sleep(10)
+            await self.change_presence(
+                activity=discord.Game(
+                    name=f"/help || {round(self.latency * 1000)}ms"
+                )
+            )
+            await asyncio.sleep(10)
 
     async def count_unique_users(self) -> None:
         """ユニークユーザー数を集計"""
@@ -242,22 +260,6 @@ class SwiftlyBot(commands.Bot):
     async def on_member_remove(self, _) -> None:
         """メンバー退出時の処理"""
         await self.count_unique_users()
-
-    async def on_command_completion(
-        self,
-        ctx: commands.Context
-    ) -> None:
-        """コマンド完了時の処理"""
-        logger.info("Command executed: %s", ctx.command)
-
-    async def on_command_error(
-        self,
-        ctx: commands.Context,
-        error: Exception
-    ) -> None:
-        """コマンドエラー時の処理"""
-        logger.error("Command error: %s", error, exc_info=True)
-        await ctx.send(ERROR_MESSAGES["command_error"])
 
     async def on_app_command_error(
         self,
