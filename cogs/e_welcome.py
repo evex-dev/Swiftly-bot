@@ -150,8 +150,8 @@ class MemberWelcomeCog(commands.Cog):
         channel="メッセージを送信するチャンネル"
     )
     @app_commands.choices(action=[
-        app_commands.Choice(name="ON", value="enable"),
-        app_commands.Choice(name="OFF", value="disable")
+        app_commands.Choice(name="enable", value="enable"),
+        app_commands.Choice(name="disable", value="disable")
     ])
     async def welcome_command(
         self,
