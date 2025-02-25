@@ -176,8 +176,8 @@ class ARIMAGrowth(commands.Cog):
             X = np.array([d.toordinal() for d in join_dates]).reshape(-1, 1)
             y = np.arange(1, len(join_dates) + 1)
 
-            # 最適なARIMAパラメータを見つける
-            best_order, best_aic = await self._find_best_arima_order(y)
+            # 最適なARIMAパラメータを見つける best_aic
+            best_order, _ = await self._find_best_arima_order(y)
 
             # ARIMAモデルのフィッティングと予測
             model = ARIMA(y, order=best_order)

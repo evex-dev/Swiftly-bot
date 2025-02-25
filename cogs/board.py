@@ -67,7 +67,7 @@ class ConfirmView(discord.ui.View):
     async def confirm(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
@@ -98,7 +98,7 @@ class ConfirmView(discord.ui.View):
     async def cancel(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
@@ -129,7 +129,7 @@ class UnregisterView(discord.ui.View):
     async def confirm(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
@@ -157,7 +157,7 @@ class UnregisterView(discord.ui.View):
     async def cancel(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         await interaction.followup.send("登録削除をキャンセルしました。", ephemeral=True)

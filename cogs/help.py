@@ -97,10 +97,10 @@ class Help(commands.Cog):
             if category not in categories:
                 continue
 
-            commands = categories[category]
+            commandss = categories[category]
             value = f"**{description}**\n\n"
 
-            for cmd in commands:
+            for cmd in commandss:
                 value += f"**{cmd['name']}**\n{cmd['description']}\n"
                 value += "特徴:\n" + "\n".join(
                     f"- {feature}" for feature in cmd["features"]

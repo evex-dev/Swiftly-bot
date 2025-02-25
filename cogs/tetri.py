@@ -368,7 +368,7 @@ class TetrisView(discord.ui.View):
     async def left(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """左移動ボタン"""
         await interaction.response.defer()
@@ -380,7 +380,7 @@ class TetrisView(discord.ui.View):
     async def right(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """右移動ボタン"""
         await interaction.response.defer()
@@ -392,7 +392,7 @@ class TetrisView(discord.ui.View):
     async def down(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """下移動ボタン"""
         await interaction.response.defer()
@@ -404,7 +404,7 @@ class TetrisView(discord.ui.View):
     async def drop(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """ハードドロップボタン"""
         await interaction.response.defer()
@@ -416,7 +416,7 @@ class TetrisView(discord.ui.View):
     async def rotate_button(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """回転ボタン"""
         await interaction.response.defer()

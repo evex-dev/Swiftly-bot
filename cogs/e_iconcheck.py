@@ -101,7 +101,7 @@ class EnableAnticheatView(View):
     async def confirm(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """登録ボタンのコールバック"""
         await interaction.response.defer(ephemeral=True)

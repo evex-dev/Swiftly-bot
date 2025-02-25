@@ -113,7 +113,7 @@ class CommandListView(discord.ui.View):
     async def previous_button(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """前のページに移動"""
         try:
@@ -138,7 +138,7 @@ class CommandListView(discord.ui.View):
     async def next_button(
         self,
         interaction: discord.Interaction,
-        button: discord.ui.Button
+        _: discord.ui.Button
     ) -> None:
         """次のページに移動"""
         try:
