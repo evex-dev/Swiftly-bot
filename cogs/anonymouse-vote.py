@@ -69,7 +69,7 @@ class AnonyVote(commands.Cog):
             )
 
         embed = discord.Embed(
-            title="投票が開始されました",
+            title="匿名投票が開始されました",
             description=f"トピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}",
             color=discord.Color.blue()
         )
