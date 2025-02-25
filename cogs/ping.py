@@ -118,6 +118,40 @@ class Ping(commands.Cog):
                 ephemeral=True
             )
 
+    @commands.command(
+        name="ping",
+        description="Botのレイテンシーと状態を表示します"
+    )
+    async def ping_legacy(
+        self,
+        ctx: commands.Context
+    ) -> None:
+        try:
+            # レート制限のチェック
+            is_limited, remaining = self._check_rate_limit(
+                ctx.author.id
+            )
+            if is_limited:
+                await ctx.send(
+                    ERROR_MESSAGES["rate_limit"].format(remaining)
+                )
+                return
+
+            # レイテンシーの計算
+            latency = self.bot.latency * MS_PER_SECOND
+
+            # レート制限の更新
+            self._last_uses[ctx.author.id] = datetime.now()
+
+            # 結果の送信
+            embed = self._create_ping_embed(latency)
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error("Error in ping command: %s", e, exc_info=True)
+            await ctx.send(
+                ERROR_MESSAGES["unexpected"].format(str(e))
+            )
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Ping(bot))
