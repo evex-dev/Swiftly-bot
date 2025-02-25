@@ -1,18 +1,25 @@
 import asyncio
 import random
 import copy
+from typing import Final, Optional, List, Tuple, Dict, Any
+import logging
+from datetime import datetime, timedelta
+
 import discord
 from discord.ext import commands
 from discord import app_commands
 
-# 定数設定
-BOARD_WIDTH = 10
-BOARD_HEIGHT = 15
-HIDDEN_ROWS = 2  # 上部に隠し行（見えない領域）として確保
-EMPTY = "⬛"
+# 定数定義
+BOARD_WIDTH: Final[int] = 10
+BOARD_HEIGHT: Final[int] = 15
+HIDDEN_ROWS: Final[int] = 2  # 上部に隠し行（見えない領域）として確保
+EMPTY: Final[str] = "⬛"
+AUTO_DROP_DELAY: Final[float] = 3.0
+GAME_TIMEOUT: Final[int] = 120
+RATE_LIMIT_SECONDS: Final[int] = 30
 
 # 各テトリミノに対応する色（emoji）
-COLOR_MAP = {
+COLOR_MAP: Final[Dict[int, str]] = {
     0: "🟦",  # I
     1: "🟨",  # O
     2: "🟪",  # T
@@ -23,42 +30,72 @@ COLOR_MAP = {
 }
 
 # テトリミノの定義（各座標は原点からの相対座標）
-TETRIS_SHAPES = [
+TETRIS_SHAPES: Final[List[List[Tuple[int, int]]]] = [
     [(0, 0), (0, 1), (0, 2), (0, 3)],          # I
-    [(0, 0), (1, 0), (0, 1), (1, 1)],           # O
-    [(0, 0), (-1, 1), (0, 1), (1, 1)],          # T
-    [(0, 0), (1, 0), (0, 1), (-1, 1)],          # S
-    [(0, 0), (-1, 0), (0, 1), (1, 1)],          # Z
-    [(0, 0), (0, 1), (0, 2), (-1, 2)],          # J
-    [(0, 0), (0, 1), (0, 2), (1, 2)]            # L
+    [(0, 0), (1, 0), (0, 1), (1, 1)],          # O
+    [(0, 0), (-1, 1), (0, 1), (1, 1)],         # T
+    [(0, 0), (1, 0), (0, 1), (-1, 1)],         # S
+    [(0, 0), (-1, 0), (0, 1), (1, 1)],         # Z
+    [(0, 0), (0, 1), (0, 2), (-1, 2)],         # J
+    [(0, 0), (0, 1), (0, 2), (1, 2)]           # L
 ]
 
+ERROR_MESSAGES: Final[dict] = {
+    "not_your_game": "このゲームはあなたの操作ではありません。",
+    "rate_limit": "レート制限中です。{}秒後にお試しください。",
+    "game_over": "Game Over!"
+}
+
+logger = logging.getLogger(__name__)
+
 class TetrisGame:
-    def __init__(self):
-        # 0: empty, >0: fixed block (type index + 1)
+    """テトリスゲームのロジックを管理するクラス"""
+
+    def __init__(self) -> None:
         self.board = [[0 for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT)]
-        self.current_piece = None  # {x, y, shape, type}
+        self.current_piece: Optional[Dict[str, Any]] = None
         self.game_over = False
+        self.score = 0
+        self.lines_cleared = 0
         self.spawn_piece()
 
-    # ボード内のセルが空ならTrue
     def is_cell_empty(self, x: int, y: int) -> bool:
-        # yがボードの外なら空とみなす
+        """
+        指定されたセルが空かどうかを判定
+
+        Parameters
+        ----------
+        x : int
+            X座標
+        y : int
+            Y座標
+
+        Returns
+        -------
+        bool
+            セルが空ならTrue
+        """
         if y < 0:
             return True
         if not (0 <= x < BOARD_WIDTH and y < BOARD_HEIGHT):
             return False
         return self.board[y][x] == 0
 
-    def spawn_piece(self):
+    def spawn_piece(self) -> None:
+        """新しいテトリミノを生成"""
         spawn_x = BOARD_WIDTH // 2
-        # 新しいブロックは上から4マス目に配置（隠し領域を考慮して）
         spawn_y = HIDDEN_ROWS
         type_index = random.randint(0, len(TETRIS_SHAPES) - 1)
         shape = copy.deepcopy(TETRIS_SHAPES[type_index])
-        piece = {"x": spawn_x, "y": spawn_y, "shape": shape, "type": type_index}
-        # 新規ピースの配置可能判定（visible部分の衝突だけチェック）
-        for (dx, dy) in piece["shape"]:
+        piece = {
+            "x": spawn_x,
+            "y": spawn_y,
+            "shape": shape,
+            "type": type_index
+        }
+
+        # 新規ピースの配置可能判定
+        for dx, dy in piece["shape"]:
             x = spawn_x + dx
             y = spawn_y + dy
             if y >= 0 and not self.is_cell_empty(x, y):
@@ -66,197 +103,449 @@ class TetrisGame:
                 return
         self.current_piece = piece
 
-    def current_piece_positions(self):
-        if self.current_piece is None:
+    def current_piece_positions(self) -> List[Tuple[int, int]]:
+        """現在のテトリミノの座標リストを取得"""
+        if not self.current_piece:
             return []
         x = self.current_piece["x"]
         y = self.current_piece["y"]
-        return [(x + dx, y + dy) for (dx, dy) in self.current_piece["shape"]]
+        return [(x + dx, y + dy) for dx, dy in self.current_piece["shape"]]
 
-    def fix_piece(self):
-        if self.current_piece is None:
+    def fix_piece(self) -> None:
+        """現在のテトリミノを固定"""
+        if not self.current_piece:
             return
-        # ゲームオーバー判定：ピースの一部がまだ隠し領域にいる場合、もしくは配置時に衝突している場合
-        for (x, y) in self.current_piece_positions():
+
+        # ゲームオーバー判定
+        for x, y in self.current_piece_positions():
             if y < 0:
                 self.game_over = True
                 break
-        # 固定ブロックをボードに設定（type_index+1）
-        for (x, y) in self.current_piece_positions():
+
+        # 固定ブロックをボードに設定
+        for x, y in self.current_piece_positions():
             if 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT:
                 self.board[y][x] = self.current_piece["type"] + 1
+
         self.current_piece = None
         self.remove_complete_lines()
-        # visible top rowはボードのHIDDEN_ROWS行目
+
+        # visible top rowのチェック
         if any(cell != 0 for cell in self.board[HIDDEN_ROWS]):
             self.game_over = True
         else:
             self.spawn_piece()
 
-    def remove_complete_lines(self):
-        new_board = [row for row in self.board if not all(cell != 0 for cell in row)]
+    def remove_complete_lines(self) -> None:
+        """完成したラインを削除してスコアを更新"""
+        new_board = [
+            row for row in self.board
+            if not all(cell != 0 for cell in row)
+        ]
         lines_cleared = BOARD_HEIGHT - len(new_board)
+
+        if lines_cleared > 0:
+            self.lines_cleared += lines_cleared
+            self.score += lines_cleared * 100 * (lines_cleared + 1) // 2
+
+        # 新しい空の行を追加
         for _ in range(lines_cleared):
             new_board.insert(0, [0 for _ in range(BOARD_WIDTH)])
         self.board = new_board
 
-    def can_move(self, dx: int, dy: int, new_shape=None) -> bool:
-        if self.current_piece is None:
+    def can_move(
+        self,
+        dx: int,
+        dy: int,
+        new_shape: Optional[List[Tuple[int, int]]] = None
+    ) -> bool:
+        """
+        指定された移動が可能かどうかを判定
+
+        Parameters
+        ----------
+        dx : int
+            X方向の移動量
+        dy : int
+            Y方向の移動量
+        new_shape : Optional[List[Tuple[int, int]]], optional
+            新しい形状, by default None
+
+        Returns
+        -------
+        bool
+            移動可能ならTrue
+        """
+        if not self.current_piece:
             return False
+
         shape = new_shape if new_shape is not None else self.current_piece["shape"]
         new_x = self.current_piece["x"] + dx
         new_y = self.current_piece["y"] + dy
-        for (offset_x, offset_y) in shape:
+
+        for offset_x, offset_y in shape:
             x = new_x + offset_x
             y = new_y + offset_y
-            if y >= 0 and not (0 <= x < BOARD_WIDTH and y < BOARD_HEIGHT):
-                return False
-            if y >= 0 and self.board[y][x] != 0:
+            if y >= 0 and not self.is_cell_empty(x, y):
                 return False
         return True
 
-    def move_left(self):
-        if self.current_piece and self.can_move(-1, 0):
-            self.current_piece["x"] -= 1
+    def move(self, dx: int, dy: int) -> bool:
+        """
+        テトリミノを移動
 
-    def move_right(self):
-        if self.current_piece and self.can_move(1, 0):
-            self.current_piece["x"] += 1
+        Parameters
+        ----------
+        dx : int
+            X方向の移動量
+        dy : int
+            Y方向の移動量
+
+        Returns
+        -------
+        bool
+            移動が成功したらTrue
+        """
+        if not self.current_piece or not self.can_move(dx, dy):
+            return False
+        self.current_piece["x"] += dx
+        self.current_piece["y"] += dy
+        return True
+
+    def move_left(self) -> bool:
+        """左に移動"""
+        return self.move(-1, 0)
+
+    def move_right(self) -> bool:
+        """右に移動"""
+        return self.move(1, 0)
 
     def move_down(self) -> bool:
-        if self.current_piece and self.can_move(0, 1):
-            self.current_piece["y"] += 1
+        """
+        下に移動
+
+        Returns
+        -------
+        bool
+            移動が成功したらTrue、固定されたらFalse
+        """
+        if self.move(0, 1):
             return True
-        else:
-            self.fix_piece()
+        self.fix_piece()
+        return False
+
+    def drop(self) -> None:
+        """テトリミノを一番下まで落とす"""
+        while self.move_down():
+            pass
+
+    def rotate(self) -> bool:
+        """
+        テトリミノを回転
+
+        Returns
+        -------
+        bool
+            回転が成功したらTrue
+        """
+        if not self.current_piece:
             return False
 
-    def drop(self):
-        while self.current_piece and self.can_move(0, 1):
-            self.current_piece["y"] += 1
-        self.fix_piece()
-
-    def rotate(self):
-        if self.current_piece is None:
-            return
         old_shape = self.current_piece["shape"]
-        rotated_shape = [(-dy, dx) for (dx, dy) in old_shape]
+        rotated_shape = [(-dy, dx) for dx, dy in old_shape]
+
+        # 回転の中心を計算
         old_cx = sum(x for x, _ in old_shape) / len(old_shape)
         old_cy = sum(y for _, y in old_shape) / len(old_shape)
         new_cx = sum(x for x, _ in rotated_shape) / len(rotated_shape)
         new_cy = sum(y for _, y in rotated_shape) / len(rotated_shape)
+
+        # オフセットを計算して適用
         offset_x = round(old_cx - new_cx)
         offset_y = round(old_cy - new_cy)
-        adjusted_shape = [(x + offset_x, y + offset_y) for (x, y) in rotated_shape]
+        adjusted_shape = [
+            (x + offset_x, y + offset_y)
+            for x, y in rotated_shape
+        ]
+
         if self.can_move(0, 0, new_shape=adjusted_shape):
             self.current_piece["shape"] = adjusted_shape
+            return True
+        return False
 
     def render(self) -> str:
-        # 描画はvisibleな部分のみ（隠し領域は表示しない）
-        display = [[EMPTY for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT - HIDDEN_ROWS)]
+        """
+        ゲーム画面を文字列として生成
+
+        Returns
+        -------
+        str
+            ゲーム画面の文字列表現
+        """
+        display = [
+            [EMPTY for _ in range(BOARD_WIDTH)]
+            for _ in range(BOARD_HEIGHT - HIDDEN_ROWS)
+        ]
+
         # 固定ブロックの描画
         for y in range(HIDDEN_ROWS, BOARD_HEIGHT):
             for x in range(BOARD_WIDTH):
                 if self.board[y][x] != 0:
                     color_index = self.board[y][x] - 1
                     display[y - HIDDEN_ROWS][x] = COLOR_MAP[color_index]
+
         # 落下中のブロックの描画
         if self.current_piece:
             piece_color = COLOR_MAP[self.current_piece["type"]]
-            for (x, y) in self.current_piece_positions():
-                if y >= HIDDEN_ROWS and 0 <= x < BOARD_WIDTH and y < BOARD_HEIGHT:
+            for x, y in self.current_piece_positions():
+                if (HIDDEN_ROWS <= y < BOARD_HEIGHT and
+                    0 <= x < BOARD_WIDTH):
                     display[y - HIDDEN_ROWS][x] = piece_color
+
         return "\n".join("".join(row) for row in display)
 
 class TetrisView(discord.ui.View):
-    def __init__(self, game: TetrisGame, interaction: discord.Interaction):
-        super().__init__(timeout=120)
+    """テトリスゲームのUIを管理するクラス"""
+
+    def __init__(
+        self,
+        game: TetrisGame,
+        interaction: discord.Interaction
+    ) -> None:
+        super().__init__(timeout=GAME_TIMEOUT)
         self.game = game
         self.interaction = interaction
+        self.auto_drop_task: Optional[asyncio.Task] = None
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        """インタラクションの権限チェック"""
         if interaction.user.id != self.interaction.user.id:
-            await interaction.response.send_message("このゲームはあなたの操作ではありません。", ephemeral=True)
+            await interaction.response.send_message(
+                ERROR_MESSAGES["not_your_game"],
+                ephemeral=True
+            )
             return False
         return True
 
-    async def update_message(self):
+    async def update_message(self) -> None:
+        """ゲーム画面を更新"""
         embed = discord.Embed(
             title="Tetris",
             description=self.game.render(),
             color=discord.Color.blue()
         )
+
+        # スコア情報を追加
+        embed.add_field(
+            name="スコア",
+            value=str(self.game.score),
+            inline=True
+        )
+        embed.add_field(
+            name="消去ライン数",
+            value=str(self.game.lines_cleared),
+            inline=True
+        )
+
         content = None
         if self.game.game_over:
-            content = "Game Over!"
+            content = ERROR_MESSAGES["game_over"]
             for child in self.children:
                 child.disabled = True
-        await self.interaction.edit_original_response(embed=embed, content=content, view=self)
+            if self.auto_drop_task:
+                self.auto_drop_task.cancel()
+
+        await self.interaction.edit_original_response(
+            embed=embed,
+            content=content,
+            view=self
+        )
 
     @discord.ui.button(label="←", style=discord.ButtonStyle.primary)
-    async def left(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def left(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        """左移動ボタン"""
         await interaction.response.defer()
-        if self.game.game_over:
-            return
-        self.game.move_left()
-        await self.update_message()
+        if not self.game.game_over:
+            self.game.move_left()
+            await self.update_message()
 
     @discord.ui.button(label="→", style=discord.ButtonStyle.primary)
-    async def right(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def right(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        """右移動ボタン"""
         await interaction.response.defer()
-        if self.game.game_over:
-            return
-        self.game.move_right()
-        await self.update_message()
+        if not self.game.game_over:
+            self.game.move_right()
+            await self.update_message()
 
     @discord.ui.button(label="↓", style=discord.ButtonStyle.primary)
-    async def down(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def down(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        """下移動ボタン"""
         await interaction.response.defer()
-        if self.game.game_over:
-            return
-        self.game.move_down()
-        await self.update_message()
+        if not self.game.game_over:
+            self.game.move_down()
+            await self.update_message()
 
     @discord.ui.button(label="⏬", style=discord.ButtonStyle.primary)
-    async def drop(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def drop(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        """ハードドロップボタン"""
         await interaction.response.defer()
-        if self.game.game_over:
-            return
-        self.game.drop()
-        await self.update_message()
+        if not self.game.game_over:
+            self.game.drop()
+            await self.update_message()
 
     @discord.ui.button(label="↻", style=discord.ButtonStyle.secondary)
-    async def rotate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def rotate_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        """回転ボタン"""
         await interaction.response.defer()
-        if self.game.game_over:
-            return
-        self.game.rotate()
-        await self.update_message()
+        if not self.game.game_over:
+            self.game.rotate()
+            await self.update_message()
 
 class Tetri(commands.Cog):
-    def __init__(self, bot):
+    """テトリスゲーム機能を提供"""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self._last_uses = {}
 
-    @app_commands.command(name="tetri", description="Discord上でテトリスを遊びます")
-    async def tetri(self, interaction: discord.Interaction) -> None:
-        game = TetrisGame()
-        embed = discord.Embed(
-            title="Tetris",
-            description=game.render(),
-            color=discord.Color.blue()
-        )
-        view = TetrisView(game, interaction)
-        await interaction.response.send_message(embed=embed, view=view)
+    def _check_rate_limit(
+        self,
+        user_id: int
+    ) -> tuple[bool, Optional[int]]:
+        """
+        レート制限をチェック
 
-        async def auto_drop(view: TetrisView):
-            await asyncio.sleep(3)
-            while not game.game_over:
-                await asyncio.sleep(3)
-                if game.current_piece and game.can_move(0, 1):
-                    game.move_down()
-                await view.update_message()
+        Parameters
+        ----------
+        user_id : int
+            ユーザーID
 
-        self.bot.loop.create_task(auto_drop(view))
+        Returns
+        -------
+        tuple[bool, Optional[int]]
+            (制限中かどうか, 残り秒数)
+        """
+        now = datetime.now()
+        if user_id in self._last_uses:
+            time_diff = now - self._last_uses[user_id]
+            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
+                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
+                return True, remaining
+        return False, None
 
-async def setup(bot):
+    async def auto_drop(self, view: TetrisView) -> None:
+        """
+        自動落下処理
+
+        Parameters
+        ----------
+        view : TetrisView
+            ゲームビュー
+        """
+        try:
+            await asyncio.sleep(AUTO_DROP_DELAY)
+            while not view.game.game_over:
+                await asyncio.sleep(AUTO_DROP_DELAY)
+                if (view.game.current_piece and
+                    view.game.can_move(0, 1)):
+                    view.game.move_down()
+                    await view.update_message()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Error in auto_drop: {e}", exc_info=True)
+
+    @app_commands.command(
+        name="tetri",
+        description="Discord上でテトリスを遊びます"
+    )
+    async def tetri(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """
+        テトリスゲームを開始するコマンド
+
+        Parameters
+        ----------
+        interaction : discord.Interaction
+            インタラクションコンテキスト
+        """
+        try:
+            # レート制限のチェック
+            is_limited, remaining = self._check_rate_limit(
+                interaction.user.id
+            )
+            if is_limited:
+                await interaction.response.send_message(
+                    ERROR_MESSAGES["rate_limit"].format(remaining),
+                    ephemeral=True
+                )
+                return
+
+            # ゲームの初期化
+            game = TetrisGame()
+            view = TetrisView(game, interaction)
+
+            embed = discord.Embed(
+                title="Tetris",
+                description=game.render(),
+                color=discord.Color.blue()
+            )
+            embed.add_field(
+                name="スコア",
+                value="0",
+                inline=True
+            )
+            embed.add_field(
+                name="消去ライン数",
+                value="0",
+                inline=True
+            )
+
+            await interaction.response.send_message(
+                embed=embed,
+                view=view
+            )
+
+            # レート制限の更新
+            self._last_uses[interaction.user.id] = datetime.now()
+
+            # 自動落下処理の開始
+            view.auto_drop_task = self.bot.loop.create_task(
+                self.auto_drop(view)
+            )
+
+        except Exception as e:
+            logger.error(f"Error in tetri command: {e}", exc_info=True)
+            await interaction.response.send_message(
+                ERROR_MESSAGES["unexpected"].format(str(e)),
+                ephemeral=True
+            )
+
+
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Tetri(bot))
