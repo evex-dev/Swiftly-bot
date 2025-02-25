@@ -7,7 +7,6 @@ import sqlite3
 import matplotlib.pyplot as plt
 import io
 import matplotlib
-import japanize_matplotlib
 matplotlib.rcParams['font.family'] = 'DejaVu Sans'
 matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
@@ -82,10 +81,11 @@ class AnonyVote(commands.Cog):
             view.add_item(button)
 
         message = await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
-        self.conn.execute(
-            'UPDATE votes SET message_id = ? WHERE session_id = ?',
-            (message.id, session_id)
-        )
+        if message:
+            self.conn.execute(
+                'UPDATE votes SET message_id = ? WHERE session_id = ?',
+                (message.id, session_id)
+            )
 
     def create_button_callback(self, session_id: str, answer: str):
         async def button_callback(interaction: discord.Interaction):
