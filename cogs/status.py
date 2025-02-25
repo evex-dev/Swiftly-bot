@@ -76,9 +76,6 @@ class SystemStatus:
     def get_system_info(self) -> Dict[str, str]:
         process = psutil.Process()
         return {
-            "OS": platform.system(),
-            "Python": platform.python_version(),
-            "Discord.py": discord.__version__,
             "CPU使用率": f"{psutil.cpu_percent()}%",
             "メモリ使用率": f"{process.memory_percent():.1f}%",
             "起動時間": str(
