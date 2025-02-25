@@ -70,63 +70,64 @@ class AnonyVote(commands.Cog):
 
         embed = discord.Embed(
             title="投票が開始されました",
-            description=f"トピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}\n\n/anony-answer session_id:{session_id} <選択肢> で回答してください。",
+            description=f"トピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}",
             color=discord.Color.blue()
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
 
-    @discord.app_commands.command(
-        name="anony-answer",
-        description="匿名で投票に回答します"
-    )
-    async def anony_answer(
-        self,
-        interaction: discord.Interaction,
-        session_id: str,
-        answer: str
-    ) -> None:
-        vote = self.conn.execute(
-            'SELECT channel_id FROM votes WHERE session_id = ?',
-            (session_id,)
-        ).fetchone()
+        view = discord.ui.View()
+        for option in options_list:
+            button = discord.ui.Button(label=option, style=discord.ButtonStyle.primary)
+            button.callback = self.create_button_callback(session_id, option)
+            view.add_item(button)
 
-        if not vote:
-            await interaction.response.send_message(
-                "無効なセッションIDです。",
-                ephemeral=True
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+
+    def create_button_callback(self, session_id: str, answer: str):
+        async def button_callback(interaction: discord.Interaction):
+            vote = self.conn.execute(
+                'SELECT channel_id FROM votes WHERE session_id = ?',
+                (session_id,)
+            ).fetchone()
+
+            if not vote:
+                await interaction.response.send_message(
+                    "無効なセッションIDです。",
+                    ephemeral=True
+                )
+                return
+
+            if vote[0] != interaction.channel_id:
+                await interaction.response.send_message(
+                    "このチャンネルでは投票に回答できません。",
+                    ephemeral=True
+                )
+                return
+
+            existing_answer = self.conn.execute(
+                'SELECT answer FROM answers WHERE session_id = ? AND user_id = ?',
+                (session_id, interaction.user.id)
+            ).fetchone()
+
+            if existing_answer:
+                await interaction.response.send_message(
+                    "既に投票済みです。",
+                    ephemeral=True
+                )
+                return
+
+            with self.conn:
+                self.conn.execute(
+                    'INSERT INTO answers (session_id, user_id, answer) VALUES (?, ?, ?)',
+                    (session_id, interaction.user.id, answer)
+                )
+
+            embed = discord.Embed(
+                title="投票に回答しました",
+                color=discord.Color.green()
             )
-            return
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        if vote[0] != interaction.channel_id:
-            await interaction.response.send_message(
-                "このチャンネルでは投票に回答できません。",
-                ephemeral=True
-            )
-            return
-
-        existing_answer = self.conn.execute(
-            'SELECT answer FROM answers WHERE session_id = ? AND user_id = ?',
-            (session_id, interaction.user.id)
-        ).fetchone()
-
-        if existing_answer:
-            await interaction.response.send_message(
-                "既に投票済みです。",
-                ephemeral=True
-            )
-            return
-
-        with self.conn:
-            self.conn.execute(
-                'INSERT INTO answers (session_id, user_id, answer) VALUES (?, ?, ?)',
-                (session_id, interaction.user.id, answer)
-            )
-
-        embed = discord.Embed(
-            title="投票に回答しました",
-            color=discord.Color.green()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return button_callback
 
     @discord.app_commands.command(
         name="anony-end",
