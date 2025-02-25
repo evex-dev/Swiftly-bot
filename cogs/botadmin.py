@@ -1,101 +1,234 @@
+from typing import Final, List
+from enum import Enum
+import logging
+
 import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.ui import View, Button
 
+# 定数定義
+ADMIN_USER_ID: Final[int] = 1241397634095120438
+SERVERS_PER_PAGE: Final[int] = 10
+EMBED_COLORS: Final[dict] = {
+    "error": discord.Color.red(),
+    "success": discord.Color.green(),
+    "info": discord.Color.blue()
+}
+ERROR_MESSAGES: Final[dict] = {
+    "no_permission": "このコマンドを使用する権限がありません。",
+    "invalid_option": "無効なオプションです。"
+}
+
+logger = logging.getLogger(__name__)
+
+class AdminOption(str, Enum):
+    """管理コマンドのオプション"""
+    SERVERS = "servers"
+    DEBUG = "debug"
+    SAY = "say:"
+
+class PaginationView(View):
+    """ページネーション用のカスタムビュー"""
+
+    def __init__(
+        self,
+        embeds: List[discord.Embed],
+        timeout: float = 180.0
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.embeds = embeds
+        self.current_page = 0
+
+        # ボタンの設定
+        self.previous_button = Button(
+            label="前へ",
+            style=discord.ButtonStyle.primary,
+            disabled=True,
+            custom_id="previous_page"
+        )
+        self.next_button = Button(
+            label="次へ",
+            style=discord.ButtonStyle.primary,
+            custom_id="next_page"
+        )
+
+        self.previous_button.callback = self.previous_callback
+        self.next_button.callback = self.next_callback
+
+        self.add_item(self.previous_button)
+        self.add_item(self.next_button)
+
+    async def update_buttons(self) -> None:
+        """ボタンの状態を更新"""
+        self.previous_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page == len(self.embeds) - 1
+
+    async def previous_callback(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """前のページへ移動"""
+        self.current_page = max(0, self.current_page - 1)
+        await self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self
+        )
+
+    async def next_callback(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """次のページへ移動"""
+        self.current_page = min(
+            len(self.embeds) - 1,
+            self.current_page + 1
+        )
+        await self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self
+        )
+
 class BotAdmin(commands.Cog):
-    def __init__(self, bot):
+    """ボット管理機能を提供"""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    def cog_check(self, ctx):
-        return ctx.author.id == 1241397634095120438
+    def is_admin(self, user_id: int) -> bool:
+        return user_id == ADMIN_USER_ID
 
-    @discord.app_commands.command(name="botadmin", description="Bot管理コマンド")
-    async def botadmin_command(self, interaction: discord.Interaction, option: str):
-        if interaction.user.id != 1241397634095120438:
+    async def create_server_embeds(self) -> List[discord.Embed]:
+        embeds = []
+        current_embed = discord.Embed(
+            title="参加中のサーバー",
+            color=EMBED_COLORS["info"]
+        )
+
+        for i, guild in enumerate(self.bot.guilds, 1):
+            member_count = len(guild.members)
+            owner = guild.owner
+            created_at = guild.created_at.strftime("%Y-%m-%d")
+
+            value = (
+                f"ID: {guild.id}\n"
+                f"オーナー: {owner}\n"
+                f"メンバー数: {member_count}\n"
+                f"作成日: {created_at}"
+            )
+            current_embed.add_field(
+                name=guild.name,
+                value=value,
+                inline=False
+            )
+
+            if i % SERVERS_PER_PAGE == 0 or i == len(self.bot.guilds):
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="参加中のサーバー (続き)",
+                    color=EMBED_COLORS["info"]
+                )
+
+        return embeds
+
+    async def create_debug_embed(self) -> discord.Embed:
+        cogs = ", ".join(self.bot.cogs.keys())
+        shard_info = (
+            f"Shard ID: {self.bot.shard_id}\n"
+            f"Shard Count: {self.bot.shard_count}\n"
+        ) if self.bot.shard_id is not None else "Sharding is not enabled."
+
+        debug_info = (
+            f"Bot Name: {self.bot.user.name}\n"
+            f"Bot ID: {self.bot.user.id}\n"
+            f"Latency: {self.bot.latency * 1000:.2f} ms\n"
+            f"Guild Count: {len(self.bot.guilds)}\n"
+            f"Loaded Cogs: {cogs}\n"
+            f"{shard_info}"
+        )
+
+        return discord.Embed(
+            title="デバッグ情報",
+            description=debug_info,
+            color=EMBED_COLORS["success"]
+        )
+
+    @app_commands.command(
+        name="botadmin",
+        description="Bot管理コマンド"
+    )
+    async def botadmin_command(
+        self,
+        interaction: discord.Interaction,
+        option: str
+    ) -> None:
+        if not self.is_admin(interaction.user.id):
             embed = discord.Embed(
-                title="エラー", description="このコマンドを使用する権限がありません。", color=discord.Color.red())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+                title="エラー",
+                description=ERROR_MESSAGES["no_permission"],
+                color=EMBED_COLORS["error"]
+            )
+            await interaction.response.send_message(
+                embed=embed,
+                ephemeral=True
+            )
             return
 
-        if option == "servers":
-            embeds = []
-            embed = discord.Embed(title="参加中のサーバー", color=discord.Color.blue())
-            for i, guild in enumerate(self.bot.guilds):
-                member_count = len(guild.members)
-                owner = guild.owner
-                created_at = guild.created_at.strftime("%Y-%m-%d")
-                value = f"ID: {guild.id}\nオーナー: {owner}\nメンバー数: {member_count}\n作成日: {created_at}"
-                embed.add_field(name=guild.name, value=value, inline=False)
-                if (i + 1) % 10 == 0 or i == len(self.bot.guilds) - 1:
-                    embeds.append(embed)
-                    embed = discord.Embed(title="参加中のサーバー (続き)", color=discord.Color.blue())
-            await self.send_paginated_response(interaction, embeds)
-        elif option == "debug":
-            cogs = ", ".join(self.bot.cogs.keys())
-            shard_info = (
-                f"Shard ID: {self.bot.shard_id}\n"
-                f"Shard Count: {self.bot.shard_count}\n"
-            ) if self.bot.shard_id is not None else "Sharding is not enabled."
-            debug_info = (
-                f"Bot Name: {self.bot.user.name}\n"
-                f"Bot ID: {self.bot.user.id}\n"
-                f"Latency: {self.bot.latency * 1000:.2f} ms\n"
-                f"Guild Count: {len(self.bot.guilds)}\n"
-                f"Loaded Cogs: {cogs}\n"
-                f"{shard_info}"
+        try:
+            if option == AdminOption.SERVERS:
+                embeds = await self.create_server_embeds()
+                view = PaginationView(embeds)
+                await interaction.response.send_message(
+                    embed=embeds[0],
+                    view=view,
+                    ephemeral=True
+                )
+
+            elif option == AdminOption.DEBUG:
+                embed = await self.create_debug_embed()
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True
+                )
+
+            elif option.startswith(AdminOption.SAY):
+                message = option[len(AdminOption.SAY):]
+                await interaction.channel.send(message)
+                embed = discord.Embed(
+                    title="Sayコマンド",
+                    description="sayを出力しました",
+                    color=EMBED_COLORS["success"]
+                )
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True
+                )
+
+            else:
+                embed = discord.Embed(
+                    title="エラー",
+                    description=ERROR_MESSAGES["invalid_option"],
+                    color=EMBED_COLORS["error"]
+                )
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True
+                )
+
+        except Exception as e:
+            logger.error("Error in botadmin command: %s", e, exc_info=True)
+            embed = discord.Embed(
+                title="エラー",
+                description=f"予期せぬエラーが発生しました: {e}",
+                color=EMBED_COLORS["error"]
             )
-            embed = discord.Embed(
-                title="デバッグ情報", description=debug_info, color=discord.Color.green())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        elif option.startswith("say:"):
-            message = option[4:]
-            await interaction.channel.send(message)
-            embed = discord.Embed(
-                title="Sayコマンド", description="sayを出力しました", color=discord.Color.green())
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        else:
-            embed = discord.Embed(
-                title="エラー", description="無効なオプションです。", color=discord.Color.red())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(
+                embed=embed,
+                ephemeral=True
+            )
 
-    async def send_paginated_response(self, interaction, embeds):
-        current_page = 0
 
-        async def update_message():
-            for item in view.children:
-                if isinstance(item, Button):
-                    item.disabled = False
-            if current_page == 0:
-                view.children[0].disabled = True
-            if current_page == len(embeds) - 1:
-                view.children[1].disabled = True
-            await interaction.edit_original_response(embed=embeds[current_page], view=view)
-
-        async def next_page(interaction):
-            nonlocal current_page
-            current_page += 1
-            await update_message()
-
-        async def previous_page(interaction):
-            nonlocal current_page
-            current_page -= 1
-            await update_message()
-
-        view = View()
-        view.add_item(Button(label="前へ", style=discord.ButtonStyle.primary, disabled=True, custom_id="previous_page"))
-        view.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next_page"))
-
-        async def button_callback(interaction):
-            if interaction.data["custom_id"] == "previous_page":
-                await previous_page(interaction)
-            elif interaction.data["custom_id"] == "next_page":
-                await next_page(interaction)
-            await interaction.response.defer()  # インタラクションに対する応答を行う
-
-        view.children[0].callback = button_callback
-        view.children[1].callback = button_callback
-
-        await interaction.response.send_message(embed=embeds[current_page], view=view, ephemeral=True)
-
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(BotAdmin(bot))

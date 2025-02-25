@@ -1,187 +1,301 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Button
+from discord.ui import View
 from datetime import datetime, timezone, timedelta
-import sqlite3
+import aiosqlite
+from pathlib import Path
+from typing import Final, Optional
+import logging
 
-JST = timezone(timedelta(hours=9))
-DB_PATH = "anticheat.db"
+# 定数定義
+JST: Final[timezone] = timezone(timedelta(hours=9))
+DB_PATH: Final[Path] = Path("data/anticheat.db")
+BUTTON_TIMEOUT: Final[int] = 60
+WARNING_DELETE_DELAY: Final[int] = 5
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(
-        "CREATE TABLE IF NOT EXISTS enabled_servers (guild_id INTEGER PRIMARY KEY)"
-    )
-    conn.commit()
-    conn.close()
+EMBED_COLORS: Final[dict] = {
+    "error": discord.Color.red(),
+    "warning": discord.Color.orange(),
+    "success": discord.Color.green(),
+    "info": discord.Color.blue()
+}
 
-init_db()
+ERROR_MESSAGES: Final[dict] = {
+    "guild_only": "このコマンドはサーバー内でのみ使用できます。",
+    "admin_only": "このコマンドはサーバーの管理者のみ実行できます。",
+    "no_permission": "Botにメッセージ削除の権限がありません。登録できません。",
+    "already_enabled": "荒らし対策は既に有効です。",
+    "already_disabled": "荒らし対策は既に無効です。",
+    "interaction_failed": "インタラクションに失敗しました: {}"
+}
 
-def is_anticheat_enabled(guild_id: int) -> bool:
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT 1 FROM enabled_servers WHERE guild_id = ?", (guild_id,))
-    result = c.fetchone()
-    conn.close()
-    return result is not None
+SUCCESS_MESSAGES: Final[dict] = {
+    "enabled": "荒らし対策を有効にしました。",
+    "disabled": "荒らし対策を無効にしました。"
+}
 
-def enable_anticheat(guild_id: int):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO enabled_servers (guild_id) VALUES (?)", (guild_id,))
-    conn.commit()
-    conn.close()
+FEATURE_DESCRIPTION: Final[str] = (
+    "この機能は、デフォルトアバターかつ本日作成されたアカウントによる"
+    "メッセージ送信を制限することで、荒らし対策をします。\n"
+    "登録ボタンを押すことで、荒らし対策を有効にします。"
+)
 
-def disable_anticheat(guild_id: int):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM enabled_servers WHERE guild_id = ?", (guild_id,))
-    conn.commit()
-    conn.close()
+logger = logging.getLogger(__name__)
+
+class AntiRaidDatabase:
+    """荒らし対策のDB操作を管理"""
+
+    @staticmethod
+    async def init_db() -> None:
+        """DBを初期化"""
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS enabled_servers
+                (guild_id INTEGER PRIMARY KEY)
+                """
+            )
+            await db.commit()
+
+    @staticmethod
+    async def is_enabled(guild_id: int) -> bool:
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT 1 FROM enabled_servers WHERE guild_id = ?",
+                (guild_id,)
+            ) as cursor:
+                return await cursor.fetchone() is not None
+
+    @staticmethod
+    async def enable(guild_id: int) -> None:
+        """サーバーの機能を有効化"""
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO enabled_servers (guild_id) VALUES (?)",
+                (guild_id,)
+            )
+            await db.commit()
+
+    @staticmethod
+    async def disable(guild_id: int) -> None:
+        """サーバーの機能を無効化"""
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "DELETE FROM enabled_servers WHERE guild_id = ?",
+                (guild_id,)
+            )
+            await db.commit()
 
 class EnableAnticheatView(View):
-    def __init__(self, guild_id: int):
-        super().__init__(timeout=60)  # expires after 60 seconds
+    """荒らし対策有効化用のビュー"""
+
+    def __init__(self, guild_id: int) -> None:
+        super().__init__(timeout=BUTTON_TIMEOUT)
         self.guild_id = guild_id
 
-    @discord.ui.button(label="登録", style=discord.ButtonStyle.green, custom_id="confirm_enable")
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Defer the response so we have time to process
+    @discord.ui.button(
+        label="登録",
+        style=discord.ButtonStyle.green,
+        custom_id="confirm_enable"
+    )
+    async def confirm(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button
+    ) -> None:
+        """登録ボタンのコールバック"""
         await interaction.response.defer(ephemeral=True)
         try:
-            guild = interaction.guild
-            if guild is None:
-                await interaction.followup.send("このボタンはサーバー内でのみ使用できます。", ephemeral=True)
-                self.stop()
+            if not interaction.guild:
+                await interaction.followup.send(
+                    ERROR_MESSAGES["guild_only"],
+                    ephemeral=True
+                )
                 return
 
-            if not interaction.channel.permissions_for(guild.me).manage_messages:
-                await interaction.followup.send("Botにメッセージ削除の権限がありません。登録できません。", ephemeral=True)
-                self.stop()
+            if not interaction.channel.permissions_for(
+                interaction.guild.me
+            ).manage_messages:
+                await interaction.followup.send(
+                    ERROR_MESSAGES["no_permission"],
+                    ephemeral=True
+                )
                 return
 
-            if is_anticheat_enabled(self.guild_id):
-                await interaction.followup.send("すでに有効です。", ephemeral=True)
-                self.stop()
+            if await AntiRaidDatabase.is_enabled(self.guild_id):
+                await interaction.followup.send(
+                    ERROR_MESSAGES["already_enabled"],
+                    ephemeral=True
+                )
                 return
 
-            enable_anticheat(self.guild_id)
-            # Edit the original deferred response so the user sees the update
-            await interaction.edit_original_response(content="荒らし対策を有効にしました。")
-            self.stop()
+            await AntiRaidDatabase.enable(self.guild_id)
+            await interaction.edit_original_response(
+                content=SUCCESS_MESSAGES["enabled"]
+            )
+
         except Exception as e:
-            await interaction.followup.send(f"インタラクションに失敗しました: {str(e)}", ephemeral=True)
+            logger.error("Error in enable confirmation: %s", e, exc_info=True)
+            await interaction.followup.send(
+                ERROR_MESSAGES["interaction_failed"].format(str(e)),
+                ephemeral=True
+            )
+        finally:
             self.stop()
 
 class IconCheck(commands.Cog):
-    def __init__(self, bot):
+    """荒らし対策機能を提供"""
+
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @discord.app_commands.command(name="antiraid_enable", description="荒らし対策を有効にします")
-    async def anticheat_enable(self, interaction: discord.Interaction):
-        guild = interaction.guild
-        if guild is None:
-            embed = discord.Embed(
-                title="エラー",
-                description="このコマンドはサーバー内でのみ使用できます。",
-                color=discord.Color.red()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+    async def cog_load(self) -> None:
+        """Cogのロード時にDBを初期化"""
+        await AntiRaidDatabase.init_db()
 
-        # 管理者権限のチェック
-        if not interaction.user.guild_permissions.administrator:
-            embed = discord.Embed(
-                title="エラー",
-                description="このコマンドはサーバーの管理者のみ実行できます。",
-                color=discord.Color.red()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
-        if is_anticheat_enabled(guild.id):
-            embed = discord.Embed(
-                title="情報",
-                description="荒らし対策は既に有効です。",
-                color=discord.Color.orange()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
-        embed = discord.Embed(
-            title="説明",
-            description=("この機能は、デフォルトアバターかつ本日作成されたアカウントによる"
-                         "メッセージ送信を制限することで、荒らし対策をします。\n"
-                         "登録ボタンを押すことで、荒らし対策を有効にします。"),
-            color=discord.Color.blue()
+    def _create_embed(
+        self,
+        title: str,
+        description: str,
+        color_key: str
+    ) -> discord.Embed:
+        return discord.Embed(
+            title=title,
+            description=description,
+            color=EMBED_COLORS[color_key]
         )
-        view = EnableAnticheatView(guild.id)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    @discord.app_commands.command(name="antiraid_disable", description="荒らし対策を無効にします")
-    async def anticheat_disable(self, interaction: discord.Interaction):
-        guild = interaction.guild
-        if guild is None:
-            embed = discord.Embed(
-                title="エラー",
-                description="このコマンドはサーバー内でのみ使用できます。",
-                color=discord.Color.red()
+    async def _check_command_context(
+        self,
+        interaction: discord.Interaction
+    ) -> Optional[discord.Embed]:
+        if not interaction.guild:
+            return self._create_embed(
+                "エラー",
+                ERROR_MESSAGES["guild_only"],
+                "error"
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
 
-        # 管理者権限のチェック
         if not interaction.user.guild_permissions.administrator:
-            embed = discord.Embed(
-                title="エラー",
-                description="このコマンドはサーバーの管理者のみ実行できます。",
-                color=discord.Color.red()
+            return self._create_embed(
+                "エラー",
+                ERROR_MESSAGES["admin_only"],
+                "error"
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        return None
+
+    @discord.app_commands.command(
+        name="antiraid_enable",
+        description="荒らし対策を有効にします"
+    )
+    async def anticheat_enable(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """荒らし対策を有効化するコマンド"""
+        if error_embed := await self._check_command_context(interaction):
+            await interaction.response.send_message(
+                embed=error_embed,
+                ephemeral=True
+            )
             return
 
-        if not is_anticheat_enabled(guild.id):
-            embed = discord.Embed(
-                title="情報",
-                description="荒らし対策は既に無効です。",
-                color=discord.Color.orange()
+        if await AntiRaidDatabase.is_enabled(interaction.guild_id):
+            await interaction.response.send_message(
+                embed=self._create_embed(
+                    "情報",
+                    ERROR_MESSAGES["already_enabled"],
+                    "warning"
+                ),
+                ephemeral=True
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        disable_anticheat(guild.id)
-        embed = discord.Embed(
-            title="完了",
-            description="荒らし対策を無効にしました。",
-            color=discord.Color.green()
+        embed = self._create_embed(
+            "説明",
+            FEATURE_DESCRIPTION,
+            "info"
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        view = EnableAnticheatView(interaction.guild_id)
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.app_commands.command(
+        name="antiraid_disable",
+        description="荒らし対策を無効にします"
+    )
+    async def anticheat_disable(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """荒らし対策を無効化するコマンド"""
+        if error_embed := await self._check_command_context(interaction):
+            await interaction.response.send_message(
+                embed=error_embed,
+                ephemeral=True
+            )
+            return
+
+        if not await AntiRaidDatabase.is_enabled(interaction.guild_id):
+            await interaction.response.send_message(
+                embed=self._create_embed(
+                    "情報",
+                    ERROR_MESSAGES["already_disabled"],
+                    "warning"
+                ),
+                ephemeral=True
+            )
+            return
+
+        await AntiRaidDatabase.disable(interaction.guild_id)
+        await interaction.response.send_message(
+            embed=self._create_embed(
+                "完了",
+                SUCCESS_MESSAGES["disabled"],
+                "success"
+            ),
+            ephemeral=True
+        )
 
     @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot:
+    async def on_message(self, message: discord.Message) -> None:
+        """メッセージ送信時の処理"""
+        if message.author.bot or not message.guild:
             return
 
-        if message.guild and is_anticheat_enabled(message.guild.id):
-            user = message.author
-
-            # デフォルトアバターのチェック
-            is_default_avatar = user.avatar is None
-
-            # アカウント作成日が今日かどうかのチェック
-            created_at_utc = user.created_at.replace(tzinfo=timezone.utc)
-            is_new_account = created_at_utc.date() == datetime.now(timezone.utc).date()
-
-            if is_default_avatar and is_new_account:
-                await message.delete()
-                embed = discord.Embed(
-                    title="警告",
-                    description=f"{user.mention}、デフォルトのアバターかつ本日作成されたアカウントではメッセージを送信できません。",
-                    color=discord.Color.red()
+        try:
+            if await AntiRaidDatabase.is_enabled(message.guild.id):
+                user = message.author
+                is_default_avatar = user.avatar is None
+                created_at_utc = user.created_at.replace(tzinfo=timezone.utc)
+                is_new_account = (
+                    created_at_utc.date() ==
+                    datetime.now(timezone.utc).date()
                 )
-                warning_message = await message.channel.send(embed=embed)
-                await warning_message.delete(delay=5)
 
-async def setup(bot):
+                if is_default_avatar and is_new_account:
+                    await message.delete()
+                    warning_embed = self._create_embed(
+                        "警告",
+                        f"{user.mention}、デフォルトのアバターかつ"
+                        "本日作成されたアカウントではメッセージを送信できません。",
+                        "error"
+                    )
+                    warning_message = await message.channel.send(
+                        embed=warning_embed
+                    )
+                    await warning_message.delete(delay=WARNING_DELETE_DELAY)
+
+        except Exception as e:
+            logger.error(
+                "Error processing message in anti-raid: %s", e,
+                exc_info=True
+            )
+
+
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(IconCheck(bot))
