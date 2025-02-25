@@ -68,21 +68,6 @@ class DatabaseManager:
         guild_id: int,
         channel_id: int
     ) -> bool:
-        """
-        チャンネルが禁止されているかチェック
-
-        Parameters
-        ----------
-        guild_id : int
-            ギルドID
-        channel_id : int
-            チャンネルID
-
-        Returns
-        -------
-        bool
-            禁止されているならTrue
-        """
         try:
             if not self._connection:
                 await self.initialize()
@@ -139,14 +124,6 @@ class UserCountManager:
         return self._read_count()
 
     def update_count(self, count: int) -> None:
-        """
-        ユーザー数を更新
-
-        Parameters
-        ----------
-        count : int
-            新しいユーザー数
-        """
         self._write_count(count)
         self._last_update = time.time()
 
@@ -298,12 +275,6 @@ class SwiftlyBot(commands.Bot):
         self,
         ctx: commands.Context
     ) -> bool:
-        # DEV_USER_IDが設定されている場合、開発のためそのユーザーのみコマンドを実行可能
-        dev_user_id = os.getenv("DEV_USER_ID")
-        if dev_user_id and str(ctx.author.id) != dev_user_id:
-            await ctx.send("現在、開発者のみが実行できます。")
-            return False
-
         if not ctx.guild:
             return True
 
