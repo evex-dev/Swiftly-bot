@@ -63,8 +63,8 @@ class AnonyVote(commands.Cog):
             )
 
         await interaction.response.send_message(
-            f"投票が開始されました。セッションID: {session_id}",
-            ephemeral=True
+            f"投票が開始されました。\nトピック: {topic}\n選択肢: {', '.join(options_list)}\nセッションID: {session_id}",
+            ephemeral=False
         )
 
     @discord.app_commands.command(
