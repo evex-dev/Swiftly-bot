@@ -82,6 +82,35 @@ class PollButton(discord.ui.Button):
 
         # レート制限を更新
         self._last_uses[interaction.user.id] = datetime.now()
+
+        # 投票メッセージを更新
+        try:
+            # 投票メッセージを検索
+            for channel in interaction.guild.text_channels:
+                try:
+                    async for message in channel.history(limit=100):
+                        if message.embeds and len(message.embeds) > 0:
+                            footer_text = message.embeds[0].footer.text
+                            if footer_text and f"投票ID: {self.poll_id}" in footer_text:
+                                # 既存のembedを取得して投票数を更新
+                                embed = message.embeds[0]
+                                # 投票数フィールドを探す
+                                for i, field in enumerate(embed.fields):
+                                    if field.name == "投票数":
+                                        embed.set_field_at(
+                                            i,
+                                            name="投票数",
+                                            value=str(total_votes),
+                                            inline=False
+                                        )
+                                        await message.edit(embed=embed)
+                                        break
+                                break
+                except (discord.Forbidden, discord.HTTPException):
+                    continue
+        except Exception as e:
+            print(f"投票数の更新中にエラーが発生しました: {e}")
+
         await interaction.response.send_message(f"投票を受け付けたよ（現在の投票数: {total_votes}票）", ephemeral=True)
 
 
@@ -171,7 +200,7 @@ class Poll(commands.Cog):
 
                     # 終了した投票ごとに処理
                     for poll in ended_polls:
-                        poll_id, title, options_str, end_time = poll
+                        poll_id, title, options_str, _ = poll
 
                         # 投票を終了状態に更新
                         await db.execute('UPDATE polls SET is_active = 0 WHERE id = ?', (poll_id,))
