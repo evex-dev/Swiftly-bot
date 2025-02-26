@@ -330,7 +330,7 @@ class TetrisView(discord.ui.View):
             return False
         return True
 
-    async def update_message(self) -> None:
+    async def update_message(self, new_interaction: Optional[discord.Interaction] = None) -> None:
         """ゲーム画面を更新"""
         embed = discord.Embed(
             title="Tetris",
@@ -358,11 +358,41 @@ class TetrisView(discord.ui.View):
             if self.auto_drop_task:
                 self.auto_drop_task.cancel()
 
-        await self.interaction.edit_original_response(
-            embed=embed,
-            content=content,
-            view=self
-        )
+        try:
+            # 新しいインタラクションがある場合はそれを使用
+            if new_interaction:
+                await new_interaction.edit_original_response(
+                    embed=embed,
+                    content=content,
+                    view=self
+                )
+            else:
+                await self.interaction.edit_original_response(
+                    embed=embed,
+                    content=content,
+                    view=self
+                )
+        except discord.errors.HTTPException as e:
+            if e.code == 50027:  # Invalid Webhook Token
+                logger.warning("Interaction token expired, cannot update message")
+                # インタラクションが期限切れの場合、フォローアップメッセージを送信
+                await self.send_interaction_expired_message(new_interaction)
+            else:
+                # その他のHTTPエラーは再スロー
+                raise
+
+    async def send_interaction_expired_message(self, interaction: Optional[discord.Interaction]) -> None:
+        if not interaction:
+            return
+
+        try:
+            # フォローアップメッセージを送信
+            await interaction.followup.send(
+                "インタラクションの有効期限が切れたよ。もう一度ゲームを作り直してね。",
+                ephemeral=True
+            )
+        except Exception as e:
+            logger.error("Failed to send interaction expired message: %s", e, exc_info=True)
 
     @discord.ui.button(label="←", style=discord.ButtonStyle.primary)
     async def left(
@@ -374,7 +404,7 @@ class TetrisView(discord.ui.View):
         await interaction.response.defer()
         if not self.game.game_over:
             self.game.move_left()
-            await self.update_message()
+            await self.update_message(interaction)
 
     @discord.ui.button(label="→", style=discord.ButtonStyle.primary)
     async def right(
@@ -386,7 +416,7 @@ class TetrisView(discord.ui.View):
         await interaction.response.defer()
         if not self.game.game_over:
             self.game.move_right()
-            await self.update_message()
+            await self.update_message(interaction)
 
     @discord.ui.button(label="↓", style=discord.ButtonStyle.primary)
     async def down(
@@ -398,7 +428,7 @@ class TetrisView(discord.ui.View):
         await interaction.response.defer()
         if not self.game.game_over:
             self.game.move_down()
-            await self.update_message()
+            await self.update_message(interaction)
 
     @discord.ui.button(label="⏬", style=discord.ButtonStyle.primary)
     async def drop(
@@ -410,7 +440,7 @@ class TetrisView(discord.ui.View):
         await interaction.response.defer()
         if not self.game.game_over:
             self.game.drop()
-            await self.update_message()
+            await self.update_message(interaction)
 
     @discord.ui.button(label="↻", style=discord.ButtonStyle.secondary)
     async def rotate_button(
@@ -422,7 +452,7 @@ class TetrisView(discord.ui.View):
         await interaction.response.defer()
         if not self.game.game_over:
             self.game.rotate()
-            await self.update_message()
+            await self.update_message(interaction)
 
 class Tetri(commands.Cog):
     """テトリスゲーム機能を提供"""
@@ -457,14 +487,6 @@ class Tetri(commands.Cog):
         return False, None
 
     async def auto_drop(self, view: TetrisView) -> None:
-        """
-        自動落下処理
-
-        Parameters
-        ----------
-        view : TetrisView
-            ゲームビュー
-        """
         try:
             await asyncio.sleep(AUTO_DROP_DELAY)
             while not view.game.game_over:
@@ -472,7 +494,16 @@ class Tetri(commands.Cog):
                 if (view.game.current_piece and
                     view.game.can_move(0, 1)):
                     view.game.move_down()
-                    await view.update_message()
+                    try:
+                        await view.update_message()
+                    except discord.errors.HTTPException as e:
+                        if e.code == 50027:  # Invalid Webhook Token
+                            logger.warning("Auto-drop: Interaction token expired")
+                            # 自動落下ではフォローアップメッセージを送信できないので、
+                            # ここでは処理を停止する
+                            return
+                        else:
+                            raise
         except asyncio.CancelledError:
             pass
         except Exception as e:
