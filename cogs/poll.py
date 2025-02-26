@@ -90,11 +90,11 @@ class PollButton(discord.ui.Button):
             async with aiosqlite.connect('./data/poll.db') as db:
                 async with db.execute('SELECT channel_id, message_id FROM polls WHERE id = ?', (self.poll_id,)) as cursor:
                     poll_location = await cursor.fetchone()
-                    
+
             if poll_location and poll_location[0] and poll_location[1]:
                 channel_id, message_id = poll_location
                 channel = interaction.guild.get_channel(channel_id)
-                
+
                 if channel:
                     try:
                         message = await channel.fetch_message(message_id)
@@ -261,6 +261,15 @@ class Poll(commands.Cog):
                                 if channel:
                                     try:
                                         await channel.send("投票の終了時間になったよ", embed=embed)
+
+                                        # 元の投票メッセージを削除
+                                        if message_id:
+                                            try:
+                                                original_message = await channel.fetch_message(message_id)
+                                                await original_message.delete()
+                                            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                                                print(f"元の投票メッセージの削除中にエラーが発生しました: {e}")
+
                                         break
                                     except (discord.Forbidden, discord.HTTPException) as e:
                                         print(f"投票結果の送信中にエラーが発生しました: {e}")
@@ -346,13 +355,13 @@ class Poll(commands.Cog):
 
             view = PollView(option_list, poll_id)
             await interaction.response.send_message(embed=embed, view=view)
-            
+
             # 送信したメッセージのIDを取得して保存
             try:
                 # interactionのオリジナルメッセージを取得
                 original_message = await interaction.original_response()
                 message_id = original_message.id
-                
+
                 # メッセージIDをDBに保存
                 async with aiosqlite.connect('./data/poll.db') as db:
                     await db.execute(
