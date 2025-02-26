@@ -209,7 +209,7 @@ class Poll(commands.Cog):
             )
             embed.add_field(
                 name="終了時刻",
-                value=f"{end_time.strftime('%Y/%m/%d %H:%M')} (JST)",
+                value=f"{end_time.strftime('%Y/%m/%d %H:%M')} (JST)\n<t:{int(end_time.timestamp())}:R>",
                 inline=False
             )
             embed.set_footer(text=f"投票ID: {poll_id}")
@@ -286,11 +286,12 @@ class Poll(commands.Cog):
                     color=discord.Color.green()
                 )
 
+                max_votes_count = max(vote_counts.values())
                 for i, option in enumerate(options):
                     votes = vote_counts.get(i, 0)
                     percentage = (votes / total_votes * 100) if total_votes > 0 else 0
-                    bar_length = int(percentage / 5)  # 20文字を最大とする
-                    progress_bar = '█' * bar_length + '░' * (20 - bar_length)
+                    bar_length = int(percentage / 5 * total_votes / max_votes_count) if total_votes > 0 else 0
+                    progress_bar = '█' * bar_length + '▁' * (20 - bar_length)
                     embed.add_field(
                         name=option,
                         value=f"{progress_bar} {votes}票 ({percentage:.1f}%)",

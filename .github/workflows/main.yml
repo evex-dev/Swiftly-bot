@@ -10,7 +10,6 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # リポジトリのディレクトリに移動して更新
       - name: Pull latest changes
         run: |
           cd /home/adminpi/Swiftly-bot
@@ -21,7 +20,12 @@ jobs:
             git clone https://github.com/evex-dev/Swiftly-bot.git /home/adminpi/Swiftly-bot
           fi
 
-      # systemdサービスを再起動
+      - name: Install dependencies
+        run: |
+          cd /home/adminpi/Swiftly-bot
+          source myenv/bin/activate
+          pip install -r requirements.txt
+
       - name: Restart systemd service
         run: |
           sudo systemctl restart swiftly-bot.service
