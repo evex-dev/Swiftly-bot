@@ -14,6 +14,7 @@ VOTE_RATE_LIMIT_SECONDS = 2  # 投票アクションのレート制限
 CLEANUP_DAYS = 1  # 終了した投票を保持する日数
 
 DURATION_CHOICES = [
+    app_commands.Choice(name="1分", value=1),
     app_commands.Choice(name="30分", value=30),
     app_commands.Choice(name="1時間", value=60),
     app_commands.Choice(name="12時間", value=720),
@@ -85,29 +86,34 @@ class PollButton(discord.ui.Button):
 
         # 投票メッセージを更新
         try:
-            # 投票メッセージを検索
-            for channel in interaction.guild.text_channels:
-                try:
-                    async for message in channel.history(limit=100):
+            # DBからチャンネルIDとメッセージIDを取得
+            async with aiosqlite.connect('./data/poll.db') as db:
+                async with db.execute('SELECT channel_id, message_id FROM polls WHERE id = ?', (self.poll_id,)) as cursor:
+                    poll_location = await cursor.fetchone()
+                    
+            if poll_location and poll_location[0] and poll_location[1]:
+                channel_id, message_id = poll_location
+                channel = interaction.guild.get_channel(channel_id)
+                
+                if channel:
+                    try:
+                        message = await channel.fetch_message(message_id)
                         if message.embeds and len(message.embeds) > 0:
-                            footer_text = message.embeds[0].footer.text
-                            if footer_text and f"投票ID: {self.poll_id}" in footer_text:
-                                # 既存のembedを取得して投票数を更新
-                                embed = message.embeds[0]
-                                # 投票数フィールドを探す
-                                for i, field in enumerate(embed.fields):
-                                    if field.name == "投票数":
-                                        embed.set_field_at(
-                                            i,
-                                            name="投票数",
-                                            value=str(total_votes),
-                                            inline=False
-                                        )
-                                        await message.edit(embed=embed)
-                                        break
-                                break
-                except (discord.Forbidden, discord.HTTPException):
-                    continue
+                            # 既存のembedを取得して投票数を更新
+                            embed = message.embeds[0]
+                            # 投票数フィールドを探す
+                            for i, field in enumerate(embed.fields):
+                                if field.name == "投票数":
+                                    embed.set_field_at(
+                                        i,
+                                        name="投票数",
+                                        value=str(total_votes),
+                                        inline=False
+                                    )
+                                    await message.edit(embed=embed)
+                                    break
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                        print(f"投票メッセージの更新中にエラーが発生しました: {e}")
         except Exception as e:
             print(f"投票数の更新中にエラーが発生しました: {e}")
 
@@ -142,7 +148,9 @@ class Poll(commands.Cog):
                     creator_id INTEGER NOT NULL,
                     end_time TIMESTAMP NOT NULL,
                     is_active BOOLEAN NOT NULL DEFAULT 1,
-                    options TEXT NOT NULL
+                    options TEXT NOT NULL,
+                    channel_id INTEGER,
+                    message_id INTEGER
                 )
             ''')
 
@@ -191,7 +199,7 @@ class Poll(commands.Cog):
                 async with aiosqlite.connect('./data/poll.db') as db:
                     # 終了時間が過ぎているがまだアクティブな投票を検索
                     async with db.execute('''
-                        SELECT id, title, options, end_time
+                        SELECT id, title, options, end_time, channel_id, message_id
                         FROM polls
                         WHERE is_active = 1
                         AND end_time < ?
@@ -200,7 +208,7 @@ class Poll(commands.Cog):
 
                     # 終了した投票ごとに処理
                     for poll in ended_polls:
-                        poll_id, title, options_str, _ = poll
+                        poll_id, title, options_str, _, channel_id, message_id = poll
 
                         # 投票を終了状態に更新
                         await db.execute('UPDATE polls SET is_active = 0 WHERE id = ?', (poll_id,))
@@ -246,21 +254,16 @@ class Poll(commands.Cog):
 
                         embed.set_footer(text=f"総投票数: {total_votes}票")
 
-                        # 投票が作成されたチャンネルを特定して結果を送信
-                        # 注意: これはメッセージ履歴から投票メッセージを見つける必要があるため、
-                        # 全てのチャンネルで投票結果を表示できない場合があります
-                        for guild in self.bot.guilds:
-                            for channel in guild.text_channels:
-                                try:
-                                    # 過去のメッセージから投票IDを含むメッセージを検索
-                                    async for message in channel.history(limit=100):
-                                        if message.embeds and len(message.embeds) > 0:
-                                            footer_text = message.embeds[0].footer.text
-                                            if footer_text and f"投票ID: {poll_id}" in footer_text:
-                                                await channel.send("投票の終了時間になったよ", embed=embed)
-                                                break
-                                except (discord.Forbidden, discord.HTTPException):
-                                    continue
+                        # 保存されたチャンネルIDを使用して結果を送信
+                        if channel_id:
+                            for guild in self.bot.guilds:
+                                channel = guild.get_channel(channel_id)
+                                if channel:
+                                    try:
+                                        await channel.send("投票の終了時間になったよ", embed=embed)
+                                        break
+                                    except (discord.Forbidden, discord.HTTPException) as e:
+                                        print(f"投票結果の送信中にエラーが発生しました: {e}")
 
             except Exception as e:
                 print(f"Error in check_ended_polls: {e}")
@@ -318,8 +321,8 @@ class Poll(commands.Cog):
 
             async with aiosqlite.connect('./data/poll.db') as db:
                 cursor = await db.execute(
-                    'INSERT INTO polls (title, description, creator_id, end_time, options) VALUES (?, ?, ?, ?, ?)',
-                    (title, description or "", interaction.user.id, end_time.timestamp(), options)
+                    'INSERT INTO polls (title, description, creator_id, end_time, options, channel_id) VALUES (?, ?, ?, ?, ?, ?)',
+                    (title, description or "", interaction.user.id, end_time.timestamp(), options, interaction.channel_id)
                 )
                 poll_id = cursor.lastrowid
                 await db.commit()
@@ -343,6 +346,22 @@ class Poll(commands.Cog):
 
             view = PollView(option_list, poll_id)
             await interaction.response.send_message(embed=embed, view=view)
+            
+            # 送信したメッセージのIDを取得して保存
+            try:
+                # interactionのオリジナルメッセージを取得
+                original_message = await interaction.original_response()
+                message_id = original_message.id
+                
+                # メッセージIDをDBに保存
+                async with aiosqlite.connect('./data/poll.db') as db:
+                    await db.execute(
+                        'UPDATE polls SET message_id = ? WHERE id = ?',
+                        (message_id, poll_id)
+                    )
+                    await db.commit()
+            except Exception as e:
+                print(f"メッセージID保存中にエラーが発生しました: {e}")
 
             # レート制限を更新
             self._last_uses[interaction.user.id] = datetime.now()
