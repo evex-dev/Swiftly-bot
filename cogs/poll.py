@@ -209,7 +209,7 @@ class Poll(commands.Cog):
             )
             embed.add_field(
                 name="終了時刻",
-                value=f"{end_time.strftime('%Y/%m/%d %H:%M')} (JST)",
+                value=f"{end_time.strftime('%Y/%m/%d %H:%M')} (JST)\n<t:{int(end_time.timestamp())}:R>",
                 inline=False
             )
             embed.set_footer(text=f"投票ID: {poll_id}")
