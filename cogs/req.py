@@ -6,7 +6,7 @@ from datetime import datetime
 class RequestModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="リクエストを送信")
-        self.add_item(discord.ui.InputText(label="リクエスト内容", style=discord.InputTextStyle.long))
+        self.add_item(discord.ui.TextInput(label="リクエスト内容", style=discord.TextInputStyle.long))
 
     async def callback(self, interaction: discord.Interaction):
         user_id = interaction.user.id
