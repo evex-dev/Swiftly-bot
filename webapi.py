@@ -289,10 +289,11 @@ class ServerBoardAPI:
                 detail=ERROR_MESSAGES["unexpected"].format(str(e))
             ) from e
 
-    async def get_requests(self, credentials: HTTPBasicCredentials) -> List[Dict[str, Any]]:
+    async def get_requests(self, credentials: HTTPBasicCredentials = Depends(self.basic_auth)) -> List[Dict[str, Any]]:
         """リクエスト内容を取得するエンドポイント"""
         try:
             conn = sqlite3.connect('data/request.db')
+            conn.row_factory = sqlite3.Row  # Add this line to enable row as dictionary
             c = conn.cursor()
             c.execute("SELECT * FROM requests")
             requests = [dict(row) for row in c.fetchall()]
