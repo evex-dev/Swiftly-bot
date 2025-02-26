@@ -124,22 +124,6 @@ class MemberWelcomeCog(commands.Cog):
         """Cogのロード時にDBを初期化"""
         await WelcomeDatabase.init_database()
 
-    def _create_welcome_embed(
-        self,
-        member: discord.Member,
-        message: str
-    ) -> discord.Embed:
-        return discord.Embed(
-            title="メンバー参加",
-            description=message,
-            color=discord.Color.green()
-        ).set_thumbnail(
-            url=member.display_avatar.url
-        ).add_field(
-            name="参加日時",
-            value=discord.utils.format_dt(member.joined_at, "F")
-        )
-
     @app_commands.command(
         name="welcome",
         description="参加メッセージの設定"
@@ -260,8 +244,7 @@ class MemberWelcomeCog(commands.Cog):
                     next_milestone=member_count + (increment - remainder)
                 )
 
-            embed = self._create_welcome_embed(member, message)
-            await channel.send(embed=embed)
+            await channel.send(message)
 
         except Exception as e:
             logger.error(
