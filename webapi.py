@@ -13,6 +13,7 @@ import uvicorn
 from dotenv import load_dotenv
 import os
 from fastapi.responses import HTMLResponse
+from fastapi import Request
 
 load_dotenv()
 
@@ -309,9 +310,10 @@ class ServerBoardAPI:
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
 
-    async def admin_ui(self, credentials: HTTPBasicCredentials = Depends(security)) -> HTMLResponse:
+    async def admin_ui(self, request: Request, credentials: HTTPBasicCredentials = Depends(security)) -> HTMLResponse:
         self.basic_auth(credentials)
-        html_content = '''
+        csrf_token = request.cookies.get("csrf_token")
+        html_content = f'''
         <!DOCTYPE html>
         <html lang="ja">
         <head>
@@ -334,24 +336,25 @@ class ServerBoardAPI:
                 </tbody>
             </table>
             <script>
-                async function fetchRequests() {
-                    const response = await fetch('/admin/requests', {
-                        headers: {
-                            'Authorization': 'Basic ' + btoa(''' + os.getenv("BASIC_AUTH_USERNAME") + ''':''' + os.getenv("BASIC_AUTH_PASSWORD") + ''')
-                        }
-                    });
+                async function fetchRequests() {{
+                    const response = await fetch('/admin/requests', {{
+                        headers: {{
+                            'Authorization': 'Basic ' + btoa('{credentials.username}:{credentials.password}'),
+                            'X-CSRF-Token': '{csrf_token}'
+                        }}
+                    }});
                     const requests = await response.json();
                     const tbody = document.querySelector('tbody');
-                    requests.forEach(request => {
+                    requests.forEach(request => {{
                         const row = document.createElement('tr');
                         row.innerHTML = `
-                            <td>${request.id}</td>
-                            <td>${request.content}</td>
-                            <td>${request.timestamp}</td>
+                            <td>${{request.id}}</td>
+                            <td>${{request.content}}</td>
+                            <td>${{request.timestamp}}</td>
                         `;
                         tbody.appendChild(row);
-                    });
-                }
+                    }});
+                }}
                 fetchRequests();
             </script>
         </body>
