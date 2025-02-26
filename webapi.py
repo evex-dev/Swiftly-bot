@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import sqlite3
@@ -9,7 +10,12 @@ import logging
 from pathlib import Path
 import json
 import uvicorn
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+security = HTTPBasic()
 
 APP_TITLE: Final[str] = "Server Board API"
 HOST: Final[str] = "localhost"
@@ -212,6 +218,7 @@ class ServerBoardAPI:
         self.app.get("/api/servers")(self.get_servers)
         self.app.get("/api/servers/{server_id}")(self.get_server)
         self.app.get("/api/users")(self.get_total_users)
+        self.app.get("/admin/requests", dependencies=[Depends(self.basic_auth)])(self.get_requests)
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
@@ -281,6 +288,34 @@ class ServerBoardAPI:
                 status_code=500,
                 detail=ERROR_MESSAGES["unexpected"].format(str(e))
             ) from e
+
+    async def get_requests(self, credentials: HTTPBasicCredentials) -> List[Dict[str, Any]]:
+        """リクエスト内容を取得するエンドポイント"""
+        try:
+            conn = sqlite3.connect('data/request.db')
+            c = conn.cursor()
+            c.execute("SELECT * FROM requests")
+            requests = [dict(row) for row in c.fetchall()]
+            conn.close()
+            return requests
+
+        except sqlite3.Error as e:
+            logger.error("Database error: %s", e, exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["db_error"].format(str(e))
+            ) from e
+
+    def basic_auth(self, credentials: HTTPBasicCredentials = Depends(security)) -> None:
+        """Basic認証の検証"""
+        correct_username = os.getenv("BASIC_AUTH_USERNAME")
+        correct_password = os.getenv("BASIC_AUTH_PASSWORD")
+        if credentials.username != correct_username or credentials.password != correct_password:
+            raise HTTPException(
+                status_code=401,
+                detail="認証に失敗しました",
+                headers={"WWW-Authenticate": "Basic"}
+            )
 
 # APIインスタンスの作成
 api = ServerBoardAPI()
