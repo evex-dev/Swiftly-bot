@@ -9,7 +9,7 @@ from statsmodels.tsa.arima.model import ARIMA
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 POSSIBLE_ORDERS: Final[List[Tuple[int, int, int]]] = [
     (0, 1, 0), (1, 1, 0), (1, 1, 1), (2, 1, 0)
 ]

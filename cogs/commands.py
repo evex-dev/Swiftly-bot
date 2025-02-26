@@ -5,7 +5,7 @@ from typing import Final, List, Optional
 import logging
 from collections import defaultdict
 
-# 定数定義
+
 ITEMS_PER_PAGE: Final[int] = 10
 TIMEOUT_SECONDS: Final[int] = 180
 DEFAULT_COLOR: Final[int] = discord.Color.green().value

@@ -5,7 +5,7 @@ from typing import Final, Optional, Dict, Literal
 import logging
 from datetime import datetime, timedelta
 
-# 定数定義
+
 PACKAGE_MANAGERS: Final[Dict[str, str]] = {
     "npm": "https://registry.npmjs.org/{}",
     "pip": "https://pypi.org/pypi/{}/json"

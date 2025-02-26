@@ -4,7 +4,7 @@ from typing import Final, Dict, List
 import logging
 from collections import defaultdict
 
-# 定数定義
+
 EMBED_COLOR: Final[int] = discord.Color.blue().value
 WEBSITE_URL: Final[str] = "https://sakana11.org/swiftly/commands.html"
 FOOTER_TEXT: Final[str] = "Hosted by TechFish_Lab"

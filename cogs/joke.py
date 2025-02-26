@@ -10,7 +10,7 @@ import logging
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 PROG_LANGS: Final[List[str]] = [
     "C++", "Go", "Java", "JavaScript", "Kotlin",
     "PHP", "Python", "Ruby", "Rust", "Swift", "TypeScript"

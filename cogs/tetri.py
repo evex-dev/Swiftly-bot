@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-# 定数定義
+
 BOARD_WIDTH: Final[int] = 10
 BOARD_HEIGHT: Final[int] = 15
 HIDDEN_ROWS: Final[int] = 2  # 上部に隠し行（見えない領域）として確保

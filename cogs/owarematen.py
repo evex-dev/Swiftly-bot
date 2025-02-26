@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Final, Optional, List, Tuple
 import logging
 
-# 定数定義
+
 VERSION: Final[str] = "V1.0 by K-Nana"
 SESSION_TIMEOUT: Final[int] = 3600  # 1時間（秒）
 DB_DIR: Final[Path] = Path("data")

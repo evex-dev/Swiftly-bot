@@ -7,7 +7,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 
-# 定数定義
+
 API_BASE_URL: Final[str] = "https://image-ai.evex.land"
 RATE_LIMIT_SECONDS: Final[int] = 60
 MAX_PROMPT_LENGTH: Final[int] = 1000

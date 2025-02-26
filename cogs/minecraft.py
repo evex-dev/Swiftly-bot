@@ -7,7 +7,7 @@ from typing import Final, Optional
 import re
 from datetime import datetime, timedelta
 
-# 定数定義
+
 API_BASE_URL: Final[str] = "https://api.mcsrvstat.us/3"
 ICON_BASE_URL: Final[str] = "https://api.mcsrvstat.us/icon"
 RATE_LIMIT_SECONDS: Final[int] = 30

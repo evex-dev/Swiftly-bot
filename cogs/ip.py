@@ -7,7 +7,7 @@ from typing import Final, Optional, Dict, List, Tuple
 import logging
 from datetime import datetime, timedelta
 
-# 定数定義
+
 API_BASE_URL: Final[str] = "http://ip-api.com/json"
 RATE_LIMIT_SECONDS: Final[int] = 60
 REQUEST_TIMEOUT: Final[int] = 10

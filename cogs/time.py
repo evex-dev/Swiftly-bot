@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timedelta
 import pytz
 
-# 定数定義
+
 API_BASE_URL: Final[str] = "https://api1.sakana11.org/api/ntp"
 RATE_LIMIT_SECONDS: Final[int] = 10
 REQUEST_TIMEOUT: Final[int] = 5

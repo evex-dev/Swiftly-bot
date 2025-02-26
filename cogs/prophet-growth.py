@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from prophet import Prophet
 
-# 定数定義
+
 GRAPH_SIZE: Final[tuple] = (12, 8)
 PREDICTION_DAYS: Final[int] = 92  # 約3ヶ月
 MIN_DATA_POINTS: Final[int] = 2
