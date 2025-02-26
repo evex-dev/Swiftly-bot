@@ -221,7 +221,7 @@ class ServerBoardAPI:
         self.app.get("/api/servers/{server_id}")(self.get_server)
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
-        self.app.delete("/admin/requests/{request_id}")(self.delete_request)
+        self.app.delete("/admin/requests/{user_id}/{message}/{date}")(self.delete_request)
         self.app.get("/admin/ui", response_class=HTMLResponse)(self.admin_ui)
         self.app.mount(
             "/",
@@ -311,13 +311,13 @@ class ServerBoardAPI:
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
 
-    async def delete_request(self, request_id: int, credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, str]:
+    async def delete_request(self, user_id: int, message: str, date: str, credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, str]:
         """リクエストを削除するエンドポイント"""
         self.basic_auth(credentials)
         try:
             conn = sqlite3.connect('data/request.db')
             c = conn.cursor()
-            c.execute("DELETE FROM requests WHERE id = ?", (request_id,))
+            c.execute("DELETE FROM requests WHERE user_id = ? AND message = ? AND date = ?", (user_id, message, date))
             conn.commit()
             conn.close()
             return {"message": "リクエストが削除されました"}
@@ -371,14 +371,14 @@ class ServerBoardAPI:
                             <td>${{request.user_id}}</td>
                             <td>${{request.message}}</td>
                             <td>${{request.date}}</td>
-                            <td><button onclick="deleteRequest(${{request.id}})">解決</button></td>
+                            <td><button onclick="deleteRequest(${{request.user_id}}, '${{request.message}}', '${{request.date}}')">解決</button></td>
                         `;
                         tbody.appendChild(row);
                     }});
                 }}
 
-                async function deleteRequest(requestId) {{
-                    const response = await fetch(`/admin/requests/${{requestId}}`, {{
+                async function deleteRequest(userId, message, date) {{
+                    const response = await fetch(`/admin/requests/${{userId}}/${{encodeURIComponent(message)}}/${{date}}`, {{
                         method: 'DELETE',
                         headers: {{
                             'Authorization': 'Basic ' + btoa('{credentials.username}:{credentials.password}'),
