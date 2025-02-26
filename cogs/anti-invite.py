@@ -4,7 +4,7 @@ import aiosqlite
 import os
 import asyncio
 import re
-from typing import Final, List, Optional, Set
+from typing import Final, Optional, Set
 import aiohttp
 from urllib.parse import urlparse
 from pathlib import Path
