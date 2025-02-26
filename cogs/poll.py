@@ -356,7 +356,6 @@ class Poll(commands.Cog):
             view = PollView(option_list, poll_id)
             await interaction.response.send_message(embed=embed, view=view)
 
-            # 送信したメッセージのIDを取得して保存
             try:
                 # interactionのオリジナルメッセージを取得
                 original_message = await interaction.original_response()
