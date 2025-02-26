@@ -90,6 +90,11 @@
     ユーザー権限: なし
     bot権限: なし
 
+- /poll action:create/end title:タイトル description:説明 duration:期間 options:選択肢 | 匿名投票を作成・管理します。
+    ユーザー権限: なし
+    bot権限: なし
+    備考: createでは選択肢をカンマ区切りで指定。期間は30分/1時間/12時間/1日/3日/1週間から選択。投票は自動で終了し7日後に削除されます。
+
 - /prophet_growth target:予測したいメンバー数 show_graph:false or true | サーバーの成長を予測します。Prophetは大規模サーバー向けです。
     ユーザー権限: なし
     bot権限: なし
