@@ -22,12 +22,14 @@ DURATION_CHOICES = [
     app_commands.Choice(name="1週間", value=10080)
 ]
 
+
 class PollView(discord.ui.View):
     def __init__(self, options: list, poll_id: int):
         super().__init__(timeout=None)
         self.poll_id = poll_id
         for i, option in enumerate(options):
             self.add_item(PollButton(option, i, poll_id))
+
 
 class PollButton(discord.ui.Button):
     def __init__(self, label: str, option_id: int, poll_id: int):
@@ -76,6 +78,7 @@ class PollButton(discord.ui.Button):
         # レート制限を更新
         self._last_uses[interaction.user.id] = datetime.now()
         await interaction.response.send_message("投票を受け付けたよ", ephemeral=True)
+
 
 class Poll(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -286,11 +289,11 @@ class Poll(commands.Cog):
                     color=discord.Color.green()
                 )
 
-                max_votes_count = max(vote_counts.values())
+                max_votes_count = max(vote_counts.values()) if vote_counts else 0
                 for i, option in enumerate(options):
                     votes = vote_counts.get(i, 0)
                     percentage = (votes / total_votes * 100) if total_votes > 0 else 0
-                    bar_length = int(percentage / 5 * total_votes / max_votes_count) if total_votes > 0 else 0
+                    bar_length = int(percentage / 5 * total_votes / max_votes_count) if max_votes_count > 0 else 0
                     progress_bar = '█' * bar_length + '▁' * (20 - bar_length)
                     embed.add_field(
                         name=option,
@@ -299,7 +302,10 @@ class Poll(commands.Cog):
                     )
 
                 embed.set_footer(text=f"総投票数: {total_votes}票")
-                await interaction.response.send_message(embed=embed)
+
+                await interaction.response.send_message("投票を終了したよ", ephemeral=True)
+
+                await interaction.channel.send(embed=embed)
 
             select_menu.callback = select_callback
             view = discord.ui.View()
@@ -315,6 +321,7 @@ class Poll(commands.Cog):
                 "無効なアクションです。'create' または 'end' を指定してね",
                 ephemeral=True
             )
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Poll(bot))
