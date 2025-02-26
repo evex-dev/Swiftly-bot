@@ -317,6 +317,7 @@ class ServerBoardAPI:
         try:
             conn = sqlite3.connect('data/request.db')
             c = conn.cursor()
+            logger.info(f"Deleting request with user_id={user_id}, message={message}, date={date}")
             c.execute("DELETE FROM requests WHERE user_id = ? AND message = ? AND date = ?", (user_id, message, date))
             conn.commit()
             conn.close()
