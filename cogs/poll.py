@@ -286,9 +286,10 @@ class Poll(commands.Cog):
                     color=discord.Color.green()
                 )
 
+                max_votes_count = max(vote_counts.values())
                 for i, option in enumerate(options):
                     votes = vote_counts.get(i, 0)
-                    percentage = (votes / total_votes * 100) if total_votes > 0 else 0
+                    percentage = (votes / max_votes_count * 100) if total_votes > 0 else 0
                     bar_length = int(percentage / 5)  # 20文字を最大とする
                     progress_bar = '█' * bar_length + '_' * (20 - bar_length)
                     embed.add_field(
