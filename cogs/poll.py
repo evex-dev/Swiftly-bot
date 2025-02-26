@@ -75,9 +75,14 @@ class PollButton(discord.ui.Button):
             await db.execute('INSERT INTO votes (poll_id, user_id, choice) VALUES (?, ?, ?)', (self.poll_id, interaction.user.id, self.option_id))
             await db.commit()
 
+            # 現在の投票数を取得
+            async with db.execute('SELECT COUNT(*) FROM votes WHERE poll_id = ?', (self.poll_id,)) as cursor:
+                total_votes = await cursor.fetchone()
+                total_votes = total_votes[0] if total_votes else 0
+
         # レート制限を更新
         self._last_uses[interaction.user.id] = datetime.now()
-        await interaction.response.send_message("投票を受け付けたよ", ephemeral=True)
+        await interaction.response.send_message(f"投票を受け付けたよ（現在の投票数: {total_votes}票）", ephemeral=True)
 
 
 class Poll(commands.Cog):
@@ -86,6 +91,7 @@ class Poll(commands.Cog):
         self._last_uses = {}
         self.bot.loop.create_task(self.init_db())
         self.bot.loop.create_task(self.cleanup_old_polls())
+        self.bot.loop.create_task(self.check_ended_polls())
 
     def _check_rate_limit(self, user_id: int) -> tuple[bool, Optional[int]]:
         now = datetime.now()
@@ -147,6 +153,90 @@ class Poll(commands.Cog):
             except Exception as e:
                 print(f"Error in cleanup_old_polls: {e}")
             await asyncio.sleep(86400)  # 24時間ごとに実行
+
+    async def check_ended_polls(self):
+        """終了時間を過ぎた投票を自動的に終了する"""
+        while True:
+            try:
+                current_time = datetime.now().timestamp()
+                async with aiosqlite.connect('./data/poll.db') as db:
+                    # 終了時間が過ぎているがまだアクティブな投票を検索
+                    async with db.execute('''
+                        SELECT id, title, options, end_time
+                        FROM polls
+                        WHERE is_active = 1
+                        AND end_time < ?
+                    ''', (current_time,)) as cursor:
+                        ended_polls = await cursor.fetchall()
+
+                    # 終了した投票ごとに処理
+                    for poll in ended_polls:
+                        poll_id, title, options_str, end_time = poll
+
+                        # 投票を終了状態に更新
+                        await db.execute('UPDATE polls SET is_active = 0 WHERE id = ?', (poll_id,))
+
+                        # 投票結果を集計
+                        async with db.execute('''
+                            SELECT choice, COUNT(*) as votes
+                            FROM votes
+                            WHERE poll_id = ?
+                            GROUP BY choice
+                        ''', (poll_id,)) as cursor:
+                            results = await cursor.fetchall()
+
+                        await db.commit()
+
+                        # 結果を集計
+                        options = options_str.split(',')
+                        vote_counts = {i: 0 for i in range(len(options))}
+                        total_votes = 0
+
+                        for choice, votes in results:
+                            if choice is not None:
+                                vote_counts[choice] = votes
+                                total_votes += votes
+
+                        # 結果表示用のEmbed作成
+                        embed = discord.Embed(
+                            title=f"📊 投票結果: {title} (自動終了)",
+                            color=discord.Color.green()
+                        )
+
+                        max_votes_count = max(vote_counts.values()) if vote_counts else 0
+                        for i, option in enumerate(options):
+                            votes = vote_counts.get(i, 0)
+                            percentage = (votes / total_votes * 100) if total_votes > 0 else 0
+                            bar_length = int(percentage / 5 * total_votes / max_votes_count) if max_votes_count > 0 else 0
+                            progress_bar = '█' * bar_length + '▁' * (20 - bar_length)
+                            embed.add_field(
+                                name=option,
+                                value=f"{progress_bar} {votes}票 ({percentage:.1f}%)",
+                                inline=False
+                            )
+
+                        embed.set_footer(text=f"総投票数: {total_votes}票")
+
+                        # 投票が作成されたチャンネルを特定して結果を送信
+                        # 注意: これはメッセージ履歴から投票メッセージを見つける必要があるため、
+                        # 全てのチャンネルで投票結果を表示できない場合があります
+                        for guild in self.bot.guilds:
+                            for channel in guild.text_channels:
+                                try:
+                                    # 過去のメッセージから投票IDを含むメッセージを検索
+                                    async for message in channel.history(limit=100):
+                                        if message.embeds and len(message.embeds) > 0:
+                                            footer_text = message.embeds[0].footer.text
+                                            if footer_text and f"投票ID: {poll_id}" in footer_text:
+                                                await channel.send("投票の終了時間になったよ", embed=embed)
+                                                break
+                                except (discord.Forbidden, discord.HTTPException):
+                                    continue
+
+            except Exception as e:
+                print(f"Error in check_ended_polls: {e}")
+
+            await asyncio.sleep(55)  # 1分ごとに実行
 
     @app_commands.command(name="poll", description="匿名投票の作成・管理")
     @app_commands.choices(
@@ -213,6 +303,11 @@ class Poll(commands.Cog):
             embed.add_field(
                 name="終了時刻",
                 value=f"{end_time.strftime('%Y/%m/%d %H:%M')} (JST)\n<t:{int(end_time.timestamp())}:R>",
+                inline=False
+            )
+            embed.add_field(
+                name="投票数",
+                value="0",
                 inline=False
             )
             embed.set_footer(text=f"投票ID: {poll_id}")
