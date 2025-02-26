@@ -4,7 +4,7 @@ from typing import Final, Dict, Optional
 import logging
 from datetime import datetime, timedelta
 
-# 定数定義
+
 EMBED_COLORS: Final[dict] = {
     "success": discord.Color.blue(),
     "error": discord.Color.red()

@@ -7,7 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ui import View, Button
 
-# 定数定義
+
 ADMIN_USER_ID: Final[int] = 1241397634095120438
 SERVERS_PER_PAGE: Final[int] = 10
 EMBED_COLORS: Final[dict] = {

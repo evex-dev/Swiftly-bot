@@ -3,7 +3,7 @@ from discord.ext import commands
 from typing import Final, Dict, Tuple
 import logging
 
-# 定数定義
+
 EMBED_COLOR: Final[int] = discord.Color.blue().value
 
 COMMAND_INFO: Final[Dict[str, dict]] = {

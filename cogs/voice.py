@@ -11,7 +11,7 @@ import edge_tts
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 VOICE: Final[str] = "ja-JP-NanamiNeural"
 MAX_MESSAGE_LENGTH: Final[int] = 75
 RATE_LIMIT_SECONDS: Final[int] = 10

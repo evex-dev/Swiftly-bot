@@ -10,7 +10,7 @@ from pathlib import Path
 import json
 import uvicorn
 
-# 定数定義
+
 APP_TITLE: Final[str] = "Server Board API"
 HOST: Final[str] = "localhost"
 PORT: Final[int] = 8000

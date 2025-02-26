@@ -6,7 +6,7 @@ import logging
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 ACTIONS: Final[list[str]] = ["encode", "decode"]
 INVALID_ACTION_MESSAGE: Final[str] = "アクションは 'encode' または 'decode' のいずれかでなければなりません。"
 INVALID_BASE64_MESSAGE: Final[str] = "無効なBase64文字列です。正しい形式で入力してください。"

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Final
 import logging
 
-# 定数定義
+
 DB_PATH: Final[Path] = Path("data/prohibited_channels.db")
 TABLE_NAME: Final[str] = "prohibited_channels"
 

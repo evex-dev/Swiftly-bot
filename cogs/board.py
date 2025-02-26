@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-# 定数定義
+
 DB_PATH: Final[Path] = Path("data/server_board.db")
 UP_DB_PATH: Final[Path] = Path("data/server_board_up.db")
 UP_COOLDOWN: Final[int] = 7200  # 2時間（秒）

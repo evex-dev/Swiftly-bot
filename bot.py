@@ -17,7 +17,7 @@ import dotenv
 from discord.ext import commands
 from module.logger import LoggingCog
 
-# 定数定義
+
 SHARD_COUNT: Final[int] = 10
 COMMAND_PREFIX: Final[str] = "sw!"
 STATUS_UPDATE_COOLDOWN: Final[int] = 5

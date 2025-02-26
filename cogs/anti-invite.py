@@ -9,7 +9,7 @@ import aiohttp
 from urllib.parse import urlparse
 from pathlib import Path
 
-# 定数定義
+
 INVITE_PATTERNS: Final[Set[str]] = {
     "discord.gg/",
     "discordapp.com/invite/",

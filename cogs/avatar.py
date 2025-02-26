@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from typing import Final
 
-# 定数定義
+
 NO_AVATAR_MESSAGE: Final[str] = "ユーザーはアイコンを設定していません。"
 ERROR_MESSAGE: Final[str] = "アバターの取得中にエラーが発生しました: {}"
 EMBED_COLOR: Final[int] = discord.Color.blue().value

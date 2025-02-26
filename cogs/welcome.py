@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 定数定義
+
 DB_PATH: Final[Path] = Path("data/welcome.db")
 DEFAULT_INCREMENT: Final[int] = 100
 MIN_INCREMENT: Final[int] = 5

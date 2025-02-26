@@ -4,7 +4,7 @@ from typing import Final, Optional
 import logging
 from datetime import datetime, timedelta
 
-# 定数定義
+
 RATE_LIMIT_SECONDS: Final[int] = 5
 MS_PER_SECOND: Final[int] = 1000
 

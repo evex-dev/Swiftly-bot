@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 MAX_MESSAGES: Final[int] = 1000
 DEFAULT_MESSAGES: Final[int] = 100
 TOP_WORDS_COUNT: Final[int] = 10

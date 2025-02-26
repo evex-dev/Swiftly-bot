@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 定数定義
+
 RATE_LIMIT_SECONDS: Final[int] = 10
 MAX_CONTENT_LENGTH: Final[int] = 2000
 

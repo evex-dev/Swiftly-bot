@@ -12,7 +12,7 @@ from sklearn.preprocessing import PolynomialFeatures
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 POLYNOMIAL_DEGREE: Final[int] = 3
 PREDICTION_DAYS: Final[int] = 36500  # 100年分
 GRAPH_SIZE: Final[Tuple[int, int]] = (12, 8)

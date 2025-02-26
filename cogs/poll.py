@@ -8,7 +8,7 @@ import asyncio
 from typing import Optional
 from datetime import datetime, timedelta
 
-# 定数定義
+
 RATE_LIMIT_SECONDS = 5  # コマンドのレート制限
 VOTE_RATE_LIMIT_SECONDS = 2  # 投票アクションのレート制限
 CLEANUP_DAYS = 7  # 終了した投票を保持する日数

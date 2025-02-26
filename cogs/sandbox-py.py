@@ -9,7 +9,7 @@ import aiohttp
 import discord
 from discord.ext import commands
 
-# 定数定義
+
 API_BASE_URL: Final[str] = "https://py-sandbox.evex.land/"
 SUPPORT_FOOTER: Final[str] = "API Powered by EvexDevelopers"
 RATE_LIMIT_SECONDS: Final[int] = 30

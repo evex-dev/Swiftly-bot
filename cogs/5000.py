@@ -4,7 +4,7 @@ import io
 from typing import Final
 from discord.ext import commands
 
-# 定数定義
+
 API_URL: Final[str] = "https://gsapi.cbrx.io/image"
 ERROR_MESSAGE: Final[str] = "画像の生成に失敗しました。"
 TITLE: Final[str] = "5000兆円ジェネレーター"

@@ -6,7 +6,7 @@ from typing import Final, Optional, List
 import logging
 from pathlib import Path
 
-# 定数定義
+
 JST: Final[timezone] = timezone(timedelta(hours=9))
 DB_DIR: Final[Path] = Path("data")
 DB_NAME: Final[str] = "timealerts.db"

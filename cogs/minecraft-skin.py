@@ -6,7 +6,7 @@ from typing import Final, Optional
 import logging
 from datetime import datetime, timedelta
 
-# 定数定義
+
 SKIN_BASE_URL: Final[str] = "https://mineskin.eu"
 MOJANG_API_URL: Final[str] = "https://api.mojang.com/users/profiles/minecraft"
 RATE_LIMIT_SECONDS: Final[int] = 30
