@@ -218,7 +218,7 @@ class ServerBoardAPI:
         self.app.get("/api/servers")(self.get_servers)
         self.app.get("/api/servers/{server_id}")(self.get_server)
         self.app.get("/api/users")(self.get_total_users)
-        self.app.get("/admin/requests", dependencies=[Depends(self.basic_auth)])(self.get_requests)
+        self.app.get("/admin/requests")(self.get_requests)
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
@@ -289,7 +289,7 @@ class ServerBoardAPI:
                 detail=ERROR_MESSAGES["unexpected"].format(str(e))
             ) from e
 
-    async def get_requests(self, credentials: HTTPBasicCredentials = Depends(self.basic_auth)) -> List[Dict[str, Any]]:
+    async def get_requests(self, credentials: HTTPBasicCredentials = Depends(security)) -> List[Dict[str, Any]]:
         """リクエスト内容を取得するエンドポイント"""
         try:
             conn = sqlite3.connect('data/request.db')
