@@ -277,7 +277,7 @@ class Poll(commands.Cog):
             except Exception as e:
                 print(f"Error in check_ended_polls: {e}")
 
-            await asyncio.sleep(55)  # 1分ごとに実行
+            await asyncio.sleep(10)
 
     @app_commands.command(name="poll", description="匿名投票の作成・管理")
     @app_commands.choices(
