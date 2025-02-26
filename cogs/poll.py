@@ -14,7 +14,6 @@ VOTE_RATE_LIMIT_SECONDS = 2  # 投票アクションのレート制限
 CLEANUP_DAYS = 1  # 終了した投票を保持する日数
 
 DURATION_CHOICES = [
-    app_commands.Choice(name="1分", value=1),
     app_commands.Choice(name="30分", value=30),
     app_commands.Choice(name="1時間", value=60),
     app_commands.Choice(name="12時間", value=720),
