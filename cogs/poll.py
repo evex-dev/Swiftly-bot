@@ -4,7 +4,23 @@ from discord import app_commands
 import aiosqlite
 import datetime
 import pytz
+import asyncio
 from typing import Optional
+from datetime import datetime, timedelta
+
+# 定数定義
+RATE_LIMIT_SECONDS = 5  # コマンドのレート制限
+VOTE_RATE_LIMIT_SECONDS = 2  # 投票アクションのレート制限
+CLEANUP_DAYS = 7  # 終了した投票を保持する日数
+
+DURATION_CHOICES = [
+    app_commands.Choice(name="30分", value=30),
+    app_commands.Choice(name="1時間", value=60),
+    app_commands.Choice(name="12時間", value=720),
+    app_commands.Choice(name="1日", value=1440),
+    app_commands.Choice(name="3日", value=4320),
+    app_commands.Choice(name="1週間", value=10080)
+]
 
 class PollView(discord.ui.View):
     def __init__(self, options: list, poll_id: int):
@@ -18,35 +34,64 @@ class PollButton(discord.ui.Button):
         super().__init__(style=discord.ButtonStyle.primary, label=label, custom_id=f"poll_{poll_id}_{option_id}")
         self.option_id = option_id
         self.poll_id = poll_id
+        self._last_uses = {}
+
+    def _check_rate_limit(self, user_id: int) -> tuple[bool, Optional[int]]:
+        now = datetime.now()
+        if user_id in self._last_uses:
+            time_diff = now - self._last_uses[user_id]
+            if time_diff < timedelta(seconds=VOTE_RATE_LIMIT_SECONDS):
+                remaining = VOTE_RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
+                return True, remaining
+        return False, None
 
     async def callback(self, interaction: discord.Interaction):
+        # レート制限
+        is_limited, remaining = self._check_rate_limit(interaction.user.id)
+        if is_limited:
+            await interaction.response.send_message(
+                f"投票が早すぎます。{remaining}秒後に試してね",
+                ephemeral=True
+            )
+            return
+
         async with aiosqlite.connect('./data/poll.db') as db:
             # 投票が有効かチェック
             async with db.execute('SELECT is_active FROM polls WHERE id = ?', (self.poll_id,)) as cursor:
                 poll = await cursor.fetchone()
                 if not poll or not poll[0]:
-                    await interaction.response.send_message("この投票は終了しています。", ephemeral=True)
+                    await interaction.response.send_message("この投票はもう終了しているよ", ephemeral=True)
                     return
 
             # 既存の投票を削除
-            await db.execute('DELETE FROM votes WHERE poll_id = ? AND user_id = ?',
-                           (self.poll_id, interaction.user.id))
-
+            await db.execute('DELETE FROM votes WHERE poll_id = ? AND user_id = ?', (self.poll_id, interaction.user.id))
             # 新しい投票を登録
-            await db.execute('INSERT INTO votes (poll_id, user_id, choice) VALUES (?, ?, ?)',
-                           (self.poll_id, interaction.user.id, self.option_id))
+            await db.execute('INSERT INTO votes (poll_id, user_id, choice) VALUES (?, ?, ?)', (self.poll_id, interaction.user.id, self.option_id))
             await db.commit()
 
-        await interaction.response.send_message("投票を受け付けました。", ephemeral=True)
+        # レート制限を更新
+        self._last_uses[interaction.user.id] = datetime.now()
+        await interaction.response.send_message("投票を受け付けたよ", ephemeral=True)
 
 class Poll(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._last_uses = {}
         self.bot.loop.create_task(self.init_db())
+        self.bot.loop.create_task(self.cleanup_old_polls())
+
+    def _check_rate_limit(self, user_id: int) -> tuple[bool, Optional[int]]:
+        now = datetime.now()
+        if user_id in self._last_uses:
+            time_diff = now - self._last_uses[user_id]
+            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
+                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
+                return True, remaining
+        return False, None
 
     async def init_db(self):
         async with aiosqlite.connect('./data/poll.db') as db:
-            # polls テーブルの作成
+            # polls
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS polls (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +104,7 @@ class Poll(commands.Cog):
                 )
             ''')
 
-            # votes テーブルの作成
+            # votes
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS votes (
                     poll_id INTEGER NOT NULL,
@@ -70,12 +115,45 @@ class Poll(commands.Cog):
             ''')
             await db.commit()
 
-    @app_commands.command(name="poll", description="投票の作成・管理を行います")
+    async def cleanup_old_polls(self):
+        """終了した古い投票を定期的に削除"""
+        while True:
+            try:
+                async with aiosqlite.connect('./data/poll.db') as db:
+                    # CLEANUP_DAYS日以上前に終了した投票を削除
+                    cleanup_time = datetime.now() - timedelta(days=CLEANUP_DAYS)
+                    # 関連する投票データを削除
+                    await db.execute('''
+                        DELETE FROM votes WHERE poll_id IN (
+                            SELECT id FROM polls
+                            WHERE is_active = 0
+                            AND end_time < ?
+                        )
+                    ''', (cleanup_time.timestamp(),))
+                    # 投票自体を削除
+                    await db.execute('''
+                        DELETE FROM polls
+                        WHERE is_active = 0
+                        AND end_time < ?
+                    ''', (cleanup_time.timestamp(),))
+                    await db.commit()
+            except Exception as e:
+                print(f"Error in cleanup_old_polls: {e}")
+            await asyncio.sleep(86400)  # 24時間ごとに実行
+
+    @app_commands.command(name="poll", description="匿名投票の作成・管理")
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="投票を作成", value="create"),
+            app_commands.Choice(name="投票を終了", value="end")
+        ],
+        duration=DURATION_CHOICES
+    )
     @app_commands.describe(
-        action="実行するアクション（create/end）",
+        action="実行するアクション",
         title="投票のタイトル",
         description="投票の説明",
-        duration="投票の期間（時間）デフォルト24時間",
+        duration="投票の期間",
         options="投票の選択肢（カンマ区切り）"
     )
     async def poll(
@@ -84,23 +162,33 @@ class Poll(commands.Cog):
         action: str,
         title: Optional[str] = None,
         description: Optional[str] = None,
-        duration: Optional[int] = 24,
+        duration: Optional[app_commands.Choice[int]] = None,
         options: Optional[str] = None
     ):
+        # レート制限チェック
+        is_limited, remaining = self._check_rate_limit(interaction.user.id)
+        if is_limited:
+            await interaction.response.send_message(
+                f"コマンドの実行が早すぎます。{remaining}秒後に試してね",
+                ephemeral=True
+            )
+            return
+
         if action == "create":
             if not all([title, options]):
                 await interaction.response.send_message(
-                    "タイトルと選択肢は必須です。", ephemeral=True)
+                    "タイトルと選択肢は必須だよ", ephemeral=True)
                 return
 
             option_list = [opt.strip() for opt in options.split(',')]
             if len(option_list) < 2:
                 await interaction.response.send_message(
-                    "選択肢は2つ以上必要です。", ephemeral=True)
+                    "選択肢は2つ以上必要だよ", ephemeral=True)
                 return
 
             jst = pytz.timezone('Asia/Tokyo')
-            end_time = datetime.datetime.now(jst) + datetime.timedelta(hours=duration)
+            duration_minutes = duration.value if duration else 1440  # デフォルト24時間
+            end_time = datetime.now(jst) + timedelta(minutes=duration_minutes)
 
             async with aiosqlite.connect('./data/poll.db') as db:
                 cursor = await db.execute(
@@ -112,7 +200,7 @@ class Poll(commands.Cog):
 
             embed = discord.Embed(
                 title=f"📊 {title}",
-                description=description or "投票を開始します。",
+                description=description or "投票を開始するよ",
                 color=discord.Color.blue()
             )
             embed.add_field(
@@ -125,6 +213,9 @@ class Poll(commands.Cog):
             view = PollView(option_list, poll_id)
             await interaction.response.send_message(embed=embed, view=view)
 
+            # レート制限を更新
+            self._last_uses[interaction.user.id] = datetime.now()
+
         elif action == "end":
             async with aiosqlite.connect('./data/poll.db') as db:
                 # ユーザーが作成した有効な投票を取得
@@ -136,7 +227,7 @@ class Poll(commands.Cog):
 
             if not polls:
                 await interaction.response.send_message(
-                    "終了可能な投票が見つかりません。", ephemeral=True)
+                    "終了可能な投票が見つからないよ", ephemeral=True)
                 return
 
             # 投票選択用のセレクトメニューを作成
@@ -148,7 +239,7 @@ class Poll(commands.Cog):
             ]
 
             select_menu = discord.ui.Select(
-                placeholder="終了する投票を選択してください",
+                placeholder="終了する投票を選択してね",
                 options=options
             )
 
@@ -171,7 +262,7 @@ class Poll(commands.Cog):
                     await db.commit()
 
                 if not results:
-                    await interaction.response.send_message("エラーが発生しました。", ephemeral=True)
+                    await interaction.response.send_message("エラーが発生したよ", ephemeral=True)
                     return
 
                 title = results[0][0]
@@ -208,11 +299,15 @@ class Poll(commands.Cog):
             select_menu.callback = select_callback
             view = discord.ui.View()
             view.add_item(select_menu)
-            await interaction.response.send_message("終了する投票を選択してください：", view=view, ephemeral=True)
+            await interaction.response.send_message("終了する投票を選択してね: ", view=view, ephemeral=True)
+
+            # レート制限を更新
+            self._last_uses[interaction.user.id] = datetime.now()
 
         else:
+            # ここには基本的に来ない
             await interaction.response.send_message(
-                "無効なアクションです。'create' または 'end' を指定してください。",
+                "無効なアクションです。'create' または 'end' を指定してね",
                 ephemeral=True
             )
 
