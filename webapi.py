@@ -348,9 +348,9 @@ class ServerBoardAPI:
                     requests.forEach(request => {{
                         const row = document.createElement('tr');
                         row.innerHTML = `
-                            <td>${{request.id}}</td>
-                            <td>${{request.content}}</td>
-                            <td>${{request.timestamp}}</td>
+                            <td>${{request.user_id}}</td>
+                            <td>${{request.message}}</td>
+                            <td>${{request.date}}</td>
                         `;
                         tbody.appendChild(row);
                     }});
