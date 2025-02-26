@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -221,6 +221,7 @@ class ServerBoardAPI:
         self.app.get("/api/servers/{server_id}")(self.get_server)
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
+        self.app.delete("/admin/requests/{request_id}")(self.delete_request)
         self.app.get("/admin/ui", response_class=HTMLResponse)(self.admin_ui)
         self.app.mount(
             "/",
@@ -310,6 +311,24 @@ class ServerBoardAPI:
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
 
+    async def delete_request(self, request_id: int, credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, str]:
+        """リクエストを削除するエンドポイント"""
+        self.basic_auth(credentials)
+        try:
+            conn = sqlite3.connect('data/request.db')
+            c = conn.cursor()
+            c.execute("DELETE FROM requests WHERE id = ?", (request_id,))
+            conn.commit()
+            conn.close()
+            return {"message": "リクエストが削除されました"}
+
+        except sqlite3.Error as e:
+            logger.error("Database error: %s", e, exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=ERROR_MESSAGES["db_error"].format(str(e))
+            ) from e
+
     async def admin_ui(self, request: Request, credentials: HTTPBasicCredentials = Depends(security)) -> HTMLResponse:
         self.basic_auth(credentials)
         csrf_token = request.cookies.get("csrf_token")
@@ -329,6 +348,7 @@ class ServerBoardAPI:
                         <th>ID</th>
                         <th>リクエスト内容</th>
                         <th>日時</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -351,10 +371,27 @@ class ServerBoardAPI:
                             <td>${{request.user_id}}</td>
                             <td>${{request.message}}</td>
                             <td>${{request.date}}</td>
+                            <td><button onclick="deleteRequest(${{request.id}})">解決</button></td>
                         `;
                         tbody.appendChild(row);
                     }});
                 }}
+
+                async function deleteRequest(requestId) {{
+                    const response = await fetch(`/admin/requests/${{requestId}}`, {{
+                        method: 'DELETE',
+                        headers: {{
+                            'Authorization': 'Basic ' + btoa('{credentials.username}:{credentials.password}'),
+                            'X-CSRF-Token': '{csrf_token}'
+                        }}
+                    }});
+                    if (response.ok) {{
+                        location.reload();
+                    }} else {{
+                        alert('リクエストの削除に失敗しました');
+                    }}
+                }}
+
                 fetchRequests();
             </script>
         </body>
