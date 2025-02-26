@@ -12,6 +12,7 @@ import json
 import uvicorn
 from dotenv import load_dotenv
 import os
+from fastapi.responses import HTMLResponse
 
 load_dotenv()
 
@@ -219,6 +220,7 @@ class ServerBoardAPI:
         self.app.get("/api/servers/{server_id}")(self.get_server)
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
+        self.app.get("/admin/ui", response_class=HTMLResponse)(self.admin_ui)
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
@@ -306,6 +308,56 @@ class ServerBoardAPI:
                 status_code=500,
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
+
+    async def admin_ui(self, credentials: HTTPBasicCredentials = Depends(security)) -> HTMLResponse:
+        self.basic_auth(credentials)
+        html_content = '''
+        <!DOCTYPE html>
+        <html lang="ja">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Admin Requests</title>
+        </head>
+        <body>
+            <h1>リクエスト一覧</h1>
+            <table border="1">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>リクエスト内容</th>
+                        <th>日時</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- リクエストデータをここに挿入 -->
+                </tbody>
+            </table>
+            <script>
+                async function fetchRequests() {
+                    const response = await fetch('/admin/requests', {
+                        headers: {
+                            'Authorization': 'Basic ' + btoa(''' + os.getenv("BASIC_AUTH_USERNAME") + ''':''' + os.getenv("BASIC_AUTH_PASSWORD") + ''')
+                        }
+                    });
+                    const requests = await response.json();
+                    const tbody = document.querySelector('tbody');
+                    requests.forEach(request => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${request.id}</td>
+                            <td>${request.content}</td>
+                            <td>${request.timestamp}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+                fetchRequests();
+            </script>
+        </body>
+        </html>
+        '''
+        return HTMLResponse(content=html_content)
 
     def basic_auth(self, credentials: HTTPBasicCredentials = Depends(security)) -> None:
         """Basic認証の検証"""
