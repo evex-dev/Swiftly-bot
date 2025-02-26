@@ -63,8 +63,12 @@ class PollButton(discord.ui.Button):
                     await interaction.response.send_message("この投票はもう終了しているよ", ephemeral=True)
                     return
 
-            # 既存の投票を削除
-            await db.execute('DELETE FROM votes WHERE poll_id = ? AND user_id = ?', (self.poll_id, interaction.user.id))
+            # ユーザーが既に投票しているかチェック
+            async with db.execute('SELECT 1 FROM votes WHERE poll_id = ? AND user_id = ?', (self.poll_id, interaction.user.id)) as cursor:
+                if await cursor.fetchone():
+                    await interaction.response.send_message("既に投票済みだよ", ephemeral=True)
+                    return
+
             # 新しい投票を登録
             await db.execute('INSERT INTO votes (poll_id, user_id, choice) VALUES (?, ?, ?)', (self.poll_id, interaction.user.id, self.option_id))
             await db.commit()
