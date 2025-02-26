@@ -1,8 +1,9 @@
-import discord
-from discord.ext import commands
+import logging
 import sqlite3
 from datetime import datetime
-import logging
+
+import discord
+from discord.ext import commands
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,11 @@ class RequestModal(discord.ui.Modal):
             user_id = interaction.user.id
             message = self.children[0].value
             date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"Saving request: user_id={user_id}, date={date}, message={message}")
+            logger.info("Saving request: user_id=%s, date=%s, message=%s", user_id, date, message)
             save_request(user_id, date, message)
             await interaction.response.send_message("リクエストが送信されました。", ephemeral=True)
         except Exception as e:
-            logger.error(f"Error in RequestModal callback: {e}", exc_info=True)
+            logger.error("Error in RequestModal callback: %s", e, exc_info=True)
             await interaction.response.send_message("リクエストの送信中にエラーが発生しました。", ephemeral=True)
 
 class RequestCog(commands.Cog):
@@ -31,8 +32,7 @@ class RequestCog(commands.Cog):
     def init_db(self):
         conn = sqlite3.connect('data/request.db')
         c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS requests
-                     (user_id INTEGER, date TEXT, message TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS requests (user_id INTEGER, date TEXT, message TEXT)''')
         conn.commit()
         conn.close()
 
@@ -53,4 +53,4 @@ def save_request(user_id: int, date: str, message: str):
         conn.close()
         logger.info("Request saved successfully")
     except Exception as e:
-        logger.error(f"Error saving request: {e}", exc_info=True)
+        logger.error("Error saving request: %s", e, exc_info=True)
