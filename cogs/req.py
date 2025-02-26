@@ -2,18 +2,26 @@ import discord
 from discord.ext import commands
 import sqlite3
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RequestModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="リクエストを送信")
-        self.add_item(discord.ui.TextInput(label="リクエスト内容", style=discord.TextStyle.long))
+        self.add_item(discord.ui.TextInput(label="リクエスト内容", style=discord.TextStyle.paragraph))
 
-    async def callback(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        message = self.children[0].value
-        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        save_request(user_id, date, message)
-        await interaction.response.send_message("リクエストが送信されました。", ephemeral=True)
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = interaction.user.id
+            message = self.children[0].value
+            date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logger.info(f"Saving request: user_id={user_id}, date={date}, message={message}")
+            save_request(user_id, date, message)
+            await interaction.response.send_message("リクエストが送信されました。", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in RequestModal callback: {e}", exc_info=True)
+            await interaction.response.send_message("リクエストの送信中にエラーが発生しました。", ephemeral=True)
 
 class RequestCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -33,12 +41,16 @@ class RequestCog(commands.Cog):
         modal = RequestModal()
         await interaction.response.send_modal(modal)
 
-def save_request(user_id: int, date: str, message: str):
-    conn = sqlite3.connect('data/request.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO requests (user_id, date, message) VALUES (?, ?, ?)", (user_id, date, message))
-    conn.commit()
-    conn.close()
-
 async def setup(bot: commands.Bot):
     await bot.add_cog(RequestCog(bot))
+
+def save_request(user_id: int, date: str, message: str):
+    try:
+        conn = sqlite3.connect('data/request.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO requests (user_id, date, message) VALUES (?, ?, ?)", (user_id, date, message))
+        conn.commit()
+        conn.close()
+        logger.info("Request saved successfully")
+    except Exception as e:
+        logger.error(f"Error saving request: {e}", exc_info=True)
