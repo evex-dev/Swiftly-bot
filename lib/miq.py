@@ -254,15 +254,15 @@ class MakeItQuote:
         """Adjust font size to fit text within the specified width and height"""
         font_size = initial_font_size
         font = ImageFont.truetype(font_path, font_size)
-        wrapped_text = self._wrap_text(text, width=max_width // font.getsize('A')[0])
+        wrapped_text = self._wrap_text(text, width=max_width // font.getbbox('A')[2])
         
         while True:
             total_height = len(wrapped_text) * (font_size + 10)
-            if total_height <= max_height and all(font.getsize(line)[0] <= max_width for line in wrapped_text):
+            if total_height <= max_height and all(font.getbbox(line)[2] <= max_width for line in wrapped_text):
                 break
             font_size -= 2
             font = ImageFont.truetype(font_path, font_size)
-            wrapped_text = self._wrap_text(text, width=max_width // font.getsize('A')[0])
+            wrapped_text = self._wrap_text(text, width=max_width // font.getbbox('A')[2])
         
         return font, font_size
 
@@ -333,7 +333,7 @@ class MakeItQuote:
         width, height = output_size
 
         # Process quote text
-        wrapped_quote = self._wrap_text(quote, width=(width - 100) // quote_font.getsize('A')[0])
+        wrapped_quote = self._wrap_text(quote, width=(width - 100) // quote_font.getbbox('A')[2])
         total_quote_height = len(wrapped_quote) * (adjusted_font_size + 10)
         
         # Add stylized quote marks
@@ -348,7 +348,7 @@ class MakeItQuote:
         # Draw quote text with enhanced effects
         current_y = start_y
         for line in wrapped_quote:
-            text_width = quote_font.getsize(line)[0]
+            text_width = quote_font.getbbox(line)[2]
             position = ((width - text_width) // 2, current_y)
             self._add_text_with_effects(draw, position, line, quote_font, 
                                       text_color, shadow_color,
@@ -358,7 +358,7 @@ class MakeItQuote:
         # Add author if provided
         if author:
             author_text = f"— {author}"
-            author_width = author_font.getsize(author_text)[0]
+            author_width = author_font.getbbox(author_text)[2]
             author_position = ((width - author_width) // 2, current_y + 30)
             self._add_text_with_effects(draw, author_position, author_text, 
                                       author_font, text_color, shadow_color)
@@ -385,7 +385,7 @@ class MakeItQuote:
         credit_font_size = adjusted_font_size // 5
         credit_font = ImageFont.truetype(font_path, credit_font_size)
         credit_text = "Powered by Swiftly"
-        credit_width = credit_font.getsize(credit_text)[0]
+        credit_width = credit_font.getbbox(credit_text)[2]
         credit_position = (width - credit_width - 20, height - credit_font_size - 20)
         self._add_text_with_effects(draw, credit_position, credit_text, 
                                   credit_font, (200, 200, 200), (0, 0, 0, 150), 1)
