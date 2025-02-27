@@ -16,3 +16,4 @@ plotly
 aiosqlite
 pytz
 python-whois
+watchdog

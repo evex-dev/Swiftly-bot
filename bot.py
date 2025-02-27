@@ -9,6 +9,8 @@ import time
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Final, Optional, Set
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 # Third-party imports
 import aiosqlite
@@ -18,7 +20,7 @@ from discord.ext import commands
 from module.logger import LoggingCog
 
 
-SHARD_COUNT: Final[int] = 10
+SHARD_COUNT: Final[int] = None
 COMMAND_PREFIX: Final[str] = "sw!"
 STATUS_UPDATE_COOLDOWN: Final[int] = 5
 LOG_RETENTION_DAYS: Final[int] = 7
@@ -39,6 +41,50 @@ ERROR_MESSAGES: Final[dict] = {
 LOG_FORMAT: Final[str] = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 logger = logging.getLogger(__name__)
+
+class CogReloader(FileSystemEventHandler):
+    """Cogファイルの変更を監視し、自動リロードを行うハンドラ"""
+
+    def __init__(self, bot: 'SwiftlyBot') -> None:
+        self.bot = bot
+        self._reload_lock = asyncio.Lock()
+        self._last_reload: Dict[str, float] = {}
+        self.RELOAD_COOLDOWN = 2.0  # リロードのクールダウン時間（秒）
+
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path.endswith('.py'):
+            file_path = Path(event.src_path)
+            if file_path.parent.name == "cogs":
+                future = asyncio.run_coroutine_threadsafe(
+                    self._handle_cog_change(file_path),
+                    self.bot.loop
+                )
+                try:
+                    future.result()  # エラーハンドリングのため結果を待つ
+                except Exception as e:
+                    logger.error("Error in cog reload: %s", e, exc_info=True)
+
+    async def _handle_cog_change(self, file_path: Path) -> None:
+        cog_name = f"cogs.{file_path.stem}"
+        current_time = time.time()
+
+        # クールダウンチェック
+        if cog_name in self._last_reload:
+            if current_time - self._last_reload[cog_name] < self.RELOAD_COOLDOWN:
+                return
+
+        async with self._reload_lock:
+            try:
+                # 既存のCogをアンロード
+                if cog_name in [ext for ext in self.bot.extensions]:
+                    await self.bot.unload_extension(cog_name)
+
+                # Cogを再読み込み
+                await self.bot.load_extension(cog_name)
+                self._last_reload[cog_name] = current_time
+                logger.info("Reloaded: %s", cog_name)
+            except Exception as e:
+                logger.error("Failed to reload %s: %s", cog_name, e, exc_info=True)
 
 class DatabaseManager:
     """DB操作を管理するクラス"""
@@ -134,7 +180,7 @@ class UserCountManager:
         """更新が必要かどうかを判定"""
         return time.time() - self._last_update >= STATUS_UPDATE_COOLDOWN
 
-class SwiftlyBot(commands.Bot):
+class SwiftlyBot(commands.AutoShardedBot):
     """Swiftlyボットのメインクラス"""
 
     def __init__(self) -> None:
@@ -143,20 +189,19 @@ class SwiftlyBot(commands.Bot):
         intents.messages = True
         intents.message_content = True
 
-        client = discord.AutoShardedClient(
-            intents=intents,
-            shard_count=SHARD_COUNT
-        )
-
         super().__init__(
             command_prefix=COMMAND_PREFIX,
             intents=intents,
-            client=client
+            shard_count=SHARD_COUNT
         )
 
         self.db = DatabaseManager(PATHS["db"])
         self.user_count = UserCountManager(PATHS["user_count"])
         self._setup_logging()
+
+        # ファイル監視の設定
+        self.cog_reloader = CogReloader(self)
+        self.observer = Observer()
 
     def _setup_logging(self) -> None:
         """ロギングの設定"""
@@ -205,6 +250,12 @@ class SwiftlyBot(commands.Bot):
         """ボットのセットアップ処理"""
         await self.db.initialize()
         await self._load_extensions()
+
+        # ファイル監視を開始
+        self.observer.schedule(self.cog_reloader, str(PATHS["cogs_dir"]), recursive=False)
+        self.observer.start()
+        logger.info("Started watching cogs directory for changes")
+
         await self.add_cog(LoggingCog(self))  # LoggingCogを追加
         await self.tree.sync()
 
@@ -344,6 +395,9 @@ def main() -> None:
     except Exception as e:
         logger.error("Bot crashed: %s", e, exc_info=True)
     finally:
+        # ファイル監視を停止
+        bot.observer.stop()
+        bot.observer.join()
         asyncio.run(bot.db.cleanup())
 
 if __name__ == "__main__":
