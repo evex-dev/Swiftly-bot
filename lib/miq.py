@@ -250,7 +250,7 @@ class MakeItQuote:
         
         return background
     
-    def _adjust_font_size(self, text: str, font_path: str, max_width: int, max_height: int, initial_font_size: int) -> Tuple[ImageFont, int]:
+    def _adjust_font_size(self, text: str, font_path: str, max_width: int, max_height: int, initial_font_size: int) -> Tuple[ImageFont.FreeTypeFont, int]:
         """Adjust font size to fit text within the specified width and height"""
         font_size = initial_font_size
         font = ImageFont.truetype(font_path, font_size)
