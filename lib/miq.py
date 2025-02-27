@@ -363,17 +363,17 @@ class MakeItQuote:
             self._add_text_with_effects(draw, author_position, author_text, 
                                       author_font, text_color, shadow_color)
         
-        # Enhanced vignette effect
-        vignette = Image.new('RGBA', output_size, (0, 0, 0, 0))
-        vignette_draw = ImageDraw.Draw(vignette)
+        # # Enhanced vignette effect
+        # vignette = Image.new('RGBA', output_size, (0, 0, 0, 0))
+        # vignette_draw = ImageDraw.Draw(vignette)
         
-        # Create radial gradient for vignette
-        for i in range(100):
-            opacity = int(130 * (i / 100))
-            box = (i, i, width - i, height - i)
-            vignette_draw.rectangle(box, outline=(0, 0, 0, opacity), width=1)
+        # # Create radial gradient for vignette
+        # for i in range(100):
+        #     opacity = int(130 * (i / 100))
+        #     box = (i, i, width - i, height - i)
+        #     vignette_draw.rectangle(box, outline=(0, 0, 0, opacity), width=1)
         
-        background = Image.alpha_composite(background, vignette)
+        # background = Image.alpha_composite(background, vignette)
         
         # Add profile image if provided
         if profile_image:
