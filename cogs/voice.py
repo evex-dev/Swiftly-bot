@@ -127,6 +127,7 @@ class VoiceState:
         channel_id: int,
         message: str
     ) -> None:
+        logger.info(f"Playing TTS in guild {guild_id}, channel {channel_id}: {message}")
         voice_client = self.voice_clients[guild_id][channel_id]
         temp_path = await self.tts_manager.generate_audio(message)
         if not temp_path:
