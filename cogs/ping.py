@@ -70,7 +70,7 @@ class Ping(commands.Cog):
 
         # レイテンシー情報
         embed.add_field(
-            name="レイテンシー",
+            name="レイテンシーtest",
             value=f"{latency:.2f}ms ({status})",
             inline=False
         )
