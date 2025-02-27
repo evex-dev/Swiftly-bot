@@ -17,10 +17,10 @@ class MakeItQuote:
         self.backgrounds_dir = backgrounds_dir or os.path.join(os.path.dirname(__file__), "../assets/backgrounds")
         
         # Default settings
-        self.default_font_size = 48
+        self.default_font_size = 56  # Increased from 48
         self.default_text_color = (255, 255, 255)  # White
-        self.default_shadow_color = (0, 0, 0, 180)  # Semi-transparent black
-        self.default_quote_width = 30  # characters per line
+        self.default_shadow_color = (0, 0, 0, 200)  # More opaque black
+        self.default_quote_width = 25  # Reduced characters per line for better readability
         
         # Make sure asset directories exist
         os.makedirs(self.fonts_dir, exist_ok=True)
@@ -46,19 +46,35 @@ class MakeItQuote:
         """Wrap text to fit specified width"""
         return textwrap.wrap(text, width=width)
     
-    def _add_text_with_shadow(self, 
+    def _add_text_with_effects(self, 
                              draw: ImageDraw, 
                              position: Tuple[int, int], 
                              text: str, 
                              font: ImageFont, 
                              text_color: Tuple[int, int, int],
-                             shadow_color: Tuple[int, int, int, int],
-                             shadow_offset: int = 3):
-        """Add text with shadow effect"""
-        # Draw shadow
-        draw.text((position[0] + shadow_offset, position[1] + shadow_offset), 
-                  text, font=font, fill=shadow_color)
-        # Draw text
+                             shadow_color: Tuple[int, int, int, int]):
+        """Add text with enhanced shadow and outline effects"""
+        x, y = position
+        
+        # Multiple shadows for stronger effect
+        shadow_offsets = [(4, 4), (3, 3), (2, 2)]
+        for offset in shadow_offsets:
+            draw.text((x + offset[0], y + offset[1]), 
+                     text, font=font, fill=shadow_color)
+        
+        # Outline effect
+        outline_color = (0, 0, 0, 255)
+        outline_positions = [
+            (-1, -1), (0, -1), (1, -1),
+            (-1, 0),           (1, 0),
+            (-1, 1),  (0, 1),  (1, 1)
+        ]
+        
+        for offset_x, offset_y in outline_positions:
+            draw.text((x + offset_x, y + offset_y), 
+                     text, font=font, fill=outline_color)
+        
+        # Main text
         draw.text(position, text, font=font, fill=text_color)
     
     def create_quote(self, 
@@ -71,18 +87,6 @@ class MakeItQuote:
                     background_image: Image.Image = None) -> Image.Image:
         """
         Generate a quote image.
-        
-        Args:
-            quote: The quote text
-            author: Author name (optional)
-            output_size: Size of the output image (width, height)
-            font_path: Path to custom font file
-            font_size: Font size for the quote
-            text_color: RGB color tuple for text
-            background_image: PIL Image object for the background
-            
-        Returns:
-            PIL Image object of the generated quote
         """
         # Use defaults or provided values
         font_path = font_path or self._get_random_font()
@@ -102,9 +106,16 @@ class MakeItQuote:
             background = background_image.convert("RGBA")
             background = background.resize(output_size, Image.LANCZOS)
         
-        # Apply subtle adjustments to enhance background
-        background = ImageEnhance.Brightness(background).enhance(0.7)  # Slightly darken
-        background = background.filter(ImageFilter.GaussianBlur(radius=2))  # Slight blur
+        # Create a black background with more opacity
+        black_background = Image.new('RGBA', output_size, (0, 0, 0, 180))
+        
+        # Composite the black background with the main background
+        background = Image.alpha_composite(background, black_background)
+        
+        # Apply stronger adjustments to enhance background
+        background = ImageEnhance.Brightness(background).enhance(0.5)  # Darker
+        background = ImageEnhance.Contrast(background).enhance(1.2)   # More contrast
+        background = background.filter(ImageFilter.GaussianBlur(radius=2))
         
         # Create drawing layer
         draw = ImageDraw.Draw(background)
@@ -124,12 +135,12 @@ class MakeItQuote:
         width, height = output_size
         start_y = (height - total_quote_height) // 2
         
-        # Draw quote text with shadow
+        # Draw quote text with enhanced effects
         current_y = start_y
         for line in wrapped_quote:
             text_width = quote_font.getlength(line)
             position = ((width - text_width) // 2, current_y)
-            self._add_text_with_shadow(draw, position, line, quote_font, 
+            self._add_text_with_effects(draw, position, line, quote_font, 
                                       text_color, self.default_shadow_color)
             current_y += font_size + 10
         
@@ -138,20 +149,18 @@ class MakeItQuote:
             author_text = f"- {author}"
             author_width = author_font.getlength(author_text)
             author_position = ((width - author_width) // 2, current_y + 20)
-            self._add_text_with_shadow(draw, author_position, author_text, 
+            self._add_text_with_effects(draw, author_position, author_text, 
                                       author_font, text_color, self.default_shadow_color)
         
-        # Add subtle vignette effect
+        # Enhanced vignette effect
         overlay = Image.new('RGBA', output_size, (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
         
-        # Draw four filled rectangles from each edge with gradient opacity
-        for i in range(50):
-            opacity = int(100 * (i / 50))
+        for i in range(100):
+            opacity = int(150 * (i / 100))  # Stronger vignette
             overlay_draw.rectangle((i, i, width - i, height - i), 
                                  outline=(0, 0, 0, opacity), width=1)
         
-        # Composite the vignette effect
         background = Image.alpha_composite(background, overlay)
         
         return background
@@ -163,20 +172,10 @@ class MakeItQuote:
                   **kwargs) -> str:
         """
         Generate and save a quote image.
-        
-        Args:
-            quote: The quote text
-            output_path: Path to save the image
-            author: Author name (optional)
-            **kwargs: Additional options to pass to create_quote
-            
-        Returns:
-            Path where the image was saved
         """
         image = self.create_quote(quote, author, **kwargs)
         
-        # Convert to RGB before saving as JPEG
-        if output_path.lower().endswith('.jpg') or output_path.lower().endswith('.jpeg'):
+        if output_path.lower().endswith(('.jpg', '.jpeg')):
             image = image.convert('RGB')
         
         image.save(output_path)
