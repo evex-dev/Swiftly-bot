@@ -6,51 +6,90 @@ on:
       - main # mainブランチが更新されたときに実行
   workflow_dispatch:
 
-
 jobs:
   update-and-restart:
     runs-on: self-hosted
 
     steps:
+      - name: Show environment information
+        run: |
+          echo "🔍 実行環境の情報:"
+          echo "Python version: $(python3 --version)"
+          echo "Working directory: $(pwd)"
+          echo "User: $(whoami)"
+          echo "System info: $(uname -a)"
+
       - name: Install dependencies
         run: |
+          echo "📦 依存関係のインストールを開始します..."
           cd /home/adminpi/Swiftly-bot
           source myenv/bin/activate
+          echo "Python virtual environment activated"
           curl -s https://raw.githubusercontent.com/evex-dev/Swiftly-bot/refs/heads/main/requirements.txt -o requirements.txt
+          echo "Requirements.txt downloaded"
           pip install -r requirements.txt
+          echo "✅ 依存関係のインストールが完了しました"
+          pip list
+          echo "-------------------"
 
       - name: Pull latest changes
         run: |
+          echo "🔄 最新の変更を取得しています..."
           cd /home/adminpi/Swiftly-bot
           if [ -d ".git" ]; then
+            echo "既存のリポジトリをリセットします"
             git reset --hard
             git pull origin main
+            echo "Current commit: $(git rev-parse HEAD)"
+            echo "Current branch: $(git branch --show-current)"
           else
+            echo "新規クローンを作成します"
             git clone https://github.com/evex-dev/Swiftly-bot.git /home/adminpi/Swiftly-bot
           fi
+          echo "✅ 変更の取得が完了しました"
 
       - name: Check changed files
         id: changed-files
         run: |
+          echo "🔍 変更されたファイルを確認しています..."
           cd /home/adminpi/Swiftly-bot
+          
           # 前回のコミットと現在のコミットの間で変更されたファイルを取得
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only $(git hash-object -t tree /dev/null) HEAD)
-
+          
+          echo "変更されたファイル一覧:"
+          echo "$CHANGED_FILES"
+          echo "-------------------"
+          
           # cogsディレクトリ以外のファイルが変更されているかチェック
           NON_COGS_CHANGES=$(echo "$CHANGED_FILES" | grep -v "^cogs/" || true)
-
+          
           if [ -z "$NON_COGS_CHANGES" ]; then
+            echo "✅ cogsディレクトリのみの変更です"
             echo "only_cogs_changed=true" >> $GITHUB_OUTPUT
           else
+            echo "⚠️ cogsディレクトリ以外の変更が含まれています"
+            echo "変更されたcogs以外のファイル:"
+            echo "$NON_COGS_CHANGES"
             echo "only_cogs_changed=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Reload cogs only
         if: steps.changed-files.outputs.only_cogs_changed == 'true'
         run: |
-          echo "Reloading cogs"
+          echo "✅ cogsのリロードが多分完了しました"
 
       - name: Restart systemd service
         if: steps.changed-files.outputs.only_cogs_changed == 'false'
         run: |
+          echo "🔄 システムサービスを再起動します..."
           sudo systemctl restart swiftly-bot.service
+          echo "サービスのステータスを確認します:"
+          sudo systemctl status swiftly-bot.service --no-pager
+          echo "✅ サービスの再起動が完了しました"
+
+      - name: Final status check
+        run: |
+          echo "🔍 ステータス確認"
+          sudo systemctl status swiftly-bot.service --no-pager
+          echo "✅ デプロイが完了しました"
