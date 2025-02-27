@@ -4,12 +4,21 @@ on:
   push:
     branches:
       - main # mainブランチが更新されたときに実行
+  workflow_dispatch:
+
 
 jobs:
   update-and-restart:
     runs-on: self-hosted
 
     steps:
+      - name: Install dependencies
+        run: |
+          cd /home/adminpi/Swiftly-bot
+          source myenv/bin/activate
+          curl -s https://raw.githubusercontent.com/evex-dev/Swiftly-bot/refs/heads/main/requirements.txt -o requirements.txt
+          pip install -r requirements.txt
+
       - name: Pull latest changes
         run: |
           cd /home/adminpi/Swiftly-bot
@@ -20,12 +29,28 @@ jobs:
             git clone https://github.com/evex-dev/Swiftly-bot.git /home/adminpi/Swiftly-bot
           fi
 
-      - name: Install dependencies
+      - name: Check changed files
+        id: changed-files
         run: |
           cd /home/adminpi/Swiftly-bot
-          source myenv/bin/activate
-          pip install -r requirements.txt
+          # 前回のコミットと現在のコミットの間で変更されたファイルを取得
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only $(git hash-object -t tree /dev/null) HEAD)
+
+          # cogsディレクトリ以外のファイルが変更されているかチェック
+          NON_COGS_CHANGES=$(echo "$CHANGED_FILES" | grep -v "^cogs/" || true)
+
+          if [ -z "$NON_COGS_CHANGES" ]; then
+            echo "only_cogs_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "only_cogs_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Reload cogs only
+        if: steps.changed-files.outputs.only_cogs_changed == 'true'
+        run: |
+          echo "Reloading cogs"
 
       - name: Restart systemd service
+        if: steps.changed-files.outputs.only_cogs_changed == 'false'
         run: |
           sudo systemctl restart swiftly-bot.service
