@@ -131,6 +131,16 @@ class MakeItQuote:
         # Process quote text
         wrapped_quote = self._wrap_text(quote, self.default_quote_width)
         total_quote_height = len(wrapped_quote) * (font_size + 10)
+
+        # Add "Powered by Swiftly" text in bottom right
+        credit_font_size = font_size // 4  # Make it smaller than the author text
+        credit_font = ImageFont.truetype(font_path, credit_font_size)
+        credit_text = "Powered by Swiftly"
+        credit_width = credit_font.getlength(credit_text)
+        credit_position = (width - credit_width - 20, height - credit_font_size - 20)
+        self._add_text_with_effects(draw, credit_position, credit_text, 
+                                  credit_font, text_color, self.default_shadow_color)
+
         
         # Calculate positioning
         width, height = output_size
@@ -163,16 +173,7 @@ class MakeItQuote:
                                  outline=(0, 0, 0, opacity), width=1)
         
         background = Image.alpha_composite(background, overlay)
-        
-        # Add "Powered by Swiftly" text in bottom right
-        credit_font_size = font_size // 4  # Make it smaller than the author text
-        credit_font = ImageFont.truetype(font_path, credit_font_size)
-        credit_text = "Powered by Swiftly"
-        credit_width = credit_font.getlength(credit_text)
-        credit_position = (width - credit_width - 20, height - credit_font_size - 20)
-        self._add_text_with_effects(draw, credit_position, credit_text, 
-                                  credit_font, text_color, self.default_shadow_color)
-        
+                
         return background
     
     def save_quote(self, 
