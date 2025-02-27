@@ -17,10 +17,10 @@ class MakeItQuote:
         self.backgrounds_dir = backgrounds_dir or os.path.join(os.path.dirname(__file__), "../assets/backgrounds")
         
         # Default settings
-        self.default_font_size = 56  # Increased from 48
+        self.default_font_size = 72  # Increased from 56 for bolder text
         self.default_text_color = (255, 255, 255)  # White
-        self.default_shadow_color = (0, 0, 0, 200)  # More opaque black
-        self.default_quote_width = 25  # Reduced characters per line for better readability
+        self.default_shadow_color = (0, 0, 0, 220)  # More opaque black
+        self.default_quote_width = 25  # Characters per line
         
         # Make sure asset directories exist
         os.makedirs(self.fonts_dir, exist_ok=True)
@@ -57,18 +57,20 @@ class MakeItQuote:
         x, y = position
         
         # Multiple shadows for stronger effect
-        shadow_offsets = [(4, 4), (3, 3), (2, 2)]
+        shadow_offsets = [(5, 5), (4, 4), (3, 3), (2, 2)]  # Added more shadow layers
         for offset in shadow_offsets:
             draw.text((x + offset[0], y + offset[1]), 
                      text, font=font, fill=shadow_color)
         
-        # Outline effect
+        # Enhanced outline effect
         outline_color = (0, 0, 0, 255)
         outline_positions = [
-            (-1, -1), (0, -1), (1, -1),
-            (-1, 0),           (1, 0),
-            (-1, 1),  (0, 1),  (1, 1)
-        ]
+            (-2, -2), (-1, -2), (0, -2), (1, -2), (2, -2),
+            (-2, -1), (-1, -1), (0, -1), (1, -1), (2, -1),
+            (-2, 0),  (-1, 0),          (1, 0),  (2, 0),
+            (-2, 1),  (-1, 1),  (0, 1),  (1, 1),  (2, 1),
+            (-2, 2),  (-1, 2),  (0, 2),  (1, 2),  (2, 2)
+        ]  # Increased outline thickness
         
         for offset_x, offset_y in outline_positions:
             draw.text((x + offset_x, y + offset_y), 
@@ -113,8 +115,7 @@ class MakeItQuote:
         background = Image.alpha_composite(background, black_background)
         
         # Apply stronger adjustments to enhance background
-        background = ImageEnhance.Brightness(background).enhance(0.5)  # Darker
-        background = ImageEnhance.Contrast(background).enhance(1.2)   # More contrast
+        background = ImageEnhance.Contrast(background).enhance(1.2)
         background = background.filter(ImageFilter.GaussianBlur(radius=2))
         
         # Create drawing layer
@@ -157,7 +158,7 @@ class MakeItQuote:
         overlay_draw = ImageDraw.Draw(overlay)
         
         for i in range(100):
-            opacity = int(150 * (i / 100))  # Stronger vignette
+            opacity = int(150 * (i / 100))
             overlay_draw.rectangle((i, i, width - i, height - i), 
                                  outline=(0, 0, 0, opacity), width=1)
         
