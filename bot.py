@@ -280,13 +280,13 @@ class SwiftlyBot(commands.AutoShardedBot):
                     name=f"{count}人のユーザー数 || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(10)
+            await asyncio.sleep(300)  # 5分に変更
             await self.change_presence(
                 activity=discord.Game(
                     name=f"/help || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(10)
+            await asyncio.sleep(300)  # 5分に変更
 
     async def count_unique_users(self) -> None:
         """ユニークユーザー数を集計"""
@@ -297,12 +297,12 @@ class SwiftlyBot(commands.AutoShardedBot):
         count = len(unique_users)
         logger.info("Unique user count: %s", count)
         self.user_count.update_count(count)
-        await self.update_presence()
 
     async def on_ready(self) -> None:
         """準備完了時の処理"""
         logger.info("Logged in as %s", self.user)
         await self.count_unique_users()
+        await self.update_presence()  # on_readyで一度だけ呼び出す
 
     async def on_member_join(self, _) -> None:
         """メンバー参加時の処理"""
