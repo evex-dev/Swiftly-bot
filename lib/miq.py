@@ -250,6 +250,22 @@ class MakeItQuote:
         
         return background
     
+    def _adjust_font_size(self, text: str, font_path: str, max_width: int, max_height: int, initial_font_size: int) -> Tuple[ImageFont, int]:
+        """Adjust font size to fit text within the specified width and height"""
+        font_size = initial_font_size
+        font = ImageFont.truetype(font_path, font_size)
+        wrapped_text = self._wrap_text(text, width=max_width // font.getsize('A')[0])
+        
+        while True:
+            total_height = len(wrapped_text) * (font_size + 10)
+            if total_height <= max_height and all(font.getsize(line)[0] <= max_width for line in wrapped_text):
+                break
+            font_size -= 2
+            font = ImageFont.truetype(font_path, font_size)
+            wrapped_text = self._wrap_text(text, width=max_width // font.getsize('A')[0])
+        
+        return font, font_size
+
     def create_quote(self, 
                     quote: str, 
                     author: Optional[str] = None, 
@@ -259,7 +275,7 @@ class MakeItQuote:
                     text_color: Tuple[int, int, int] = None,
                     background_image: Image.Image = None,
                     profile_image: str = None,
-                    style: Union[str, Dict] = "modern") -> Image.Image:
+                    style: Union[str, Dict[str, Union[int, bool]]] = "modern") -> Image.Image:
         """
         Generate a quote image with enhanced Twitter-style design.
         
@@ -306,10 +322,10 @@ class MakeItQuote:
         # Create drawing layer
         draw = ImageDraw.Draw(background)
         
-        # Load fonts
+        # Load fonts and adjust font size if necessary
         try:
-            quote_font = ImageFont.truetype(font_path, font_size)
-            author_font = ImageFont.truetype(font_path, font_size // 2)
+            quote_font, adjusted_font_size = self._adjust_font_size(quote, font_path, output_size[0] - 100, output_size[1] - 200, font_size)
+            author_font = ImageFont.truetype(font_path, adjusted_font_size // 2)
         except Exception as e:
             raise ValueError(f"Error loading font: {str(e)}")
         
@@ -317,11 +333,11 @@ class MakeItQuote:
         width, height = output_size
 
         # Process quote text
-        wrapped_quote = self._wrap_text(quote, self.default_quote_width)
-        total_quote_height = len(wrapped_quote) * (font_size + 10)
+        wrapped_quote = self._wrap_text(quote, width=(width - 100) // quote_font.getsize('A')[0])
+        total_quote_height = len(wrapped_quote) * (adjusted_font_size + 10)
         
         # Add stylized quote marks
-        quote_mark_size = int(font_size * 2.5)
+        quote_mark_size = int(adjusted_font_size * 2.5)
         quote_mark_color = text_color
         quote_mark_position = (width // 8, height // 6)
         self._add_quote_marks(draw, quote_mark_position, font_path, quote_mark_size, quote_mark_color)
@@ -332,17 +348,17 @@ class MakeItQuote:
         # Draw quote text with enhanced effects
         current_y = start_y
         for line in wrapped_quote:
-            text_width = quote_font.getlength(line)
+            text_width = quote_font.getsize(line)[0]
             position = ((width - text_width) // 2, current_y)
             self._add_text_with_effects(draw, position, line, quote_font, 
                                       text_color, shadow_color,
                                       shadow_strength=style_settings.get('shadow_strength', 3))
-            current_y += font_size + 10
+            current_y += adjusted_font_size + 10
         
         # Add author if provided
         if author:
             author_text = f"— {author}"
-            author_width = author_font.getlength(author_text)
+            author_width = author_font.getsize(author_text)[0]
             author_position = ((width - author_width) // 2, current_y + 30)
             self._add_text_with_effects(draw, author_position, author_text, 
                                       author_font, text_color, shadow_color)
@@ -366,10 +382,10 @@ class MakeItQuote:
                                               size=int(height * 0.12))
         
         # Add watermark
-        credit_font_size = font_size // 5
+        credit_font_size = adjusted_font_size // 5
         credit_font = ImageFont.truetype(font_path, credit_font_size)
         credit_text = "Powered by Swiftly"
-        credit_width = credit_font.getlength(credit_text)
+        credit_width = credit_font.getsize(credit_text)[0]
         credit_position = (width - credit_width - 20, height - credit_font_size - 20)
         self._add_text_with_effects(draw, credit_position, credit_text, 
                                   credit_font, (200, 200, 200), (0, 0, 0, 150), 1)
