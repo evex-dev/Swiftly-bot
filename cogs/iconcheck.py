@@ -279,6 +279,7 @@ class IconCheck(commands.Cog):
 
                 if is_default_avatar and is_new_account:
                     await message.delete()
+                    logger.info(f"Deleted message from {user} in {message.guild.name} ({message.guild.id})")
                     warning_embed = self._create_embed(
                         "警告",
                         f"{user.mention}、デフォルトのアバターかつ"
