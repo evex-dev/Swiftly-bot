@@ -128,6 +128,9 @@ class MakeItQuote:
         except Exception as e:
             raise ValueError(f"Error loading font: {str(e)}")
         
+        # Calculate positioning
+        width, height = output_size
+
         # Process quote text
         wrapped_quote = self._wrap_text(quote, self.default_quote_width)
         total_quote_height = len(wrapped_quote) * (font_size + 10)
@@ -140,10 +143,6 @@ class MakeItQuote:
         credit_position = (width - credit_width - 20, height - credit_font_size - 20)
         self._add_text_with_effects(draw, credit_position, credit_text, 
                                   credit_font, text_color, self.default_shadow_color)
-
-        
-        # Calculate positioning
-        width, height = output_size
         start_y = (height - total_quote_height) // 2
         
         # Draw quote text with enhanced effects
