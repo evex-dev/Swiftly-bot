@@ -225,10 +225,10 @@ class MakeItQuote:
 
     def _enhance_background(self, background: Image.Image, style: Dict) -> Image.Image:
         """Apply enhancements to the background image based on style"""
-        # Apply contrast and saturation adjustments
+        # Apply contrast and brightness adjustments
         background = ImageEnhance.Contrast(background).enhance(1.2)
         background = ImageEnhance.Brightness(background).enhance(0.85)
-        background = ImageEnhance.Saturation(background).enhance(1.3)
+        background = ImageEnhance.Color(background).enhance(1.3)  # Adjust saturation
         
         # Apply blur
         background = background.filter(ImageFilter.GaussianBlur(radius=3))
