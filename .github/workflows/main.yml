@@ -11,6 +11,13 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Remove poll.db
+        run: |
+          echo "🗑️ poll.dbファイルを削除しています..."
+          cd /home/adminpi/Swiftly-bot
+          rm -f data/poll.db
+          echo "✅ poll.dbの削除が完了しました"
+
       - name: Show environment information
         run: |
           echo "🔍 実行環境の情報:"
