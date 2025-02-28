@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class MakeItQuoteCog(commands.Cog):
     """MakeItQuoteコマンドを提供"""
 
@@ -35,7 +36,7 @@ class MakeItQuoteCog(commands.Cog):
 
             # アイコンを取得
             avatar_url = reference_message.author.avatar.url
-            response = requests.get(avatar_url)
+            response = requests.get(avatar_url, timeout=10)
             avatar_image = Image.open(BytesIO(response.content))
 
             # Make It Quoteを作成
@@ -54,6 +55,7 @@ class MakeItQuoteCog(commands.Cog):
         except Exception as e:
             logger.error("Error in make_it_quote command: %s", e, exc_info=True)
             await ctx.send(f"エラーが発生しました: {str(e)}")
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(MakeItQuoteCog(bot))
