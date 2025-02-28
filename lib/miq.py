@@ -4,7 +4,6 @@ import random
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 from PIL.Image import Resampling
 from typing import Tuple, Optional, List, Dict, Union
-import math
 
 
 class MakeItQuote:
@@ -61,16 +60,14 @@ class MakeItQuote:
 
     def _get_random_background(self) -> str:
         """Get a random background image path"""
-        backgrounds = [f for f in os.listdir(self.backgrounds_dir)
-                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        backgrounds = [f for f in os.listdir(self.backgrounds_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         if not backgrounds:
             raise FileNotFoundError("No background images found.")
         return os.path.join(self.backgrounds_dir, random.choice(backgrounds))
 
     def _get_random_font(self) -> str:
         """Get a random font file path"""
-        fonts = [f for f in os.listdir(self.fonts_dir)
-                 if f.lower().endswith(('.ttf', '.otf'))]
+        fonts = [f for f in os.listdir(self.fonts_dir) if f.lower().endswith(('.ttf', '.otf'))]
         if not fonts:
             raise FileNotFoundError("No font files found.")
         return os.path.join(self.fonts_dir, random.choice(fonts))
@@ -93,8 +90,7 @@ class MakeItQuote:
         # Multiple shadows for stronger effect
         shadow_offsets = [(i, i) for i in range(1, shadow_strength + 1)]
         for offset in shadow_offsets:
-            draw.text((x + offset[0], y + offset[1]),
-                      text, font=font, fill=shadow_color)
+            draw.text((x + offset[0], y + offset[1]), text, font=font, fill=shadow_color)
 
         # Enhanced outline effect
         outline_color = (0, 0, 0, 255)
@@ -107,8 +103,7 @@ class MakeItQuote:
                     outline_positions.append((i, j))
 
         for offset_x, offset_y in outline_positions:
-            draw.text((x + offset_x, y + offset_y),
-                      text, font=font, fill=outline_color)
+            draw.text((x + offset_x, y + offset_y), text, font=font, fill=outline_color)
 
         # Main text
         draw.text(position, text, font=font, fill=text_color)
@@ -324,7 +319,7 @@ class MakeItQuote:
                 background = background.convert("RGBA")
                 background = background.resize(output_size, Resampling.LANCZOS)
             except Exception as e:
-                raise ValueError(f"Error loading background image: {str(e)}")
+                raise ValueError(f"Error loading background image: {e}") from e
         else:
             background = background_image.convert("RGBA")
             background = background.resize(output_size, Resampling.LANCZOS)
@@ -342,7 +337,7 @@ class MakeItQuote:
             author_font = ImageFont.truetype(
                 font_path, adjusted_font_size // 2)
         except Exception as e:
-            raise ValueError(f"Error loading font: {str(e)}")
+            raise ValueError(f"Error loading font: {e}") from e
 
         # Calculate positioning
         width, height = output_size
@@ -356,8 +351,7 @@ class MakeItQuote:
         quote_mark_size = int(adjusted_font_size * 2.5)
         quote_mark_color = text_color
         quote_mark_position = (width // 8, height // 6)
-        self._add_quote_marks(draw, quote_mark_position,
-                              font_path, quote_mark_size, quote_mark_color)
+        self._add_quote_marks(draw, quote_mark_position, font_path, quote_mark_size, quote_mark_color)
 
         # Calculate vertical position to center text
         start_y = max((height - total_quote_height) // 2, height // 3)
