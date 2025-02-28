@@ -214,7 +214,7 @@ class SwiftlyBot(commands.AutoShardedBot):
 
         # 共通のログハンドラ設定
         handlers = []
-        for name, level in [("logs", logging.DEBUG), ("commands", logging.DEBUG)]:
+        for name, level in [("logs", logging.INFO), ("commands", logging.INFO)]:
             handler = TimedRotatingFileHandler(
                 PATHS["log_dir"] / f"{name}.log",
                 when="midnight",
@@ -245,6 +245,20 @@ class SwiftlyBot(commands.AutoShardedBot):
         for handler in handlers:
             discord_logger.addHandler(handler)
         discord_logger.addHandler(console_handler)
+
+        # aiosqliteのロガーレベルをINFOに設定
+        aiosqlite_logger = logging.getLogger("aiosqlite")
+        aiosqlite_logger.setLevel(logging.INFO)
+        for handler in handlers:
+            aiosqlite_logger.addHandler(handler)
+        aiosqlite_logger.addHandler(console_handler)
+
+        # PILのロガーレベルをINFOに設定
+        pil_logger = logging.getLogger("PIL")
+        pil_logger.setLevel(logging.INFO)
+        for handler in handlers:
+            pil_logger.addHandler(handler)
+        pil_logger.addHandler(console_handler)
 
     async def setup_hook(self) -> None:
         """ボットのセットアップ処理"""
