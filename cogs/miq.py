@@ -30,27 +30,28 @@ class MakeItQuoteCog(commands.Cog):
                 await ctx.send("返信先のメッセージが必要です。")
                 return
 
-            reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            quote = reference_message.content
-            author = reference_message.author.display_name
+            async with ctx.typing():
+                reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                quote = reference_message.content
+                author = reference_message.author.display_name
 
-            # アイコンを取得
-            avatar_url = reference_message.author.avatar.url
-            response = requests.get(avatar_url, timeout=10)
-            avatar_image = Image.open(BytesIO(response.content))
+                # アイコンを取得
+                avatar_url = reference_message.author.avatar.url
+                response = requests.get(avatar_url, timeout=10)
+                avatar_image = Image.open(BytesIO(response.content))
 
-            # Make It Quoteを作成
-            quote_image = self.miq.create_quote(
-                quote=quote,
-                author=author,
-                background_image=avatar_image
-            )
+                # Make It Quoteを作成
+                quote_image = self.miq.create_quote(
+                    quote=quote,
+                    author=author,
+                    background_image=avatar_image
+                )
 
-            # 画像を一時ファイルに保存
-            with BytesIO() as image_binary:
-                quote_image.save(image_binary, "PNG")
-                image_binary.seek(0)
-                await ctx.send(file=discord.File(fp=image_binary, filename="quote.png"))
+                # 画像を一時ファイルに保存
+                with BytesIO() as image_binary:
+                    quote_image.save(image_binary, "PNG")
+                    image_binary.seek(0)
+                    await ctx.send(file=discord.File(fp=image_binary, filename="quote.png"))
 
         except Exception as e:
             logger.error("Error in make_it_quote command: %s", e, exc_info=True)
