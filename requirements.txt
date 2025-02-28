@@ -17,3 +17,4 @@ aiosqlite
 pytz
 python-whois
 watchdog
+cryptography
