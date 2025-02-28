@@ -48,9 +48,9 @@ class MakeItQuoteCog(commands.Cog):
 
             # 画像を一時ファイルに保存
             with BytesIO() as image_binary:
-                quote_image.save(image_binary, 'PNG')
+                quote_image.save(image_binary, "PNG")
                 image_binary.seek(0)
-                await ctx.send(file=discord.File(fp=image_binary, filename='quote.png'))
+                await ctx.send(file=discord.File(fp=image_binary, filename="quote.png"))
 
         except Exception as e:
             logger.error("Error in make_it_quote command: %s", e, exc_info=True)

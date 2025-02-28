@@ -60,14 +60,14 @@ class MakeItQuote:
 
     def _get_random_background(self) -> str:
         """Get a random background image path"""
-        backgrounds = [f for f in os.listdir(self.backgrounds_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        backgrounds = [f for f in os.listdir(self.backgrounds_dir) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
         if not backgrounds:
             raise FileNotFoundError("No background images found.")
         return os.path.join(self.backgrounds_dir, random.choice(backgrounds))
 
     def _get_random_font(self) -> str:
         """Get a random font file path"""
-        fonts = [f for f in os.listdir(self.fonts_dir) if f.lower().endswith(('.ttf', '.otf'))]
+        fonts = [f for f in os.listdir(self.fonts_dir) if f.lower().endswith((".ttf", ".otf"))]
         if not fonts:
             raise FileNotFoundError("No font files found.")
         return os.path.join(self.fonts_dir, random.choice(fonts))
@@ -111,14 +111,14 @@ class MakeItQuote:
     def _create_gradient_overlay(self, size: Tuple[int, int],
                                  start_color: Tuple[int, int, int, int],
                                  end_color: Tuple[int, int, int, int],
-                                 direction: str = 'vertical') -> Image.Image:
+                                 direction: str = "vertical") -> Image.Image:
         """Create a gradient overlay image"""
-        gradient = Image.new('RGBA', size, (0, 0, 0, 0))
+        gradient = Image.new("RGBA", size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(gradient)
 
         width, height = size
 
-        if direction == 'vertical':
+        if direction == "vertical":
             for y in range(height):
                 # Calculate the color for this line
                 alpha = y / height
@@ -145,7 +145,7 @@ class MakeItQuote:
     def _add_profile_image(self,
                            base_image: Image.Image,
                            profile_image_path: str,
-                           position: str = 'bottom-left',
+                           position: str = "bottom-left",
                            size: int = 120,
                            padding: int = 40) -> Image.Image:
         """Add a profile image to the quote"""
@@ -158,7 +158,7 @@ class MakeItQuote:
             profile_img = profile_img.resize((size, size), Resampling.LANCZOS)
 
             # Create circular mask
-            mask = Image.new('L', (size, size), 0)
+            mask = Image.new("L", (size, size), 0)
             draw = ImageDraw.Draw(mask)
             draw.ellipse((0, 0, size, size), fill=255)
 
@@ -167,13 +167,13 @@ class MakeItQuote:
 
             # Calculate position
             width, height = base_image.size
-            if position == 'bottom-left':
+            if position == "bottom-left":
                 pos = (padding, height - size - padding)
-            elif position == 'bottom-right':
+            elif position == "bottom-right":
                 pos = (width - size - padding, height - size - padding)
-            elif position == 'top-left':
+            elif position == "top-left":
                 pos = (padding, padding)
-            elif position == 'top-right':
+            elif position == "top-right":
                 pos = (width - size - padding, padding)
             else:  # center
                 pos = ((width - size) // 2, (height - size) // 2)
@@ -188,12 +188,12 @@ class MakeItQuote:
 
     def _apply_rounded_corners(self, image: Image.Image, radius: int = 40) -> Image.Image:
         """Apply rounded corners to an image"""
-        circle = Image.new('L', (radius * 2, radius * 2), 0)
+        circle = Image.new("L", (radius * 2, radius * 2), 0)
         draw = ImageDraw.Draw(circle)
         draw.ellipse((0, 0, radius * 2, radius * 2), fill=255)
 
         width, height = image.size
-        alpha = Image.new('L', image.size, 255)
+        alpha = Image.new("L", image.size, 255)
 
         # Paste corner circles
         alpha.paste(circle.crop((0, 0, radius, radius)), (0, 0))
@@ -204,9 +204,9 @@ class MakeItQuote:
         alpha.paste(circle.crop((radius, radius, radius * 2,
                     radius * 2)), (width - radius, height - radius))
 
-        # Convert image to RGBA if it's not already
-        if image.mode != 'RGBA':
-            image = image.convert('RGBA')
+        # Convert image to RGBA if it"s not already
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
 
         # Apply the alpha mask
         result = image.copy()
@@ -236,18 +236,18 @@ class MakeItQuote:
         background = background.filter(ImageFilter.GaussianBlur(radius=3))
 
         # Create a semi-transparent overlay
-        overlay_opacity = style.get('overlay_opacity', 160)
-        overlay = Image.new('RGBA', background.size,
+        overlay_opacity = style.get("overlay_opacity", 160)
+        overlay = Image.new("RGBA", background.size,
                             (0, 0, 0, overlay_opacity))
         background = Image.alpha_composite(background, overlay)
 
-        if style.get('gradient_overlay', False):
+        if style.get("gradient_overlay", False):
             # Add gradient overlay
             gradient = self._create_gradient_overlay(
                 background.size,
                 (0, 0, 0, 0),  # Transparent at top
                 (0, 0, 0, 180),  # Dark at bottom
-                'vertical'
+                "vertical"
             )
             background = Image.alpha_composite(background, gradient)
 
@@ -258,7 +258,7 @@ class MakeItQuote:
         font_size = initial_font_size
         font = ImageFont.truetype(font_path, font_size)
         wrapped_text = self._wrap_text(
-            text, width=max_width // font.getbbox('A')[2])
+            text, width=max_width // font.getbbox("A")[2])
 
         while True:
             total_height = len(wrapped_text) * (font_size + 10)
@@ -267,7 +267,7 @@ class MakeItQuote:
             font_size -= 2
             font = ImageFont.truetype(font_path, font_size)
             wrapped_text = self._wrap_text(
-                text, width=max_width // font.getbbox('A')[2])
+                text, width=max_width // font.getbbox("A")[2])
 
         return font, font_size
 
@@ -305,10 +305,10 @@ class MakeItQuote:
         # Use defaults or provided values
         font_path = font_path or self._get_random_font()
         font_size = font_size or style_settings.get(
-            'font_size', self.default_font_size)
+            "font_size", self.default_font_size)
         text_color = text_color or style_settings.get(
-            'text_color', self.default_text_color)
-        shadow_opacity = style_settings.get('shadow_opacity', 180)
+            "text_color", self.default_text_color)
+        shadow_opacity = style_settings.get("shadow_opacity", 180)
         shadow_color = (0, 0, 0, shadow_opacity)
 
         # Create base image from background
@@ -344,7 +344,7 @@ class MakeItQuote:
 
         # Process quote text
         wrapped_quote = self._wrap_text(quote, width=(
-            width - 100) // quote_font.getbbox('A')[2])
+            width - 100) // quote_font.getbbox("A")[2])
         total_quote_height = len(wrapped_quote) * (adjusted_font_size + 10)
 
         # Add stylized quote marks
@@ -363,7 +363,7 @@ class MakeItQuote:
             position = ((width - text_width) // 2, current_y)
             self._add_text_with_effects(draw, position, line, quote_font,
                                         text_color, shadow_color,
-                                        shadow_strength=style_settings.get('shadow_strength', 3))
+                                        shadow_strength=style_settings.get("shadow_strength", 3))
             current_y += adjusted_font_size + 10
 
         # Add author if provided
@@ -375,7 +375,7 @@ class MakeItQuote:
                                         author_font, text_color, shadow_color)
 
         # # Enhanced vignette effect
-        # vignette = Image.new('RGBA', output_size, (0, 0, 0, 0))
+        # vignette = Image.new("RGBA", output_size, (0, 0, 0, 0))
         # vignette_draw = ImageDraw.Draw(vignette)
 
         # # Create radial gradient for vignette
@@ -389,7 +389,7 @@ class MakeItQuote:
         # Add profile image if provided
         if profile_image:
             background = self._add_profile_image(background, profile_image,
-                                                 position='bottom-left',
+                                                 position="bottom-left",
                                                  size=int(height * 0.12))
 
         # Add watermark
@@ -403,7 +403,7 @@ class MakeItQuote:
                                     credit_font, (200, 200, 200), (0, 0, 0, 150), 1)
 
         # Apply rounded corners if style specifies
-        if style_settings.get('rounded_corners', False):
+        if style_settings.get("rounded_corners", False):
             background = self._apply_rounded_corners(
                 background, radius=int(min(width, height) * 0.05))
 
@@ -419,8 +419,8 @@ class MakeItQuote:
         """
         image = self.create_quote(quote, author, **kwargs)
 
-        if output_path.lower().endswith(('.jpg', '.jpeg')):
-            image = image.convert('RGB')
+        if output_path.lower().endswith((".jpg", ".jpeg")):
+            image = image.convert("RGB")
 
         image.save(output_path)
         return output_path
