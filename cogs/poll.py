@@ -21,13 +21,11 @@ KEY_FILE = './data/poll_key.json'  # 暗号化キーの保存先
 RECOVER = False  # ボット再起動時にアクティブな投票を復元するかどうか(レートリミット注意)
 
 # 暗号化キーの管理
-
-
 def get_or_create_key():
     """暗号化キーを取得または新規作成"""
     try:
         if os.path.exists(KEY_FILE):
-            with open(KEY_FILE, 'r') as f:
+            with open(KEY_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return base64.b64decode(data['key'])
     except Exception as e:
@@ -37,7 +35,7 @@ def get_or_create_key():
     key = Fernet.generate_key()
     os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
     try:
-        with open(KEY_FILE, 'w') as f:
+        with open(KEY_FILE, 'w', encoding='utf-8') as f:
             json.dump({'key': base64.b64encode(key).decode()}, f)
     except Exception as e:
         print(f"キーファイルの保存に失敗: {e}")
