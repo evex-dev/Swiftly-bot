@@ -29,17 +29,15 @@ class MakeItQuote:
         self.default_shadow_color = (0, 0, 0, 220)
         self.default_quote_width = 25
 
-        # Style presets - 本家Make it a Quoteに近づけた設定
+        # Style presets
         self.style_presets = {
             "modern": {
-                "font_size": 72,
+                "font_size": 64,
                 "text_color": (255, 255, 255),
-                "shadow_opacity": 200,
+                "shadow_opacity": 180,
                 "gradient_overlay": True,
-                "rounded_corners": False,
-                "overlay_opacity": 80,  # トップの透明度を下げる
-                "gradient_start": (0, 0, 0, 80),  # 上部はより透明な黒に
-                "gradient_end": (0, 0, 0, 220)    # 下部は濃い目の黒
+                "rounded_corners": True,
+                "overlay_opacity": 160
             },
             "minimal": {
                 "font_size": 72,
@@ -185,8 +183,10 @@ class MakeItQuote:
             # Apply blur
             background = apply_blur(background)
 
-            # 本家Make it a Quoteに近い効果を得るため、オーバーレイを適用する前にコントラストを上げる
-            background = ImageEnhance.Contrast(background).enhance(1.3)
+            # Create overlay
+            overlay_opacity = style.get("overlay_opacity", 160)
+            overlay = Image.new("RGBA", background.size, (0, 0, 0, overlay_opacity))
+            background = Image.alpha_composite(background.convert('RGBA'), overlay)
 
             if style.get("gradient_overlay", False):
                 # Get or create gradient overlay
@@ -194,12 +194,12 @@ class MakeItQuote:
                 if gradient_key not in self._gradient_cache:
                     self._gradient_cache[gradient_key] = self._create_gradient_overlay(
                         background.size,
-                        style.get("gradient_start", (0, 0, 0, 100)),  # 上部は半透明な黒
-                        style.get("gradient_end", (0, 0, 0, 230)),    # 下部は濃い目の黒
+                        (0, 0, 0, 0),
+                        (0, 0, 0, 180),
                         "vertical"
                     )
                 gradient = self._gradient_cache[gradient_key]
-                background = Image.alpha_composite(background.convert('RGBA'), gradient)
+                background = Image.alpha_composite(background, gradient)
 
             return background
         except Exception as e:
@@ -330,8 +330,8 @@ class MakeItQuote:
             fonts_future = self.executor.submit(prepare_fonts)
 
             # Get results
-            background = background_future.result()
-            quote_font, author_font = fonts_future.result()
+            background = background_future.result(timeout=60)
+            quote_font, author_font = fonts_future.result(timeout=60)
 
             # Create drawing layer
             draw = ImageDraw.Draw(background)
