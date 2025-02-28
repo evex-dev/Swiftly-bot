@@ -18,7 +18,7 @@ VOTE_RATE_LIMIT_SECONDS = 2  # 投票アクションのレート制限
 CLEANUP_DAYS = 1  # 終了した投票を保持する日数
 MAX_OPTIONS = 5  # 最大選択肢数（Discordの制限に合わせる）
 KEY_FILE = "./data/poll_key.json"  # 暗号化キーの保存先
-RECOVER = False  # ボット再起動時にアクティブな投票を復元するかどうか(レートリミット注意)
+RECOVER = False  # BOT再起動時にアクティブな投票を復元するかどうか(レートリミット注意)
 
 # 暗号化キーの管理
 def get_or_create_key():
@@ -79,8 +79,7 @@ class PollView(discord.ui.View):
 
 class PollButton(discord.ui.Button):
     def __init__(self, label: str, option_id: int, poll_id: int):
-        super().__init__(style=discord.ButtonStyle.primary,
-                         label=label, custom_id=f"poll_{poll_id}_{option_id}")
+        super().__init__(style=discord.ButtonStyle.primary, label=label, custom_id=f"poll_{poll_id}_{option_id}")
         self.option_id = option_id
         self.poll_id = poll_id
         self._last_uses = {}
@@ -290,7 +289,7 @@ class Poll(commands.Cog):
                                 # 新しい投票メッセージを作成
                                 embed = discord.Embed(
                                     title=f"📊 {title}",
-                                    description="🔒 **匿名投票**\n\n(ボットの再起動により再作成されました)",
+                                    description="🔒 **匿名投票**\n\n(BOTの再起動により再作成されました)",
                                     color=discord.Color.blue()
                                 )
                                 embed.add_field(
@@ -414,7 +413,7 @@ class Poll(commands.Cog):
                                 )
 
                             embed.set_footer(
-                                text=f"総投票数: {total_votes}票 | 🔒 投票者のプライバシーは保護されています")
+                                text=f"総投票数: {total_votes}票")
 
                             # チャンネルを取得して結果を送信
                             if channel_id:
@@ -508,8 +507,7 @@ class Poll(commands.Cog):
                     try:
                         cursor = await db.execute(
                             "INSERT INTO polls (title, description, creator_id, end_time, options, channel_id) VALUES (?, ?, ?, ?, ?, ?)",
-                            (title, description or "", interaction.user.id,
-                             end_time.timestamp(), options, interaction.channel_id)
+                            (title, description or "", interaction.user.id, end_time.timestamp(), options, interaction.channel_id)
                         )
                         poll_id = cursor.lastrowid
                         await db.commit()
@@ -630,8 +628,7 @@ class Poll(commands.Cog):
                                         ) if vote_counts else 0
                         for i, option in enumerate(options):
                             votes = vote_counts.get(i, 0)
-                            percentage = (votes / total_votes *
-                                          100) if total_votes > 0 else 0
+                            percentage = (votes / total_votes * 100) if total_votes > 0 else 0
                             bar_length = int(
                                 percentage / 5 * total_votes / max_votes) if max_votes > 0 else 0
                             progress_bar = "█" * bar_length + \
