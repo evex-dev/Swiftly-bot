@@ -12,7 +12,6 @@ from typing import Any, Dict, Final, Optional, Set
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Third-party imports
 import aiosqlite
 import discord
 import dotenv
