@@ -214,7 +214,7 @@ class SwiftlyBot(commands.AutoShardedBot):
 
         # 共通のログハンドラ設定
         handlers = []
-        for name, level in [("logs", logging.DEBUG), ("commands", logging.DEBUG)]:
+        for name, level in [("logs", logging.INFO), ("commands", logging.INFO)]:
             handler = TimedRotatingFileHandler(
                 PATHS["log_dir"] / f"{name}.log",
                 when="midnight",
