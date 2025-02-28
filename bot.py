@@ -402,7 +402,8 @@ def main() -> None:
     bot.check(bot.check_command_permissions)
 
     try:
-        asyncio.run(bot.start(token))
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(bot.start(token))
     except KeyboardInterrupt:
         logger.info("Bot shutdown requested")
     except Exception as e:
@@ -411,7 +412,7 @@ def main() -> None:
         # ファイル監視を停止
         bot.observer.stop()
         bot.observer.join()
-        asyncio.run(bot.db.cleanup())
+        loop.run_until_complete(bot.db.cleanup())
 
 if __name__ == "__main__":
     main()
