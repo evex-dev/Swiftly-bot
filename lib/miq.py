@@ -23,37 +23,40 @@ class MakeItQuote:
         self.backgrounds_dir = backgrounds_dir or os.path.join(
             os.path.dirname(__file__), "../assets/backgrounds")
 
-        # Default settings
-        self.default_font_size = 72
+        # Default settings - adjusted for 16:9 aspect ratio
+        self.default_font_size = 90
         self.default_text_color = (255, 255, 255)
-        self.default_shadow_color = (0, 0, 0, 220)
-        self.default_quote_width = 25
+        self.default_shadow_color = (0, 0, 0, 180)
+        self.default_quote_width = 40
 
-        # Style presets
+        # Style presets - adjusted to be more like the original
         self.style_presets = {
             "modern": {
-                "font_size": 64,
+                "font_size": 90,
                 "text_color": (255, 255, 255),
                 "shadow_opacity": 180,
                 "gradient_overlay": True,
-                "rounded_corners": True,
-                "overlay_opacity": 160
+                "rounded_corners": False,
+                "overlay_opacity": 120,
+                "shadow_strength": 3
             },
             "minimal": {
-                "font_size": 72,
+                "font_size": 80,
                 "text_color": (255, 255, 255),
-                "shadow_opacity": 100,
+                "shadow_opacity": 120,
                 "gradient_overlay": False,
                 "rounded_corners": False,
-                "overlay_opacity": 120
+                "overlay_opacity": 100,
+                "shadow_strength": 2
             },
             "bold": {
-                "font_size": 84,
-                "text_color": (255, 232, 115),
+                "font_size": 100,
+                "text_color": (255, 240, 200),
                 "shadow_opacity": 200,
                 "gradient_overlay": True,
                 "rounded_corners": False,
-                "overlay_opacity": 180
+                "overlay_opacity": 140,
+                "shadow_strength": 4
             }
         }
 
@@ -166,13 +169,13 @@ class MakeItQuote:
         """Apply enhancements to the background image in parallel"""
         try:
             def apply_enhancements():
-                enhanced = ImageEnhance.Contrast(background).enhance(1.2)
-                enhanced = ImageEnhance.Brightness(enhanced).enhance(0.85)
-                enhanced = ImageEnhance.Color(enhanced).enhance(1.3)
+                enhanced = ImageEnhance.Contrast(background).enhance(1.3)  # よりコントラストを強く
+                enhanced = ImageEnhance.Brightness(enhanced).enhance(0.8)  # より暗めに
+                enhanced = ImageEnhance.Color(enhanced).enhance(1.2)
                 return enhanced
 
             def apply_blur(img):
-                return img.filter(ImageFilter.GaussianBlur(radius=3))
+                return img.filter(ImageFilter.GaussianBlur(radius=4))  # よりぼかしを強く
 
             # Execute enhancements and blur in parallel
             enhanced_future = self.executor.submit(apply_enhancements)
@@ -183,19 +186,19 @@ class MakeItQuote:
             # Apply blur
             background = apply_blur(background)
 
-            # Create overlay
+            # Create overlay with stronger opacity for more dramatic effect
             overlay_opacity = style.get("overlay_opacity", 160)
             overlay = Image.new("RGBA", background.size, (0, 0, 0, overlay_opacity))
             background = Image.alpha_composite(background.convert('RGBA'), overlay)
 
             if style.get("gradient_overlay", False):
-                # Get or create gradient overlay
+                # Get or create gradient overlay with stronger bottom shadow
                 gradient_key = (background.size, "vertical")
                 if gradient_key not in self._gradient_cache:
                     self._gradient_cache[gradient_key] = self._create_gradient_overlay(
                         background.size,
                         (0, 0, 0, 0),
-                        (0, 0, 0, 180),
+                        (0, 0, 0, 200),  # より濃い影
                         "vertical"
                     )
                 gradient = self._gradient_cache[gradient_key]
@@ -272,7 +275,7 @@ class MakeItQuote:
     def create_quote(self,
                     quote: str,
                     author: Optional[str] = None,
-                    output_size: Tuple[int, int] = (1080, 1080),
+                    output_size: Tuple[int, int] = (1920, 1080),  # Changed to 16:9
                     font_path: str = None,
                     font_size: int = None,
                     text_color: Tuple[int, int, int] = None,
@@ -341,17 +344,17 @@ class MakeItQuote:
             wrapped_quote = self._wrap_text(quote, width=(width - 100) // max(1, quote_font.getbbox("A")[2]))
             total_quote_height = len(wrapped_quote) * (font_size + 10)
 
-            # Add quote marks
-            quote_mark_size = int(font_size * 2.5)
-            quote_mark_position = (width // 8, height // 6)
+            # Add quote marks with adjusted position and size
+            quote_mark_size = int(font_size * 3.0)  # より大きな引用符
+            quote_mark_position = (width // 10, height // 7)  # より上部に配置
             self._add_text_with_effects_parallel(
                 draw, quote_mark_position, '"',
                 self._get_font(font_path, quote_mark_size),
                 text_color, shadow_color
             )
 
-            # Draw quote text
-            start_y = max((height - total_quote_height) // 2, height // 3)
+            # Draw quote text with adjusted positioning
+            start_y = max((height - total_quote_height) // 2, height // 3.5)  # より上部に配置
             current_y = start_y
 
             # Draw text lines in parallel
