@@ -78,7 +78,7 @@ class MakeItQuote:
                 raise FileNotFoundError("背景画像が見つかりません。")
             return os.path.join(self.backgrounds_dir, random.choice(backgrounds))
         except Exception as e:
-            raise ValueError(f"背景画像の取得中にエラーが発生しました: {e}")
+            raise ValueError(f"背景画像の取得中にエラーが発生しました: {e}") from e
 
     @lru_cache(maxsize=32)
     def _get_random_font(self) -> str:
@@ -89,14 +89,14 @@ class MakeItQuote:
                 raise FileNotFoundError("フォントファイルが見つかりません。")
             return os.path.join(self.fonts_dir, random.choice(fonts))
         except Exception as e:
-            raise ValueError(f"フォントの取得中にエラーが発生しました: {e}")
+            raise ValueError(f"フォントの取得中にエラーが発生しました: {e}") from e
 
     def _wrap_text(self, text: str, width: int) -> List[str]:
         """Wrap text to fit specified width"""
         try:
             return textwrap.wrap(text, width=width)
         except Exception as e:
-            raise ValueError(f"テキストの折り返し処理中にエラーが発生しました: {e}")
+            raise ValueError(f"テキストの折り返し処理中にエラーが発生しました: {e}") from e
 
     def _add_text_with_effects_parallel(self,
                                     draw: ImageDraw,
@@ -132,7 +132,7 @@ class MakeItQuote:
             # Draw main text
             draw.text(position, text, font=font, fill=text_color)
         except Exception as e:
-            raise ValueError(f"テキスト効果の描画中にエラーが発生しました: {e}")
+            raise ValueError(f"テキスト効果の描画中にエラーが発生しました: {e}") from e
 
     @lru_cache(maxsize=16)
     def _create_gradient_overlay(self, size: Tuple[int, int],
@@ -160,7 +160,7 @@ class MakeItQuote:
 
             return Image.fromarray(gradient_array, 'RGBA')
         except Exception as e:
-            raise ValueError(f"グラデーションの生成中にエラーが発生しました: {e}")
+            raise ValueError(f"グラデーションの生成中にエラーが発生しました: {e}") from e
 
     def _enhance_background_parallel(self, background: Image.Image, style: Dict) -> Image.Image:
         """Apply enhancements to the background image in parallel"""
@@ -203,7 +203,7 @@ class MakeItQuote:
 
             return background
         except Exception as e:
-            raise ValueError(f"背景画像の処理中にエラーが発生しました: {e}")
+            raise ValueError(f"背景画像の処理中にエラーが発生しました: {e}") from e
 
     def _get_font(self, font_path: str, size: int) -> ImageFont.FreeTypeFont:
         """Get cached font object"""
@@ -213,7 +213,7 @@ class MakeItQuote:
                 self._font_cache[key] = ImageFont.truetype(font_path, size)
             return self._font_cache[key]
         except Exception as e:
-            raise ValueError(f"フォントの読み込み中にエラーが発生しました: {e}")
+            raise ValueError(f"フォントの読み込み中にエラーが発生しました: {e}") from e
 
     def _apply_rounded_corners(self, image: Image.Image, radius: int = 40) -> Image.Image:
         """Apply rounded corners to an image"""
@@ -241,7 +241,7 @@ class MakeItQuote:
 
             return result
         except Exception as e:
-            raise ValueError(f"角丸処理中にエラーが発生しました: {e}")
+            raise ValueError(f"角丸処理中にエラーが発生しました: {e}") from e
 
     def _calculate_optimal_font_size(self, text: str, max_width: int, max_height: int, font_path: str, initial_size: int) -> int:
         """Calculate optimal font size to fit text within given dimensions"""
@@ -267,7 +267,7 @@ class MakeItQuote:
                 current_size -= 5
             return min_font_size
         except Exception as e:
-            raise ValueError(f"フォントサイズの計算中にエラーが発生しました: {e}")
+            raise ValueError(f"フォントサイズの計算中にエラーが発生しました: {e}") from e
 
     def create_quote(self,
                     quote: str,
@@ -302,7 +302,7 @@ class MakeItQuote:
                         bg = bg.convert("RGBA")
                         bg = bg.resize(output_size, Resampling.LANCZOS)
                     except Exception as e:
-                        raise ValueError(f"背景画像の読み込み中にエラーが発生しました: {e}")
+                        raise ValueError(f"背景画像の読み込み中にエラーが発生しました: {e}") from e
                 else:
                     bg = background_image.convert("RGBA")
                     bg = bg.resize(output_size, Resampling.LANCZOS)
@@ -366,7 +366,7 @@ class MakeItQuote:
                         shadow_strength=style_settings.get("shadow_strength", 3)
                     )
                 except Exception as e:
-                    raise ValueError(f"テキスト描画中にエラーが発生しました: {e}")
+                    raise ValueError(f"テキスト描画中にエラーが発生しました: {e}") from e
 
             text_lines = [(line, current_y + i * (font_size + 10)) for i, line in enumerate(wrapped_quote)]
 
@@ -389,7 +389,7 @@ class MakeItQuote:
                         author_font, text_color, shadow_color
                     )
                 except Exception as e:
-                    raise ValueError(f"著者名の描画中にエラーが発生しました: {e}")
+                    raise ValueError(f"著者名の描画中にエラーが発生しました: {e}") from e
 
             # Add watermark
             try:
@@ -403,7 +403,7 @@ class MakeItQuote:
                     credit_font, (200, 200, 200), (0, 0, 0, 150), 1
                 )
             except Exception as e:
-                raise ValueError(f"ウォーターマークの描画中にエラーが発生しました: {e}")
+                raise ValueError(f"ウォーターマークの描画中にエラーが発生しました: {e}") from e
 
             # Apply rounded corners if specified
             if style_settings.get("rounded_corners", False):
@@ -412,12 +412,12 @@ class MakeItQuote:
                         background, radius=int(min(width, height) * 0.05)
                     )
                 except Exception as e:
-                    raise ValueError(f"角丸処理中にエラーが発生しました: {e}")
+                    raise ValueError(f"角丸処理中にエラーが発生しました: {e}") from e
 
             return background
 
         except Exception as e:
-            raise ValueError(f"画像生成中にエラーが発生しました: {e}")
+            raise ValueError(f"画像生成中にエラーが発生しました: {e}") from e
 
     def save_quote(self, quote: str, output_path: str, author: Optional[str] = None, **kwargs) -> str:
         """Generate and save a quote image."""
@@ -430,7 +430,7 @@ class MakeItQuote:
             image.save(output_path)
             return output_path
         except Exception as e:
-            raise ValueError(f"画像の保存中にエラーが発生しました: {e}")
+            raise ValueError(f"画像の保存中にエラーが発生しました: {e}") from e
 
     def __del__(self):
         """Cleanup thread pool on deletion"""
