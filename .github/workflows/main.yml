@@ -53,25 +53,33 @@ jobs:
         run: |
           echo "🔍 変更されたファイルを確認しています..."
           cd /home/adminpi/Swiftly-bot
-          
+
           # 前回のコミットと現在のコミットの間で変更されたファイルを取得
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD || git diff --name-only $(git hash-object -t tree /dev/null) HEAD)
-          
+
           echo "変更されたファイル一覧:"
           echo "$CHANGED_FILES"
           echo "-------------------"
-          
+
           # cogsディレクトリ以外のファイルが変更されているかチェック
           NON_COGS_CHANGES=$(echo "$CHANGED_FILES" | grep -v "^cogs/" || true)
-          
-          if [ -z "$NON_COGS_CHANGES" ]; then
+
+          # bot.pyまたはwebapi.pyが変更されているかチェック
+          CORE_FILES_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^(bot\.py|webapi\.py)$" || true)
+
+          if [ ! -z "$CORE_FILES_CHANGED" ]; then
+            echo "⚠️ コアファイル(bot.py/webapi.py)の変更が検出されました"
+            echo "$CORE_FILES_CHANGED"
+            echo "only_cogs_changed=false" >> $GITHUB_OUTPUT
+
+          elif [ -z "$NON_COGS_CHANGES" ]; then
             echo "✅ cogsディレクトリのみの変更です"
             echo "only_cogs_changed=true" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ cogsディレクトリ以外の変更が含まれています"
+            echo "✅ cogsディレクトリ以外の変更も含まれています"
             echo "変更されたcogs以外のファイル:"
             echo "$NON_COGS_CHANGES"
-            echo "only_cogs_changed=false" >> $GITHUB_OUTPUT
+            echo "only_cogs_changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Reload cogs only
