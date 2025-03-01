@@ -40,62 +40,63 @@ class Mind(commands.Cog):
     )
     async def mind(self, ctx: commands.Context) -> None:
         try:
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(ctx.author.id)
-            if is_limited:
-                await ctx.send(ERROR_MESSAGES["rate_limit"].format(remaining))
-                return
+            async with ctx.typing():
+                # レート制限のチェック
+                is_limited, remaining = self._check_rate_limit(ctx.author.id)
+                if is_limited:
+                    await ctx.send(ERROR_MESSAGES["rate_limit"].format(remaining))
+                    return
 
-            # 返信先のメッセージを取得
-            if not ctx.message.reference or not ctx.message.reference.resolved:
-                await ctx.send("返信先のメッセージが見つかりません。")
-                return
+                # 返信先のメッセージを取得
+                if not ctx.message.reference or not ctx.message.reference.resolved:
+                    await ctx.send("返信先のメッセージが見つかりません。")
+                    return
 
-            referenced_message = ctx.message.reference.resolved
-            text = referenced_message.content
+                referenced_message = ctx.message.reference.resolved
+                text = referenced_message.content
 
-            # テキストをトークン化
-            max_seq_length = 512
-            tokenized = self.tokenizer(text, truncation=True, max_length=max_seq_length, padding="max_length")
-            input_ids = torch.tensor(tokenized['input_ids']).unsqueeze(0)  # バッチ次元追加
-            attention_mask = torch.tensor(tokenized['attention_mask']).unsqueeze(0)
+                # テキストをトークン化
+                max_seq_length = 512
+                tokenized = self.tokenizer(text, truncation=True, max_length=max_seq_length, padding="max_length")
+                input_ids = torch.tensor(tokenized['input_ids']).unsqueeze(0)  # バッチ次元追加
+                attention_mask = torch.tensor(tokenized['attention_mask']).unsqueeze(0)
 
-            # モデル実行
-            output = self.model(input_ids, attention_mask=attention_mask)
-            max_index = torch.argmax(output.logits, dim=1).item()
+                # モデル実行
+                output = self.model(input_ids, attention_mask=attention_mask)
+                max_index = torch.argmax(output.logits, dim=1).item()
 
-            # ラベルに対応する感情
-            if max_index == 0:
-                sentiment_label = 'joy、うれしい'
-            elif max_index == 1:
-                sentiment_label = 'sadness、悲しい'
-            elif max_index == 2:
-                sentiment_label = 'anticipation、期待'
-            elif max_index == 3:
-                sentiment_label = 'surprise、驚き'
-            elif max_index == 4:
-                sentiment_label = 'anger、怒り'
-            elif max_index == 5:
-                sentiment_label = 'fear、恐れ'
-            elif max_index == 6:
-                sentiment_label = 'disgust、嫌悪'
-            elif max_index == 7:
-                sentiment_label = 'trust、信頼'
-            else:
-                sentiment_label = '不明'
+                # ラベルに対応する感情
+                if max_index == 0:
+                    sentiment_label = 'うれしい'
+                elif max_index == 1:
+                    sentiment_label = '悲しい'
+                elif max_index == 2:
+                    sentiment_label = '期待'
+                elif max_index == 3:
+                    sentiment_label = '驚き'
+                elif max_index == 4:
+                    sentiment_label = '怒り'
+                elif max_index == 5:
+                    sentiment_label = '恐れ'
+                elif max_index == 6:
+                    sentiment_label = '嫌悪'
+                elif max_index == 7:
+                    sentiment_label = '信頼'
+                else:
+                    sentiment_label = '不明'
 
-            # レート制限の更新
-            self._last_uses[ctx.author.id] = datetime.now()
+                # レート制限の更新
+                self._last_uses[ctx.author.id] = datetime.now()
 
-            # 結果の送信
-            embed = discord.Embed(
-                title="感情予測結果",
-                description=f"メッセージ: {text}",
-                color=discord.Color.blue()
-            )
-            embed.add_field(name="感情", value=sentiment_label)
-            embed.add_field(name="予測クラス", value=str(max_index))
-            await ctx.send(embed=embed)
+                # 結果の送信
+                embed = discord.Embed(
+                    title="感情予測結果",
+                    description=f"メッセージ: {text}",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="感情", value=sentiment_label)
+                embed.add_field(name="予測クラス", value=str(max_index))
+                await ctx.send(embed=embed)
 
         except Exception as e:
             logger.error("Error in mind command: %s", e, exc_info=True)
