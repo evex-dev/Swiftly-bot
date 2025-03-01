@@ -58,7 +58,7 @@ class MakeItQuote:
         }
 
         # Initialize thread pool
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.executor = ThreadPoolExecutor(max_workers=8)
 
         # Make sure asset directories exist
         os.makedirs(self.fonts_dir, exist_ok=True)
@@ -119,7 +119,7 @@ class MakeItQuote:
 
             # Create shadow positions
             shadow_offsets = [(i, i) for i in range(1, shadow_strength + 1)]
-            outline_positions = [(i, j) for i in range(-2, 3) for j in range(-2, 3) if i != 0 or j != 0]
+            outline_positions = [(i, j) for i in range(-1, 2) for j in range(-1, 2) if i != 0 or j != 0]
 
             # Execute shadow and outline drawing in parallel
             shadow_futures = [self.executor.submit(draw_shadow, offset) for offset in shadow_offsets]
@@ -363,7 +363,7 @@ class MakeItQuote:
                     self._add_text_with_effects_parallel(
                         draw, position, line, quote_font,
                         text_color, shadow_color,
-                        shadow_strength=style_settings.get("shadow_strength", 3)
+                        shadow_strength=style_settings.get("shadow_strength", 2)
                     )
                 except Exception as e:
                     raise ValueError(f"テキスト描画中にエラーが発生しました: {e}") from e
