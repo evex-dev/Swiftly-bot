@@ -279,7 +279,7 @@ class MakeItQuote:
                     background_image: Image.Image = None,
                     _: str = None,  # profile_image
                     style: Union[str, Dict[str, Union[int, bool]]] = "modern") -> Image.Image:
-        """Generate a quote image with enhanced performance"""
+        """Generate a quote image with enhanced performance using parallel compositing"""
         try:
             # Resolve style settings
             if isinstance(style, str):
@@ -333,9 +333,11 @@ class MakeItQuote:
             background = background_future.result(timeout=60)
             quote_font, author_font = fonts_future.result(timeout=60)
 
-            # Create drawing layer
-            draw = ImageDraw.Draw(background)
             width, height = output_size
+
+            # Create a separate transparent layer for text drawing
+            text_layer = Image.new("RGBA", background.size, (0, 0, 0, 0))
+            text_draw = ImageDraw.Draw(text_layer)
 
             # Process quote text
             wrapped_quote = self._wrap_text(quote, width=(width - 100) // max(1, quote_font.getbbox("A")[2]))
@@ -345,65 +347,60 @@ class MakeItQuote:
             quote_mark_size = int(font_size * 2.5)
             quote_mark_position = (width // 8, height // 6)
             self._add_text_with_effects_parallel(
-                draw, quote_mark_position, '"',
+                text_draw, quote_mark_position, '"',
                 self._get_font(font_path, quote_mark_size),
                 text_color, shadow_color
             )
 
-            # Draw quote text
+            # Draw quote text lines on text_layer in parallel
             start_y = max((height - total_quote_height) // 2, height // 3)
-            current_y = start_y
-
-            # Draw text lines in parallel
             def draw_text_line(line_data):
                 try:
                     line, y_pos = line_data
                     text_width = quote_font.getbbox(line)[2]
                     position = ((width - text_width) // 2, y_pos)
                     self._add_text_with_effects_parallel(
-                        draw, position, line, quote_font,
+                        text_draw, position, line, quote_font,
                         text_color, shadow_color,
                         shadow_strength=style_settings.get("shadow_strength", 2)
                     )
                 except Exception as e:
                     raise ValueError(f"テキスト描画中にエラーが発生しました: {e}") from e
 
-            text_lines = [(line, current_y + i * (font_size + 10)) for i, line in enumerate(wrapped_quote)]
-
+            text_lines = [(line, start_y + i * (font_size + 10)) for i, line in enumerate(wrapped_quote)]
             text_futures = [self.executor.submit(draw_text_line, line_data) for line_data in text_lines]
-
-            # Wait for all text drawing to complete
             for future in text_futures:
                 future.result()
 
-            current_y += len(wrapped_quote) * (font_size + 10)
-
-            # Add author if provided
+            # Add author text on text_layer if provided
             if author:
                 try:
                     author_text = f"— {author}"
                     author_width = author_font.getbbox(author_text)[2]
-                    author_position = ((width - author_width) // 2, current_y + 30)
+                    author_position = ((width - author_width) // 2, start_y + len(wrapped_quote) * (font_size + 10) + 30)
                     self._add_text_with_effects_parallel(
-                        draw, author_position, author_text,
+                        text_draw, author_position, author_text,
                         author_font, text_color, shadow_color
                     )
                 except Exception as e:
                     raise ValueError(f"著者名の描画中にエラーが発生しました: {e}") from e
 
-            # Add watermark
+            # Add watermark on text_layer
             try:
-                credit_font_size = max(font_size // 5, 12)  # 最小サイズを設定
+                credit_font_size = max(font_size // 5, 12)
                 credit_font = self._get_font(font_path, credit_font_size)
                 credit_text = "Powered by Swiftly"
                 credit_width = credit_font.getbbox(credit_text)[2]
                 credit_position = (width - credit_width - 20, height - credit_font_size - 20)
                 self._add_text_with_effects_parallel(
-                    draw, credit_position, credit_text,
+                    text_draw, credit_position, credit_text,
                     credit_font, (200, 200, 200), (0, 0, 0, 150), 1
                 )
             except Exception as e:
                 raise ValueError(f"ウォーターマークの描画中にエラーが発生しました: {e}") from e
+
+            # Composite the text_layer onto the background
+            background = Image.alpha_composite(background, text_layer)
 
             # Apply rounded corners if specified
             if style_settings.get("rounded_corners", False):
