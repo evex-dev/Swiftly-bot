@@ -20,3 +20,5 @@ watchdog
 cryptography
 transformers
 torch
+protobuf
+fugashi
