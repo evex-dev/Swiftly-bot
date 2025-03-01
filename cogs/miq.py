@@ -5,6 +5,7 @@ from PIL import Image
 import aiohttp
 from io import BytesIO
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class MakeItQuoteCog(commands.Cog):
         self.bot = bot
         self.miq = MakeItQuote()
         self.session = None
+        self.avatar_cache = {}  # Cache for avatar images
 
     async def cog_load(self) -> None:
         self.session = aiohttp.ClientSession()
@@ -43,24 +45,24 @@ class MakeItQuoteCog(commands.Cog):
                 quote = reference_message.content
                 author = reference_message.author.display_name
 
-                # アイコンを取得
+                # アイコンを取得、キャッシュを利用
                 avatar_url = reference_message.author.avatar.url
-                async with self.session.get(avatar_url) as response:
-                    if response.status != 200:
-                        raise Exception(f"アバター画像の取得に失敗しました: {response.status}")
-                    avatar_bytes = await response.read()
-                    avatar_image = Image.open(BytesIO(avatar_bytes))
+                if avatar_url in self.avatar_cache:
+                    avatar_image = self.avatar_cache[avatar_url]
+                else:
+                    async with self.session.get(avatar_url) as response:
+                        if response.status != 200:
+                            raise Exception(f"アバター画像の取得に失敗しました: {response.status}")
+                        avatar_bytes = await response.read()
+                        avatar_image = await asyncio.to_thread(Image.open, BytesIO(avatar_bytes))
+                        self.avatar_cache[avatar_url] = avatar_image
 
-                # Make It Quoteを作成
-                quote_image = self.miq.create_quote(
-                    quote=quote,
-                    author=author,
-                    background_image=avatar_image
-                )
+                # Make It Quoteを作成 using asynchronous thread for blocking operation
+                quote_image = await asyncio.to_thread(self.miq.create_quote, quote=quote, author=author, background_image=avatar_image)
 
                 # 画像を一時ファイルに保存
                 with BytesIO() as image_binary:
-                    quote_image.save(image_binary, "PNG")
+                    await asyncio.to_thread(quote_image.save, image_binary, "PNG")
                     image_binary.seek(0)
                     await ctx.send(file=discord.File(fp=image_binary, filename="quote.png"))
 
