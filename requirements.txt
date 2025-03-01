@@ -18,3 +18,4 @@ pytz
 python-whois
 watchdog
 cryptography
+transformers
