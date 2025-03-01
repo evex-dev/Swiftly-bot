@@ -22,3 +22,4 @@ transformers
 torch
 protobuf
 fugashi
+unidic-lite
