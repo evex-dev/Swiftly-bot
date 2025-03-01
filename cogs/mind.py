@@ -19,7 +19,7 @@ class Mind(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._last_uses = {}
-        self.sentiment_analyzer = pipeline("sentiment-analysis", model="daigo/bert-base-japanese-sentiment")
+        self.sentiment_analyzer = pipeline("sentiment-analysis", model="cl-tohoku/bert-base-japanese")
 
     def _check_rate_limit(self, user_id: int) -> tuple[bool, Optional[int]]:
         now = datetime.now()
