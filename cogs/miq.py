@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from lib.miq import MakeItQuote
 from PIL import Image
-import requests
+import aiohttp
 from io import BytesIO
 import logging
 
@@ -15,6 +15,14 @@ class MakeItQuoteCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.miq = MakeItQuote()
+        self.session = None
+
+    async def cog_load(self) -> None:
+        self.session = aiohttp.ClientSession()
+
+    async def cog_unload(self) -> None:
+        if self.session:
+            await self.session.close()
 
     @commands.command(
         name="miq",
@@ -37,8 +45,11 @@ class MakeItQuoteCog(commands.Cog):
 
                 # アイコンを取得
                 avatar_url = reference_message.author.avatar.url
-                response = requests.get(avatar_url, timeout=10)
-                avatar_image = Image.open(BytesIO(response.content))
+                async with self.session.get(avatar_url) as response:
+                    if response.status != 200:
+                        raise Exception(f"アバター画像の取得に失敗しました: {response.status}")
+                    avatar_bytes = await response.read()
+                    avatar_image = Image.open(BytesIO(avatar_bytes))
 
                 # Make It Quoteを作成
                 quote_image = self.miq.create_quote(
