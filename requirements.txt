@@ -19,3 +19,4 @@ python-whois
 watchdog
 cryptography
 transformers
+torch
