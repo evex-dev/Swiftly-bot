@@ -24,8 +24,6 @@ class Mind(commands.Cog):
         self.tokenizer = AutoTokenizer.from_pretrained("Mizuiro-sakura/luke-japanese-large-sentiment-analysis-wrime")
         self.config = LukeConfig.from_pretrained("Mizuiro-sakura/luke-japanese-large-sentiment-analysis-wrime", output_hidden_states=True)
         self.model = AutoModelForSequenceClassification.from_pretrained("Mizuiro-sakura/luke-japanese-large-sentiment-analysis-wrime", config=self.config)
-        self.url_tokenizer = AutoTokenizer.from_pretrained("r3ddkahili/final-complete-malicious-url-model")
-        self.url_model = AutoModelForSequenceClassification.from_pretrained("r3ddkahili/final-complete-malicious-url-model")
 
     def _check_rate_limit(self, user_id: int) -> tuple[bool, Optional[int]]:
         now = datetime.now()
@@ -98,46 +96,10 @@ class Mind(commands.Cog):
                 )
                 embed.add_field(name="感情", value=sentiment_label)
                 embed.add_field(name="予測クラス", value=str(max_index))
-                embed.set_footer(text="この結果はAIによる予測です。実際の結果とは異なる場合があります。")
                 await ctx.send(embed=embed)
 
         except Exception as e:
             logger.error("Error in mind command: %s", e, exc_info=True)
-            await ctx.send(ERROR_MESSAGES["unexpected"].format(str(e)))
-
-    @commands.command(
-        name="url",
-        description="指定されたURLの分類を行います"
-    )
-    async def url(self, ctx: commands.Context, url: str) -> None:
-        try:
-            async with ctx.typing():
-                # レート制限のチェック
-                is_limited, remaining = self._check_rate_limit(ctx.author.id)
-                if is_limited:
-                    await ctx.send(ERROR_MESSAGES["rate_limit"].format(remaining))
-                    return
-                # URLをトークン化して予測
-                inputs = self.url_tokenizer(url, return_tensors="pt", truncation=True, padding=True, max_length=128)
-                with torch.no_grad():
-                    outputs = self.url_model(**inputs)
-                    prediction = torch.argmax(outputs.logits).item()
-                # ラベルマッピング
-                label_map = {0: "Benign", 1: "Defacement", 2: "Phishing", 3: "Malware"}
-                result = label_map.get(prediction, "Unknown")
-                # レート制限の更新
-                self._last_uses[ctx.author.id] = datetime.now()
-                # 結果の送信
-                embed = discord.Embed(
-                    title="URL分類結果",
-                    description=f"URL: {url}",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(name="分類", value=result)
-                embed.set_footer(text="この結果はAIによる予測です。実際の結果とは異なる場合があります。")
-                await ctx.send(embed=embed)
-        except Exception as e:
-            logger.error("Error in url command: %s", e, exc_info=True)
             await ctx.send(ERROR_MESSAGES["unexpected"].format(str(e)))
 
 async def setup(bot: commands.Bot) -> None:
