@@ -56,6 +56,11 @@ Swiftly, a multi-function Discord bot
 
 その他にも色々あります！
 
+# LICENSE
+- **edge-tts** - LGPL-3.0 License  
+  - [edge-tts](https://github.com/rany2/edge-tts)
+  - このライブラリは LGPL-3.0 ライセンスで配布されています。ソースコードは上記のリンクからアクセスできます。
+
 ## コントリビューターのみなさんへ
 
 **お願い**
