@@ -20,7 +20,7 @@ EMOJI_MAP = {
     PLAYER2: "🔵"
 }
 
-DB_PATH = r"/data/gomoku.db"
+DB_PATH = r"data/gomoku.db"
 
 def create_empty_board():
     return [[EMPTY for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
