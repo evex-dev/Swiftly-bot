@@ -27,7 +27,8 @@ def create_empty_board():
 
 def render_board(board):
     rows = []
-    header = "   " + " ".join(f"{i:2d}" for i in range(1, BOARD_SIZE+1))
+    # Adjust header spacing (add one more space for better alignment)
+    header = "    " + " ".join(f"{i:2d}" for i in range(1, BOARD_SIZE+1))
     rows.append(header)
     for idx, row in enumerate(board):
         line = f"{idx+1:2d} " + " ".join(EMOJI_MAP[cell] for cell in row)
@@ -74,19 +75,20 @@ class Gomoku(commands.Cog):
                     moves TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     ended_at TEXT,
-                    winner INTEGER
+                    winner INTEGER,
+                    message_id TEXT
                 )
             """)
 
-    def _create_session(self, p1: int, p2: int, channel_id: int) -> int:
+    def _create_session(self, p1: int, p2: int, channel_id: int, msg_id: str) -> int:
         board = create_empty_board()
         moves = []
         now = datetime.utcnow().isoformat()
         with self.conn:
             cur = self.conn.execute("""
-                INSERT INTO sessions (channel_id, player1, player2, current_turn, board, moves, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (channel_id, p1, p2, p1, json.dumps(board), json.dumps(moves), now))
+                INSERT INTO sessions (channel_id, player1, player2, current_turn, board, moves, created_at, message_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (channel_id, p1, p2, p1, json.dumps(board), json.dumps(moves), now, msg_id))
             return cur.lastrowid
 
     def _update_session(self, session_id: int, board, moves, current_turn, ended_at=None, winner=None):
@@ -124,12 +126,10 @@ class Gomoku(commands.Cog):
             await interaction.response.send_message("自分自身とは対局できません。", ephemeral=True)
             return
 
-        # 既にこのチャンネルで進行中の対局があるか確認
         if self._get_active_session_for_channel(channel_id):
             await interaction.response.send_message("このチャンネルではすでに進行中の対局があります。", ephemeral=True)
             return
 
-        session_id = self._create_session(p1, p2, channel_id)
         board = create_empty_board()
         board_str = render_board(board)
         embed = discord.Embed(
@@ -137,8 +137,17 @@ class Gomoku(commands.Cog):
             description=f"<@{p1}> vs <@{p2}>\n先手: <@{p1}> (🔴)\n後手: <@{p2}> (🔵)"
         )
         embed.add_field(name="盤面", value=f"```\n{board_str}\n```", inline=False)
+        embed.set_footer(text=f"対局ID: (pending) | /move x y で手を打ってください。座標は1～{BOARD_SIZE}で指定。")
+        
+        # Send the initial embed and capture the sent message so it can be edited later
+        msg = await interaction.response.send_message(embed=embed)
+        # For slash commands, to get the sent message, use followup:
+        sent_msg = await interaction.original_response()
+        # Create session and store the message id
+        session_id = self._create_session(p1, p2, channel_id, str(sent_msg.id))
+        # Now edit footer to show session id
         embed.set_footer(text=f"対局ID: {session_id} | /move x y で手を打ってください。座標は1～{BOARD_SIZE}で指定。")
-        await interaction.response.send_message(embed=embed)
+        await sent_msg.edit(embed=embed)
 
     @discord.app_commands.command(
         name="move",
@@ -151,7 +160,7 @@ class Gomoku(commands.Cog):
         if not session:
             await interaction.response.send_message("このチャンネルで進行中の対局が見つかりません。", ephemeral=True)
             return
-
+        
         if not (1 <= x <= BOARD_SIZE and 1 <= y <= BOARD_SIZE):
             await interaction.response.send_message(f"座標は1から{BOARD_SIZE}の間で指定してください。", ephemeral=True)
             return
@@ -179,6 +188,7 @@ class Gomoku(commands.Cog):
         board[y_idx][x_idx] = player
         moves.append({"x": x_idx, "y": y_idx, "player": player, "time": datetime.utcnow().isoformat()})
 
+        # Determine which embed title/description to show based on win/draw or next move
         if check_win(board, x_idx, y_idx, player):
             ended_at = datetime.utcnow().isoformat()
             self._update_session(session["id"], board, moves, current_turn=0, ended_at=ended_at, winner=user_id)
@@ -188,10 +198,7 @@ class Gomoku(commands.Cog):
                 description=f"<@{user_id}> の勝利！"
             )
             embed.add_field(name="最終盤面", value=f"```\n{board_str}\n```", inline=False)
-            await interaction.response.send_message(embed=embed)
-            return
-
-        if all(cell != EMPTY for row in board for cell in row):
+        elif all(cell != EMPTY for row in board for cell in row):
             ended_at = datetime.utcnow().isoformat()
             self._update_session(session["id"], board, moves, current_turn=0, ended_at=ended_at, winner=0)
             board_str = render_board(board)
@@ -200,19 +207,28 @@ class Gomoku(commands.Cog):
                 description="盤面が埋まりました。引き分けです。"
             )
             embed.add_field(name="最終盤面", value=f"```\n{board_str}\n```", inline=False)
-            await interaction.response.send_message(embed=embed)
-            return
+        else:
+            next_turn = other
+            self._update_session(session["id"], board, moves, current_turn=next_turn)
+            board_str = render_board(board)
+            embed = discord.Embed(
+                title="⏳ 次の一手",
+                description=f"現在の手番: <@{next_turn}>"
+            )
+            embed.add_field(name="盤面", value=f"```\n{board_str}\n```", inline=False)
+            embed.set_footer(text=f"対局ID: {session['id']}")
 
-        next_turn = other
-        self._update_session(session["id"], board, moves, current_turn=next_turn)
-        board_str = render_board(board)
-        embed = discord.Embed(
-            title="⏳ 次の一手",
-            description=f"現在の手番: <@{next_turn}>"
-        )
-        embed.add_field(name="盤面", value=f"```\n{board_str}\n```", inline=False)
-        embed.set_footer(text=f"対局ID: {session['id']}")
-        await interaction.response.send_message(embed=embed)
+        # Instead of sending a new message, fetch the original game board message using the stored message id and edit it.
+        try:
+            message_id = int(session["message_id"])
+            # Fetch the channel and then the message
+            channel = interaction.channel
+            game_msg = await channel.fetch_message(message_id)
+            await game_msg.edit(embed=embed)
+            await interaction.response.send_message("手が打たれました。", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Message edit failed: {e}")
+            await interaction.response.send_message("手は打たれましたが、盤面を更新できませんでした。", ephemeral=True)
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Gomoku(bot))
