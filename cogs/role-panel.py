@@ -384,14 +384,6 @@ class RolePanel(commands.Cog):
         except discord.HTTPException:
             pass  # DMが無効になっている場合は無視
             
-        # リアクションを削除 (任意、サーバー設定によって変更可能)
-        try:
-            channel = guild.get_channel(payload.channel_id)
-            if channel:
-                message = await channel.fetch_message(payload.message_id)
-                await message.remove_reaction(payload.emoji, member)
-        except discord.HTTPException:
-            pass
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
