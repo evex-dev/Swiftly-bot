@@ -5,6 +5,9 @@ import json
 import os
 import asyncio
 from typing import Dict, List, Optional, Union
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RolePanel(commands.Cog):
     """ユーザーがリアクションを通じてロールを取得できるパネルを管理するコグ"""
@@ -42,7 +45,8 @@ class RolePanel(commands.Cog):
         try:
             channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
             return await channel.fetch_message(message_id)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+            logger.error(f"Failed to fetch message: {e}")
             return None
 
     role_panel_group = app_commands.Group(name="role-panel", description="ロールパネル関連のコマンド")
@@ -365,7 +369,8 @@ class RolePanel(commands.Cog):
         if not member:
             try:
                 member = await guild.fetch_member(payload.user_id)
-            except discord.HTTPException:
+            except discord.HTTPException as e:
+                logger.error(f"Failed to fetch member: {e}")
                 return
                 
         role = guild.get_role(role_id)
@@ -375,8 +380,9 @@ class RolePanel(commands.Cog):
         # ロールを付与
         try:
             await member.add_roles(role, reason="ロールパネルからの自動ロール付与")
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            logger.error(f"Failed to add role: {e}")
+            return
             
         # DMでフィードバックを送る (任意)
         try:
@@ -414,7 +420,8 @@ class RolePanel(commands.Cog):
         if not member:
             try:
                 member = await guild.fetch_member(payload.user_id)
-            except discord.HTTPException:
+            except discord.HTTPException as e:
+                logger.error(f"Failed to fetch member: {e}")
                 return
                 
         role = guild.get_role(role_id)
@@ -424,8 +431,9 @@ class RolePanel(commands.Cog):
         # ロールを削除
         try:
             await member.remove_roles(role, reason="ロールパネルからの自動ロール削除")
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            logger.error(f"Failed to remove role: {e}")
+            return
             
         # DMでフィードバックを送る (任意)
         try:
