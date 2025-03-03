@@ -347,7 +347,7 @@ class MakeItQuote:
             quote_mark_size = int(font_size * 2.5)
             quote_mark_position = (width // 8, height // 6)
             self._add_text_with_effects_parallel(
-                text_draw, quote_mark_position, """,
+                text_draw, quote_mark_position, '"',
                 self._get_font(font_path, quote_mark_size),
                 text_color, shadow_color
             )
