@@ -99,7 +99,7 @@ class Time(commands.Cog):
 
     def _format_time(self, time_str: str) -> str:
         try:
-            dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
             jst = dt.astimezone(pytz.timezone(TIMEZONE))
             return jst.strftime("%Y年%m月%d日 %H:%M:%S")
         except Exception as e:

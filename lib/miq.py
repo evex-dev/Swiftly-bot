@@ -158,7 +158,7 @@ class MakeItQuote:
                     start_color[i] * (1 - gradient) + end_color[i] * gradient
                 )
 
-            return Image.fromarray(gradient_array, 'RGBA')
+            return Image.fromarray(gradient_array, "RGBA")
         except Exception as e:
             raise ValueError(f"グラデーションの生成中にエラーが発生しました: {e}") from e
 
@@ -186,7 +186,7 @@ class MakeItQuote:
             # Create overlay
             overlay_opacity = style.get("overlay_opacity", 160)
             overlay = Image.new("RGBA", background.size, (0, 0, 0, overlay_opacity))
-            background = Image.alpha_composite(background.convert('RGBA'), overlay)
+            background = Image.alpha_composite(background.convert("RGBA"), overlay)
 
             if style.get("gradient_overlay", False):
                 # Get or create gradient overlay
@@ -231,7 +231,7 @@ class MakeItQuote:
             alpha.paste(circle.crop((0, radius, radius, radius * 2)), (0, height - radius))
             alpha.paste(circle.crop((radius, radius, radius * 2, radius * 2)), (width - radius, height - radius))
 
-            # Convert image to RGBA if it's not already
+            # Convert image to RGBA if it"s not already
             if image.mode != "RGBA":
                 image = image.convert("RGBA")
 
@@ -347,7 +347,7 @@ class MakeItQuote:
             quote_mark_size = int(font_size * 2.5)
             quote_mark_position = (width // 8, height // 6)
             self._add_text_with_effects_parallel(
-                text_draw, quote_mark_position, '"',
+                text_draw, quote_mark_position, """,
                 self._get_font(font_path, quote_mark_size),
                 text_color, shadow_color
             )

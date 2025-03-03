@@ -30,9 +30,9 @@ class RequestCog(commands.Cog):
         self.init_db()
 
     def init_db(self):
-        conn = sqlite3.connect('data/request.db')
+        conn = sqlite3.connect("data/request.db")
         c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS requests (user_id INTEGER, date TEXT, message TEXT)''')
+        c.execute("""CREATE TABLE IF NOT EXISTS requests (user_id INTEGER, date TEXT, message TEXT)""")
         conn.commit()
         conn.close()
 
@@ -46,7 +46,7 @@ async def setup(bot: commands.Bot):
 
 def save_request(user_id: int, date: str, message: str):
     try:
-        conn = sqlite3.connect('data/request.db')
+        conn = sqlite3.connect("data/request.db")
         c = conn.cursor()
         c.execute("INSERT INTO requests (user_id, date, message) VALUES (?, ?, ?)", (user_id, date, message))
         conn.commit()

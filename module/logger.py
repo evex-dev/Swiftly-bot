@@ -8,7 +8,7 @@ class LoggingCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.logger = logging.getLogger('bot')
+        self.logger = logging.getLogger("bot")
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:

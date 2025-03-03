@@ -12,7 +12,7 @@ LATENCY_THRESHOLDS: Final[dict] = {
     "excellent": 100,  # 100ms未満
     "good": 200,      # 200ms未満
     "fair": 500,      # 500ms未満
-    "poor": float('inf')  # それ以上
+    "poor": float("inf")  # それ以上
 }
 
 LATENCY_COLORS: Final[dict] = {

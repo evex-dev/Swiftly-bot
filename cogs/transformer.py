@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-from transformers import pipeline
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -58,8 +57,8 @@ class Mind(commands.Cog):
                 # テキストをトークン化
                 max_seq_length = 512
                 tokenized = self.tokenizer(text, truncation=True, max_length=max_seq_length, padding="max_length")
-                input_ids = torch.tensor(tokenized['input_ids']).unsqueeze(0)  # バッチ次元追加
-                attention_mask = torch.tensor(tokenized['attention_mask']).unsqueeze(0)
+                input_ids = torch.tensor(tokenized["input_ids"]).unsqueeze(0)  # バッチ次元追加
+                attention_mask = torch.tensor(tokenized["attention_mask"]).unsqueeze(0)
 
                 # モデル実行
                 output = self.model(input_ids, attention_mask=attention_mask)
@@ -67,23 +66,23 @@ class Mind(commands.Cog):
 
                 # ラベルに対応する感情
                 if max_index == 0:
-                    sentiment_label = 'うれしい'
+                    sentiment_label = "うれしい"
                 elif max_index == 1:
-                    sentiment_label = '悲しい'
+                    sentiment_label = "悲しい"
                 elif max_index == 2:
-                    sentiment_label = '期待'
+                    sentiment_label = "期待"
                 elif max_index == 3:
-                    sentiment_label = '驚き'
+                    sentiment_label = "驚き"
                 elif max_index == 4:
-                    sentiment_label = '怒り'
+                    sentiment_label = "怒り"
                 elif max_index == 5:
-                    sentiment_label = '恐れ'
+                    sentiment_label = "恐れ"
                 elif max_index == 6:
-                    sentiment_label = '嫌悪'
+                    sentiment_label = "嫌悪"
                 elif max_index == 7:
-                    sentiment_label = '信頼'
+                    sentiment_label = "信頼"
                 else:
-                    sentiment_label = '不明'
+                    sentiment_label = "不明"
 
                 # レート制限の更新
                 self._last_uses[ctx.author.id] = datetime.now()
