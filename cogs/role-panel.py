@@ -1,11 +1,11 @@
+import json
+import logging
+import os
+from typing import Optional
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-import json
-import os
-import asyncio
-from typing import Dict, List, Optional, Union
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class RolePanel(commands.Cog):
         # 絵文字をパネルに追加する
         try:
             await message.add_reaction(emoji)
-        except (discord.HTTPException, discord.InvalidArgument):
+        except (discord.HTTPException, TypeError, ValueError):
             await interaction.followup.send("無効な絵文字です。Discord上で使用できる絵文字を指定してください。", ephemeral=True)
             return
 
