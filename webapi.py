@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 import os
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi import Request
-from lib.miq import MakeItQuote  # 追加
 
 load_dotenv()
 
@@ -27,8 +26,7 @@ PORT: Final[int] = 8000
 PATHS: Final[dict] = {
     "db": Path(__file__).parent / "data/server_board.db",
     "user_count": Path(__file__).parent / "data/user_count.json",
-    "public": Path(__file__).parent / "public",
-    "quotes": Path(__file__).parent / "data/quotes"  # 追加
+    "public": Path(__file__).parent / "public"
 }
 
 TIME_UNITS: Final[Dict[str, int]] = {
@@ -201,13 +199,11 @@ class ServerBoardAPI:
         self.db = DatabaseManager(PATHS["db"])
         self.user_count = UserCountManager(PATHS["user_count"])
         self.time_calc = TimeCalculator()
-        self.quote_generator = MakeItQuote()  # 追加
         self._setup_middleware()
         self._setup_routes()
         logger.info("Database path: %s", PATHS['db'])
         logger.info("User count file path: %s", PATHS['user_count'])
         logger.info("Public directory path: %s", PATHS['public'])
-        logger.info("Quotes directory path: %s", PATHS['quotes'])  # 追加
 
     def _setup_middleware(self) -> None:
         """ミドルウェアの設定"""
@@ -226,7 +222,6 @@ class ServerBoardAPI:
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
         self.app.delete("/admin/requests/{user_id}/{message}/{date}")(self.delete_request)
-        self.app.post("/api/quote")(self.create_quote)  # 追加
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
@@ -333,21 +328,6 @@ class ServerBoardAPI:
                 status_code=500,
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
-
-    async def create_quote(self, request: Request) -> FileResponse:
-        """クオート画像を生成するエンドポイント"""
-        data = await request.json()
-        quote = data.get("quote")
-        author = data.get("author")
-        style = data.get("style", "modern")
-
-        if not quote:
-            raise HTTPException(status_code=400, detail="クオートが必要です")
-
-        output_path = PATHS["quotes"] / f"{datetime.now().timestamp()}.png"
-        self.quote_generator.save_quote(quote, output_path, author=author, style=style)
-
-        return FileResponse(output_path, media_type="image/png")
 
     def basic_auth(self, credentials: HTTPBasicCredentials = Depends(security)) -> None:
         """Basic認証の検証"""
