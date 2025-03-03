@@ -28,7 +28,7 @@ class Minecraft(commands.Cog):
                 return True, remaining
         return False, None
 
-    @app_commands.command(name='minecraft', description='Get the status of a Minecraft server')
+    @app_commands.command(name="minecraft", description="Get the status of a Minecraft server")
     async def minecraft(self, interaction: discord.Interaction, address: str):
         # レート制限のチェック
         is_limited, remaining = self._check_rate_limit(interaction.user.id)
@@ -40,8 +40,8 @@ class Minecraft(commands.Cog):
             return
 
         await interaction.response.defer(thinking=True)
-        url = f'https://api.mcsrvstat.us/3/{address}'
-        icon_url = f'https://api.mcsrvstat.us/icon/{address}'
+        url = f"https://api.mcsrvstat.us/3/{address}"
+        icon_url = f"https://api.mcsrvstat.us/icon/{address}"
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
@@ -55,22 +55,22 @@ class Minecraft(commands.Cog):
                     data = await response.json()
                     logger.debug("Response data: %s", data)
 
-                    if data['online']:
+                    if data["online"]:
                         embed = discord.Embed(title=f"Server Status for {address}", color=discord.Color.green())
                         embed.set_thumbnail(url=icon_url)
-                        embed.add_field(name="IP", value=data.get('ip', 'N/A'), inline=False)
-                        embed.add_field(name="Port", value=data.get('port', 'N/A'), inline=False)
-                        embed.add_field(name="Version", value=data.get('version', 'N/A'), inline=False)
-                        embed.add_field(name="Players Online", value=f"{data['players']['online']}/{data['players']['max']}", inline=False)
-                        if 'hostname' in data:
-                            embed.add_field(name="Hostname", value=data['hostname'], inline=False)
-                        if 'motd' in data:
-                            embed.add_field(name="MOTD", value="\n".join(data['motd']['clean']), inline=False)
-                        if 'plugins' in data:
-                            plugins = ", ".join([plugin['name'] for plugin in data['plugins']])
+                        embed.add_field(name="IP", value=data.get("ip", "N/A"), inline=False)
+                        embed.add_field(name="Port", value=data.get("port", "N/A"), inline=False)
+                        embed.add_field(name="Version", value=data.get("version", "N/A"), inline=False)
+                        embed.add_field(name="Players Online", value=f"{data["players"]["online"]}/{data["players"]["max"]}", inline=False)
+                        if "hostname" in data:
+                            embed.add_field(name="Hostname", value=data["hostname"], inline=False)
+                        if "motd" in data:
+                            embed.add_field(name="MOTD", value="\n".join(data["motd"]["clean"]), inline=False)
+                        if "plugins" in data:
+                            plugins = ", ".join([plugin["name"] for plugin in data["plugins"]])
                             embed.add_field(name="Plugins", value=plugins, inline=False)
-                        if 'mods' in data:
-                            mods = ", ".join([mod['name'] for mod in data['mods']])
+                        if "mods" in data:
+                            mods = ", ".join([mod["name"] for mod in data["mods"]])
                             embed.add_field(name="Mods", value=mods, inline=False)
                     else:
                         embed = discord.Embed(title=f"Server Status for {address}", color=discord.Color.red())

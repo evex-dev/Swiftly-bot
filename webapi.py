@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(levelname)s:     %(message)s')
+formatter = logging.Formatter("%(levelname)s:     %(message)s")
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
@@ -314,7 +314,7 @@ class ServerBoardAPI:
         """リクエストを削除するエンドポイント"""
         self.basic_auth(credentials)
         try:
-            conn = sqlite3.connect('data/request.db')
+            conn = sqlite3.connect('data/request.db")
             c = conn.cursor()
             logger.info(f"Deleting request with user_id={user_id}, message={message}, date={date}")
             c.execute("DELETE FROM requests WHERE user_id = ? AND message = ? AND date = ?", (user_id, message, date))

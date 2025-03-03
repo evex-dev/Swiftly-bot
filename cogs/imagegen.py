@@ -49,8 +49,8 @@ class ImageGen(commands.Cog):
 
         # 不適切な文字や文字列のチェック
         invalid_patterns = [
-            r'[<>{}[\]\\]',  # 特殊文字
-            r'(?:https?://|www\.)\S+'  # URL
+            r"[<>{}[\]\\]",  # 特殊文字
+            r"(?:https?://|www\.)\S+"  # URL
         ]
 
         for pattern in invalid_patterns:
