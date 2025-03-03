@@ -61,12 +61,12 @@ class Yen5000(commands.Cog):
 
         except aiohttp.ClientError as e:
             await interaction.followup.send(
-                f"{ERROR_MESSAGE} (Error: {str(e)})",
+                f"{ERROR_MESSAGE} (Error: {e})",
                 ephemeral=True
             )
         except Exception as e:
             await interaction.followup.send(
-                f"予期せぬエラーが発生しました。(Error: {str(e)})",
+                f"予期せぬエラーが発生しました。(Error: {e})",
                 ephemeral=True
             )
 

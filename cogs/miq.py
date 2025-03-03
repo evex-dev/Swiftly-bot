@@ -68,7 +68,7 @@ class MakeItQuoteCog(commands.Cog):
 
         except Exception as e:
             logger.error("Error in make_it_quote command: %s", e, exc_info=True)
-            await ctx.send(f"エラーが発生しました: {str(e)}")
+            await ctx.send(f"エラーが発生しました: {e}")
 
 
 async def setup(bot: commands.Bot) -> None:
