@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,8 +12,6 @@ import json
 import uvicorn
 from dotenv import load_dotenv
 import os
-from fastapi.responses import HTMLResponse, FileResponse
-from fastapi import Request
 
 load_dotenv()
 
@@ -314,9 +312,9 @@ class ServerBoardAPI:
         """リクエストを削除するエンドポイント"""
         self.basic_auth(credentials)
         try:
-            conn = sqlite3.connect('data/request.db")
+            conn = sqlite3.connect("data/request.db")
             c = conn.cursor()
-            logger.info(f"Deleting request with user_id={user_id}, message={message}, date={date}")
+            logger.info("Deleting request with user_id=%s, message=%s, date=%s", user_id, message, date)
             c.execute("DELETE FROM requests WHERE user_id = ? AND message = ? AND date = ?", (user_id, message, date))
             conn.commit()
             conn.close()
