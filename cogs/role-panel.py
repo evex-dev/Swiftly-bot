@@ -46,7 +46,7 @@ class RolePanel(commands.Cog):
             channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
             return await channel.fetch_message(message_id)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
-            logger.error(f"Failed to fetch message: {e}")
+            logger.error("Failed to fetch message: %s", e)
             return None
 
     role_panel_group = app_commands.Group(name="role-panel", description="ロールパネル関連のコマンド")
@@ -370,7 +370,7 @@ class RolePanel(commands.Cog):
             try:
                 member = await guild.fetch_member(payload.user_id)
             except discord.HTTPException as e:
-                logger.error(f"Failed to fetch member: {e}")
+                logger.error("Failed to fetch member: %s", e)
                 return
 
         role = guild.get_role(role_id)
@@ -381,7 +381,7 @@ class RolePanel(commands.Cog):
         try:
             await member.add_roles(role, reason="ロールパネルからの自動ロール付与")
         except discord.HTTPException as e:
-            logger.error(f"Failed to add role: {e}")
+            logger.error("Failed to add role: %s", e)
             return
 
         # DMでフィードバックを送る (任意)
@@ -421,7 +421,7 @@ class RolePanel(commands.Cog):
             try:
                 member = await guild.fetch_member(payload.user_id)
             except discord.HTTPException as e:
-                logger.error(f"Failed to fetch member: {e}")
+                logger.error("Failed to fetch member: %s", e)
                 return
 
         role = guild.get_role(role_id)
@@ -432,7 +432,7 @@ class RolePanel(commands.Cog):
         try:
             await member.remove_roles(role, reason="ロールパネルからの自動ロール削除")
         except discord.HTTPException as e:
-            logger.error(f"Failed to remove role: {e}")
+            logger.error("Failed to remove role: %s", e)
             return
 
         # DMでフィードバックを送る (任意)
