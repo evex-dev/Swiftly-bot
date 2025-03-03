@@ -12,8 +12,9 @@ import json
 import uvicorn
 from dotenv import load_dotenv
 import os
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi import Request
+from lib.miq import MakeItQuote  # 追加
 
 load_dotenv()
 
@@ -26,7 +27,8 @@ PORT: Final[int] = 8000
 PATHS: Final[dict] = {
     "db": Path(__file__).parent / "data/server_board.db",
     "user_count": Path(__file__).parent / "data/user_count.json",
-    "public": Path(__file__).parent / "public"
+    "public": Path(__file__).parent / "public",
+    "quotes": Path(__file__).parent / "data/quotes"  # 追加
 }
 
 TIME_UNITS: Final[Dict[str, int]] = {
@@ -199,11 +201,13 @@ class ServerBoardAPI:
         self.db = DatabaseManager(PATHS["db"])
         self.user_count = UserCountManager(PATHS["user_count"])
         self.time_calc = TimeCalculator()
+        self.quote_generator = MakeItQuote()  # 追加
         self._setup_middleware()
         self._setup_routes()
         logger.info("Database path: %s", PATHS['db'])
         logger.info("User count file path: %s", PATHS['user_count'])
         logger.info("Public directory path: %s", PATHS['public'])
+        logger.info("Quotes directory path: %s", PATHS['quotes'])  # 追加
 
     def _setup_middleware(self) -> None:
         """ミドルウェアの設定"""
@@ -222,7 +226,7 @@ class ServerBoardAPI:
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
         self.app.delete("/admin/requests/{user_id}/{message}/{date}")(self.delete_request)
-        self.app.get("/admin/ui", response_class=HTMLResponse)(self.admin_ui)
+        self.app.post("/api/quote")(self.create_quote)  # 追加
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
@@ -330,75 +334,20 @@ class ServerBoardAPI:
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
 
-    async def admin_ui(self, request: Request, credentials: HTTPBasicCredentials = Depends(security)) -> HTMLResponse:
-        self.basic_auth(credentials)
-        csrf_token = request.cookies.get("csrf_token")
-        html_content = f'''
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Admin Requests</title>
-        </head>
-        <body>
-            <h1>リクエスト一覧</h1>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>リクエスト内容</th>
-                        <th>日時</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- リクエストデータをここに挿入 -->
-                </tbody>
-            </table>
-            <script>
-                async function fetchRequests() {{
-                    const response = await fetch('/admin/requests', {{
-                        headers: {{
-                            'Authorization': 'Basic ' + btoa('{credentials.username}:{credentials.password}'),
-                            'X-CSRF-Token': '{csrf_token}'
-                        }}
-                    }});
-                    const requests = await response.json();
-                    const tbody = document.querySelector('tbody');
-                    requests.forEach(request => {{
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${{request.user_id}}</td>
-                            <td>${{request.message}}</td>
-                            <td>${{request.date}}</td>
-                            <td><button onclick="deleteRequest(${{request.user_id}}, '${{request.message}}', '${{request.date}}')">解決</button></td>
-                        `;
-                        tbody.appendChild(row);
-                    }});
-                }}
+    async def create_quote(self, request: Request) -> FileResponse:
+        """クオート画像を生成するエンドポイント"""
+        data = await request.json()
+        quote = data.get("quote")
+        author = data.get("author")
+        style = data.get("style", "modern")
 
-                async function deleteRequest(userId, message, date) {{
-                    const response = await fetch(`/admin/requests/${{userId}}/${{encodeURIComponent(message)}}/${{date}}`, {{
-                        method: 'DELETE',
-                        headers: {{
-                            'Authorization': 'Basic ' + btoa('{credentials.username}:{credentials.password}'),
-                            'X-CSRF-Token': '{csrf_token}'
-                        }}
-                    }});
-                    if (response.ok) {{
-                        location.reload();
-                    }} else {{
-                        alert('リクエストの削除に失敗しました');
-                    }}
-                }}
+        if not quote:
+            raise HTTPException(status_code=400, detail="クオートが必要です")
 
-                fetchRequests();
-            </script>
-        </body>
-        </html>
-        '''
-        return HTMLResponse(content=html_content)
+        output_path = PATHS["quotes"] / f"{datetime.now().timestamp()}.png"
+        self.quote_generator.save_quote(quote, output_path, author=author, style=style)
+
+        return FileResponse(output_path, media_type="image/png")
 
     def basic_auth(self, credentials: HTTPBasicCredentials = Depends(security)) -> None:
         """Basic認証の検証"""
