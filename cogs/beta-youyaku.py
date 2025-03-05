@@ -1,13 +1,13 @@
 import discord
 from discord.ext import commands
-from transformers import pipeline, PipelineException
+from transformers import pipeline
 
 class BetaYouyaku(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         try:
             self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-        except PipelineException as e:
+        except Exception as e:
             self.summarizer = None
             print(f"Error loading summarizer model: {str(e)}")
 
