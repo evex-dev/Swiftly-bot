@@ -79,6 +79,7 @@ class RolePanel(commands.Cog):
             "title": title,
             "description": description,
             "channel_id": interaction.channel_id,
+            "guild_id": interaction.guild_id,
             "roles": {}
         }
         self._save_panels()
@@ -114,6 +115,10 @@ class RolePanel(commands.Cog):
 
         if panel_id not in self.panels:
             await interaction.response.send_message(f"ID: `{panel_id}` のパネルが見つかりません。\nパネル一覧は `/role-panel list` で確認してください。", ephemeral=True)
+            return
+
+        if interaction.guild_id != self.panels[panel_id]["guild_id"]:
+            await interaction.response.send_message("このパネルは他のサーバーに属しています。", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -181,6 +186,10 @@ class RolePanel(commands.Cog):
             await interaction.response.send_message(f"ID: `{panel_id}` のパネルが見つかりません。\nパネル一覧は `/role-panel list` で確認してください。", ephemeral=True)
             return
 
+        if interaction.guild_id != self.panels[panel_id]["guild_id"]:
+            await interaction.response.send_message("このパネルは他のサーバーに属しています。", ephemeral=True)
+            return
+
         panel_data = self.panels[panel_id]
         if emoji not in panel_data["roles"]:
             await interaction.response.send_message(f"絵文字 {emoji} はパネル内に見つかりません。", ephemeral=True)
@@ -241,6 +250,10 @@ class RolePanel(commands.Cog):
             await interaction.response.send_message(f"ID: `{panel_id}` のパネルが見つかりません。\nパネル一覧は `/role-panel list` で確認してください。", ephemeral=True)
             return
 
+        if interaction.guild_id != self.panels[panel_id]["guild_id"]:
+            await interaction.response.send_message("このパネルは他のサーバーに属しています。", ephemeral=True)
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         # メッセージを削除
@@ -273,6 +286,9 @@ class RolePanel(commands.Cog):
         )
 
         for panel_id, panel_data in self.panels.items():
+            if interaction.guild_id != panel_data["guild_id"]:
+                continue
+
             channel = self.bot.get_channel(panel_data["channel_id"])
             channel_mention = f"<# {panel_data['channel_id']}>" if channel else f"ID: {panel_data['channel_id']}"
 
@@ -299,6 +315,10 @@ class RolePanel(commands.Cog):
 
         if panel_id not in self.panels:
             await interaction.response.send_message(f"ID: `{panel_id}` のパネルが見つかりません。\nパネル一覧は `/role-panel list` で確認してください。", ephemeral=True)
+            return
+
+        if interaction.guild_id != self.panels[panel_id]["guild_id"]:
+            await interaction.response.send_message("このパネルは他のサーバーに属しています。", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
