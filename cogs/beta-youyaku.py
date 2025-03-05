@@ -11,7 +11,7 @@ class BetaYouyaku(commands.Cog):
     async def beta_youyaku(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         await interaction.response.defer(thinking=True)
         try:
-            messages = await channel.history(limit=100).flatten()
+            messages = [message async for message in channel.history(limit=100)]
             text = "\n".join([message.content for message in messages if message.content])
             summary = self.summarizer(text, max_length=130, min_length=30, do_sample=False)
             await interaction.followup.send(summary[0]['summary_text'], ephemeral=True)
