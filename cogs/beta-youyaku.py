@@ -17,13 +17,33 @@ class BetaYouyaku(commands.Cog):
         if not self.summarizer:
             await interaction.response.send_message("サマライザーモデルの読み込みに失敗しました。管理者に連絡してください。", ephemeral=True)
             return
+        if not channel.permissions_for(interaction.guild.me).read_message_history:
+            await interaction.response.send_message("メッセージ履歴を読む権限がありません。", ephemeral=True)
+            return
         await interaction.response.defer(thinking=True)
         try:
-            messages = []
-            async for message in channel.history(limit=100):
-                if message.content:
-                    messages.append(message.content)
-            text = "\n".join(messages)
+            # メッセージの取得を修正
+            messages = [
+                message async for message in channel.history(limit=100)
+            ]
+            
+            # メッセージ内容を抽出
+            message_contents = [
+                message.content
+                for message in messages
+                if message.content and len(message.content.strip()) > 0
+            ]
+            
+            if not message_contents:
+                await interaction.followup.send("要約するメッセージが見つかりませんでした。", ephemeral=True)
+                return
+            
+            # スペースを使用してメッセージを結合（改行よりも要約モデルに適している）
+            text = " ".join(message_contents)
+            
+            # デバッグ情報を追加（長さを確認用）
+            print(f"Messages found: {len(message_contents)}, Total text length: {len(text)}")
+            
             summary = self.summarizer(text, max_length=130, min_length=30, do_sample=False)
             await interaction.followup.send(summary[0]['summary_text'], ephemeral=True)
         except Exception as e:
