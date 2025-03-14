@@ -136,16 +136,14 @@ class VoiceState:
         def after_playing(error: Optional[Exception]) -> None:
             if error:
                 logger.error("Error playing audio: %s", error, exc_info=True)
-
-            # 次のメッセージを再生
-            if (guild_id in self.tts_queues and
-                channel_id in self.tts_queues[guild_id] and
-                self.tts_queues[guild_id][channel_id]):
-                next_message = self.tts_queues[guild_id][channel_id].pop(0)
-                asyncio.run_coroutine_threadsafe(
-                    self.play_tts(guild_id, channel_id, next_message),
-                    voice_client.loop
-                )
+            async def play_next():
+                # 接続状態を確認し、排他制御のもとで次のメッセージがあれば再生
+                if voice_client.is_connected():
+                    async with self.get_lock(guild_id):
+                        if self.tts_queues.get(guild_id, {}).get(channel_id, []):
+                            next_message = self.tts_queues[guild_id][channel_id].pop(0)
+                            await self.play_tts(guild_id, channel_id, next_message)
+            asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
 
         voice_client.play(
             discord.FFmpegPCMAudio(
