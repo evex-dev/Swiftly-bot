@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import tempfile
+import uuid
 from typing import Final, Optional, Dict, List
 import logging
 from pathlib import Path
@@ -10,7 +11,6 @@ from datetime import datetime, timedelta
 import edge_tts
 import discord
 from discord.ext import commands
-
 
 VOICE: Final[str] = "ja-JP-NanamiNeural"
 MAX_MESSAGE_LENGTH: Final[int] = 75
@@ -49,7 +49,7 @@ class TTSManager:
 
     def cleanup_temp_files(self) -> None:
         """一時ファイルを削除"""
-        for file in self.temp_files:
+        for file in self.temp_files.copy():
             if os.path.exists(file):
                 try:
                     os.remove(file)
@@ -59,10 +59,13 @@ class TTSManager:
 
     async def generate_audio(
         self,
-        message: str
+        message: str,
+        guild_id: int
     ) -> Optional[str]:
         try:
-            temp_file = TEMP_DIR / f"{hash(message)}.mp3"
+            # guild_idとuuidをファイル名に含める
+            unique_id = uuid.uuid4().hex
+            temp_file = TEMP_DIR / f"{guild_id}_{unique_id}.mp3"
             temp_path = str(temp_file)
             self.temp_files.append(temp_path)
 
@@ -86,7 +89,6 @@ class MessageProcessor:
 
     @staticmethod
     def limit_message(message: str) -> str:
-        """メッセージを制限長に収める"""
         if len(message) > MAX_MESSAGE_LENGTH:
             return message[:MAX_MESSAGE_LENGTH] + "省略"
         return message
@@ -98,38 +100,37 @@ class MessageProcessor:
     ) -> str:
         result = MessageProcessor.sanitize_message(message)
         result = MessageProcessor.limit_message(result)
-
         if attachments:
-            image_count = len(attachments)
-            result += f" {image_count}枚の画像"
-
+            result += f" {len(attachments)}枚の画像"
         return result
 
+class GuildTTS:
+    """Guildごとの音声再生状態を管理するクラス"""
+
+    def __init__(self, channel_id: int, voice_client: discord.VoiceClient) -> None:
+        self.channel_id = channel_id
+        self.voice_client = voice_client
+        self.tts_queue: List[str] = []
+        self.lock = asyncio.Lock()
+
 class VoiceState:
-    """ボイスの状態を管理するクラス"""
+    """複数ギルド・複数チャンネルに対応した状態管理クラス"""
 
     def __init__(self) -> None:
-        self.voice_clients: Dict[int, Dict[int, discord.VoiceClient]] = {}
-        self.monitored_channels: Dict[int, int] = {}
-        self.tts_queues: Dict[int, Dict[int, List[str]]] = {}
-        self.locks: Dict[int, asyncio.Lock] = {}
+        self.guilds: Dict[int, GuildTTS] = {}
         self.tts_manager = TTSManager()
-
-    def get_lock(self, guild_id: int) -> asyncio.Lock:
-        """ギルドのロックを取得"""
-        if guild_id not in self.locks:
-            self.locks[guild_id] = asyncio.Lock()
-        return self.locks[guild_id]
 
     async def play_tts(
         self,
         guild_id: int,
-        channel_id: int,
         message: str
     ) -> None:
-        logger.info(f"Playing TTS in guild {guild_id}, channel {channel_id}: {message}")
-        voice_client = self.voice_clients[guild_id][channel_id]
-        temp_path = await self.tts_manager.generate_audio(message)
+        guild_state = self.guilds.get(guild_id)
+        if not guild_state:
+            return
+
+        voice_client = guild_state.voice_client
+        temp_path = await self.tts_manager.generate_audio(message, guild_id)
         if not temp_path:
             return
 
@@ -137,12 +138,11 @@ class VoiceState:
             if error:
                 logger.error("Error playing audio: %s", error, exc_info=True)
             async def play_next():
-                # 接続状態を確認し、排他制御のもとで次のメッセージがあれば再生
                 if voice_client.is_connected():
-                    async with self.get_lock(guild_id):
-                        if self.tts_queues.get(guild_id, {}).get(channel_id, []):
-                            next_message = self.tts_queues[guild_id][channel_id].pop(0)
-                            await self.play_tts(guild_id, channel_id, next_message)
+                    async with guild_state.lock:
+                        if guild_state.tts_queue:
+                            next_message = guild_state.tts_queue.pop(0)
+                            await self.play_tts(guild_id, next_message)
             asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
 
         voice_client.play(
@@ -159,18 +159,17 @@ class Voice(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.state = VoiceState()
-        self._last_uses = {}
+        self._last_uses: Dict[int, datetime] = {}
 
     def _check_rate_limit(
         self,
         user_id: int
     ) -> tuple[bool, Optional[int]]:
-        """レート制限をチェック"""
         now = datetime.now()
         if user_id in self._last_uses:
-            time_diff = now - self._last_uses[user_id]
-            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
-                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
+            diff = now - self._last_uses[user_id]
+            if diff < timedelta(seconds=RATE_LIMIT_SECONDS):
+                remaining = RATE_LIMIT_SECONDS - int(diff.total_seconds())
                 return True, remaining
         return False, None
 
@@ -182,7 +181,6 @@ class Voice(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
-        """ボイスチャンネル参加コマンド"""
         try:
             member = interaction.guild.get_member(interaction.user.id)
             if not member or not member.voice:
@@ -194,12 +192,8 @@ class Voice(commands.Cog):
 
             voice_channel = member.voice.channel
             guild_id = interaction.guild.id
-            channel_id = voice_channel.id
 
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                interaction.user.id
-            )
+            is_limited, remaining = self._check_rate_limit(interaction.user.id)
             if is_limited:
                 await interaction.response.send_message(
                     ERROR_MESSAGES["rate_limit"].format(remaining),
@@ -207,37 +201,19 @@ class Voice(commands.Cog):
                 )
                 return
 
-            # ボイスチャンネルに接続
-            if (guild_id in self.state.voice_clients and
-                channel_id in self.state.voice_clients[guild_id]):
-                await self.state.voice_clients[guild_id][channel_id].move_to(
-                    voice_channel
-                )
+            if guild_id in self.state.guilds:
+                # 既存の場合はチャンネル移動
+                await self.state.guilds[guild_id].voice_client.move_to(voice_channel)
             else:
                 voice_client = await voice_channel.connect()
-                if guild_id not in self.state.voice_clients:
-                    self.state.voice_clients[guild_id] = {}
-                self.state.voice_clients[guild_id][channel_id] = voice_client
+                # ミュート状態に変更
+                await voice_client.guild.change_voice_state(
+                    channel=voice_client.channel,
+                    self_deaf=True
+                )
+                self.state.guilds[guild_id] = GuildTTS(voice_channel.id, voice_client)
 
-            # ボットをミュート
-            voice_client = self.state.voice_clients[guild_id][channel_id]
-            await voice_client.guild.change_voice_state(
-                channel=voice_client.channel,
-                self_deaf=True
-            )
-
-            # チャンネルの監視を開始
-            self.state.monitored_channels[guild_id] = interaction.channel.id
-
-            # TTSキューを初期化
-            if guild_id not in self.state.tts_queues:
-                self.state.tts_queues[guild_id] = {}
-            self.state.tts_queues[guild_id][channel_id] = []
-
-            # レート制限の更新
             self._last_uses[interaction.user.id] = datetime.now()
-
-            # 結果の送信
             await interaction.response.send_message(
                 SUCCESS_MESSAGES["joined"].format(voice_channel.name)
             )
@@ -257,7 +233,6 @@ class Voice(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
-        """ボイスチャンネル退出コマンド"""
         try:
             member = interaction.guild.get_member(interaction.user.id)
             if not member or not member.voice:
@@ -268,20 +243,17 @@ class Voice(commands.Cog):
                 return
 
             guild_id = interaction.guild.id
-            channel_id = member.voice.channel.id
 
-            if (guild_id not in self.state.voice_clients or
-                channel_id not in self.state.voice_clients[guild_id]):
+            if guild_id not in self.state.guilds:
                 await interaction.response.send_message(
                     ERROR_MESSAGES["bot_not_in_voice"],
                     ephemeral=True
                 )
                 return
 
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                interaction.user.id
-            )
+            voice_client = self.state.guilds[guild_id].voice_client
+
+            is_limited, remaining = self._check_rate_limit(interaction.user.id)
             if is_limited:
                 await interaction.response.send_message(
                     ERROR_MESSAGES["rate_limit"].format(remaining),
@@ -289,30 +261,11 @@ class Voice(commands.Cog):
                 )
                 return
 
-            # ボイスチャンネルから切断
-            await self.state.voice_clients[guild_id][channel_id].disconnect()
-            del self.state.voice_clients[guild_id][channel_id]
-            if not self.state.voice_clients[guild_id]:
-                del self.state.voice_clients[guild_id]
-
-            # 監視を停止
-            if guild_id in self.state.monitored_channels:
-                del self.state.monitored_channels[guild_id]
-
-            # TTSキューをクリア
-            if guild_id in self.state.tts_queues:
-                if channel_id in self.state.tts_queues[guild_id]:
-                    del self.state.tts_queues[guild_id][channel_id]
-                if not self.state.tts_queues[guild_id]:
-                    del self.state.tts_queues[guild_id]
-
-            # レート制限の更新
+            await voice_client.disconnect()
+            del self.state.guilds[guild_id]
             self._last_uses[interaction.user.id] = datetime.now()
 
-            # 結果の送信
-            await interaction.response.send_message(
-                SUCCESS_MESSAGES["left"]
-            )
+            await interaction.response.send_message(SUCCESS_MESSAGES["left"])
 
         except Exception as e:
             logger.error("Error in leave command: %s", e, exc_info=True)
@@ -340,20 +293,14 @@ class Voice(commands.Cog):
                 return
 
             guild_id = interaction.guild.id
-            channel_id = member.voice.channel.id
-
-            if (guild_id not in self.state.voice_clients or
-                channel_id not in self.state.voice_clients[guild_id]):
+            if guild_id not in self.state.guilds:
                 await interaction.response.send_message(
                     ERROR_MESSAGES["bot_not_in_voice"],
                     ephemeral=True
                 )
                 return
 
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                interaction.user.id
-            )
+            is_limited, remaining = self._check_rate_limit(interaction.user.id)
             if is_limited:
                 await interaction.response.send_message(
                     ERROR_MESSAGES["rate_limit"].format(remaining),
@@ -361,28 +308,15 @@ class Voice(commands.Cog):
                 )
                 return
 
-            # メッセージを処理
             processed_message = MessageProcessor.process_message(message)
+            guild_state = self.state.guilds[guild_id]
+            async with guild_state.lock:
+                guild_state.tts_queue.append(processed_message)
+                if not guild_state.voice_client.is_playing():
+                    next_message = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(guild_id, next_message)
 
-            async with self.state.get_lock(guild_id):
-                # キューにメッセージを追加
-                self.state.tts_queues[guild_id][channel_id].append(
-                    processed_message
-                )
-
-                # 再生中でなければ再生開始
-                if not self.state.voice_clients[guild_id][channel_id].is_playing():
-                    next_message = self.state.tts_queues[guild_id][channel_id].pop(0)
-                    await self.state.play_tts(
-                        guild_id,
-                        channel_id,
-                        next_message
-                    )
-
-            # レート制限の更新
             self._last_uses[interaction.user.id] = datetime.now()
-
-            # 結果の送信
             await interaction.response.send_message(
                 SUCCESS_MESSAGES["tts_played"].format(processed_message)
             )
@@ -395,127 +329,73 @@ class Voice(commands.Cog):
             )
 
     @commands.Cog.listener()
+    async def on_message(
+        self,
+        message: discord.Message
+    ) -> None:
+        try:
+            if message.author.bot:
+                return
+            guild = message.guild
+            if not guild or guild.id not in self.state.guilds:
+                return
+            processed_message = MessageProcessor.process_message(
+                message.content,
+                message.attachments
+            )
+            guild_state = self.state.guilds[guild.id]
+            async with guild_state.lock:
+                guild_state.tts_queue.append(processed_message)
+                if not guild_state.voice_client.is_playing():
+                    next_message = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(guild.id, next_message)
+
+        except Exception as e:
+            logger.error("Error in message handler: %s", e, exc_info=True)
+
+    @commands.Cog.listener()
     async def on_voice_state_update(
         self,
         member: discord.Member,
         before: discord.VoiceState,
         after: discord.VoiceState
     ) -> None:
-        """ボイスチャンネルの状態変更イベントハンドラ"""
         try:
-            # ボットだけになった場合は切断
-            if voice_client := member.guild.voice_client:
-                if len(voice_client.channel.members) == 1:
-                    await voice_client.disconnect()
-                    return
+            guild = member.guild
+            guild_state = self.state.guilds.get(guild.id)
+            if not guild_state:
+                return
 
-            guild_id = member.guild.id
+            voice_client = guild_state.voice_client
+            # ボットのみになった場合は切断
+            if voice_client and len(voice_client.channel.members) == 1:
+                await voice_client.disconnect()
+                del self.state.guilds[guild.id]
+                return
 
-            # 参加時の処理
+            # 参加・退出時にTTSを再生
             if before.channel is None and after.channel is not None:
-                channel_id = after.channel.id
-                if (guild_id in self.state.voice_clients and
-                    channel_id in self.state.voice_clients[guild_id]):
-                    message = f"{member.display_name}が参加しました。"
-                    processed_message = MessageProcessor.process_message(message)
-
-                    async with self.state.get_lock(guild_id):
-                        self.state.tts_queues[guild_id][channel_id].append(
-                            processed_message
-                        )
-                        if not self.state.voice_clients[guild_id][channel_id].is_playing():
-                            next_message = self.state.tts_queues[guild_id][channel_id].pop(0)
-                            await self.state.play_tts(
-                                guild_id,
-                                channel_id,
-                                next_message
-                            )
-
-            # 退出時の処理
+                msg = f"{member.display_name}が参加しました。"
             elif before.channel is not None and after.channel is None:
-                channel_id = before.channel.id
-                if (guild_id in self.state.voice_clients and
-                    channel_id in self.state.voice_clients[guild_id]):
-                    message = f"{member.display_name}が退出しました。"
-                    processed_message = MessageProcessor.process_message(message)
+                msg = f"{member.display_name}が退出しました。"
+            else:
+                return
 
-                    async with self.state.get_lock(guild_id):
-                        self.state.tts_queues[guild_id][channel_id].append(
-                            processed_message
-                        )
-                        if not self.state.voice_clients[guild_id][channel_id].is_playing():
-                            next_message = self.state.tts_queues[guild_id][channel_id].pop(0)
-                            await self.state.play_tts(
-                                guild_id,
-                                channel_id,
-                                next_message
-                            )
+            processed_message = MessageProcessor.process_message(msg)
+            async with guild_state.lock:
+                guild_state.tts_queue.append(processed_message)
+                if not voice_client.is_playing():
+                    next_message = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(guild.id, next_message)
 
         except Exception as e:
-            logger.error(
-                "Error in voice state update: %s",
-                e,
-                exc_info=True
-            )
-
-    @commands.Cog.listener()
-    async def on_message(
-        self,
-        message: discord.Message
-    ) -> None:
-        """メッセージイベントハンドラ"""
-        try:
-            if message.author.bot:
-                return
-
-            guild_id = message.guild.id
-            if (guild_id not in self.state.monitored_channels or
-                message.channel.id != self.state.monitored_channels[guild_id]):
-                return
-
-            if not message.author.voice:
-                return
-
-            channel_id = message.author.voice.channel.id
-            if (guild_id not in self.state.voice_clients or
-                channel_id not in self.state.voice_clients[guild_id]):
-                return
-
-            processed_message = MessageProcessor.process_message(
-                message.content,
-                message.attachments
-            )
-
-            async with self.state.get_lock(guild_id):
-                self.state.tts_queues[guild_id][channel_id].append(
-                    processed_message
-                )
-                if not self.state.voice_clients[guild_id][channel_id].is_playing():
-                    next_message = self.state.tts_queues[guild_id][channel_id].pop(0)
-                    await self.state.play_tts(
-                        guild_id,
-                        channel_id,
-                        next_message
-                    )
-
-        except Exception as e:
-            logger.error(
-                "Error in message handler: %s",
-                e,
-                exc_info=True
-            )
+            logger.error("Error in voice state update: %s", e, exc_info=True)
 
     async def cog_unload(self) -> None:
-        """Cogのアンロード時の処理"""
-        # 一時ファイルの削除
         self.state.tts_manager.cleanup_temp_files()
-
-        # ボイスクライアントの切断
-        for guild_clients in self.state.voice_clients.values():
-            for client in guild_clients.values():
-                if client.is_connected():
-                    await client.disconnect()
-
+        for guild_state in self.state.guilds.values():
+            if guild_state.voice_client.is_connected():
+                await guild_state.voice_client.disconnect()
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Voice(bot))
