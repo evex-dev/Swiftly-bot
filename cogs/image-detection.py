@@ -11,7 +11,17 @@ class NSFWdetectionImageCog(commands.Cog):
         self.bot = bot
         self.model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection")
         self.processor = ViTImageProcessor.from_pretrained('Falconsai/nsfw_image_detection')
-        self.conn = sqlite3.connect('data/settings.db')
+        self.conn = sqlite3.connect('data/nsfw-settings.db')
+        self.create_table_if_not_exists()
+
+    def create_table_if_not_exists(self):
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                guild_id INTEGER PRIMARY KEY,
+                nsfw_detection_enabled BOOLEAN NOT NULL
+            )
+        ''')
+        self.conn.commit()
 
     def is_nsfw(self, image_bytes):
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
