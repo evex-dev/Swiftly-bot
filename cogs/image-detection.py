@@ -60,20 +60,20 @@ class NSFWdetectionImageCog(commands.Cog):
                         await discord.utils.sleep_until(discord.utils.utcnow() + discord.utils.timedelta(seconds=5))
                         await alert.delete()
 
-    @commands.command(name='sentry')
-    async def sentry(self, ctx, action: str, function: str):
+    @discord.app_commands.command(name='sentry', description="NSFWコンテンツの検出設定を管理します")
+    async def sentry(self, interaction: discord.Interaction, action: str, function: str):
         if function != 'imagedetect':
-            await ctx.send("無効な機能です。")
+            await interaction.response.send_message("無効な機能です。")
             return
 
         if action == 'enable':
-            self.set_nsfw_detection_status(ctx.guild.id, True)
-            await ctx.send("NSFW画像検知が有効になりました。")
+            self.set_nsfw_detection_status(interaction.guild_id, True)
+            await interaction.response.send_message("NSFW画像検知が有効になりました。")
         elif action == 'disable':
-            self.set_nsfw_detection_status(ctx.guild.id, False)
-            await ctx.send("NSFW画像検知が無効になりました。")
+            self.set_nsfw_detection_status(interaction.guild_id, False)
+            await interaction.response.send_message("NSFW画像検知が無効になりました。")
         else:
-            await ctx.send("無効なアクションです。")
+            await interaction.response.send_message("無効なアクションです。")
 
 async def setup(bot):
     await bot.add_cog(NSFWdetectionImageCog(bot))
