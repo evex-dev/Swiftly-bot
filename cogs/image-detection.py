@@ -6,6 +6,7 @@ from transformers import AutoModelForImageClassification, ViTImageProcessor
 import io
 import sqlite3
 from datetime import timedelta
+import logging
 
 class NSFWdetectionImageCog(commands.Cog):
     def __init__(self, bot):
@@ -14,6 +15,10 @@ class NSFWdetectionImageCog(commands.Cog):
         self.processor = ViTImageProcessor.from_pretrained('Falconsai/nsfw_image_detection')
         self.conn = sqlite3.connect('data/nsfw-settings.db')
         self.create_table_if_not_exists()
+
+        # Configure logging
+        logging.basicConfig(filename='log/logs.log', level=logging.INFO, 
+                            format='%(asctime)s:%(levelname)s:%(message)s')
 
     def create_table_if_not_exists(self):
         self.conn.execute('''
@@ -57,10 +62,9 @@ class NSFWdetectionImageCog(commands.Cog):
                     image_bytes = await attachment.read()
                     if self.is_nsfw(image_bytes):
                         await message.add_reaction('🚫')
-                        self.bot.logger.info(f"NSFW image detected and removed in guild {message.guild.id} by user {message.author.id}.")
-                        print(f"NSFW image detected and removed in guild {message.guild.id} by user {message.author.id}.")
+                        logging.info(f"NSFW image detected and removed in guild {message.guild.id} by user {message.author.id}.")
                     else:
-                        print(f"Safe image detected in guild {message.guild.id} by user {message.author.id}.")
+                        logging.info(f"Safe image detected in guild {message.guild.id} by user {message.author.id}.")
 
     @discord.app_commands.command(name='sentry', description="NSFWコンテンツの検出設定を管理します")
     async def sentry(self, interaction: discord.Interaction, action: str, function: str):
