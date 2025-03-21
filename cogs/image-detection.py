@@ -5,6 +5,7 @@ from PIL import Image
 from transformers import AutoModelForImageClassification, ViTImageProcessor
 import io
 import sqlite3
+from datetime import timedelta
 
 class NSFWdetectionImageCog(commands.Cog):
     def __init__(self, bot):
@@ -56,14 +57,10 @@ class NSFWdetectionImageCog(commands.Cog):
                     image_bytes = await attachment.read()
                     if self.is_nsfw(image_bytes):
                         await message.add_reaction('🚫')
-                        alert = await message.channel.send(f"{message.author.mention} NSFW画像が検出されました。\nこのメッセージは5秒後に削除されます。")
-                        await discord.utils.sleep_until(discord.utils.utcnow() + discord.utils.timedelta(seconds=5))
-                        await alert.delete()
-                        await message.delete()
                         self.bot.logger.info(f"NSFW image detected and removed in guild {message.guild.id} by user {message.author.id}.")
+                        print(f"NSFW image detected and removed in guild {message.guild.id} by user {message.author.id}.")
                     else:
-                        await message.add_reaction('✅')
-                        self.bot.logger.info(f"Safe image detected in guild {message.guild.id} by user {message.author.id}.")
+                        print(f"Safe image detected in guild {message.guild.id} by user {message.author.id}.")
 
     @discord.app_commands.command(name='sentry', description="NSFWコンテンツの検出設定を管理します")
     async def sentry(self, interaction: discord.Interaction, action: str, function: str):
