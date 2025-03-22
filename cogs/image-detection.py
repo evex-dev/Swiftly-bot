@@ -63,8 +63,8 @@ class NSFWdetectionImageCog(commands.Cog):
                     if self.is_nsfw(image_bytes):
                         await message.add_reaction('🚫')
                         logging.info(f"NSFW image detected and removed in guild {message.guild.id} by user {message.author.id}.")
-                    else:
-                        logging.info(f"Safe image detected in guild {message.guild.id} by user {message.author.id}.")
+                        return  # Exit after detecting the first NSFW image
+            logging.info(f"All images are safe in guild {message.guild.id} by user {message.author.id}.")
 
     @discord.app_commands.command(name='sentry', description="NSFWコンテンツの検出設定を管理します")
     async def sentry(self, interaction: discord.Interaction, action: str, function: str):
