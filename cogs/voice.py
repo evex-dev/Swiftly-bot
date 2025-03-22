@@ -19,7 +19,7 @@ VOLUME_LEVEL: Final[float] = 0.6
 TEMP_DIR: Final[Path] = Path(tempfile.gettempdir()) / "voice_tts"
 
 PATTERNS: Final[Dict[str, str]] = {
-    "url": r"http[s]?://\S+",
+    "url": r"http[s]?://[^\s<>]+",
     "user_mention": r"<@!?[0-9]+>",
     "role_mention": r"<@&[0-9]+>",
     "channel_mention": r"<#[0-9]+>"
