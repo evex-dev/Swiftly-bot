@@ -28,5 +28,5 @@ class SpamDetection(commands.Cog):
         embed = discord.Embed(title="Spam Detection", description=f"The message is: {result}", color=discord.Color.blue())
         await interaction.response.send_message(embed=embed)
 
-def setup(bot):
-    bot.add_cog(SpamDetection(bot))
+async def setup(bot):
+    await bot.add_cog(SpamDetection(bot))
