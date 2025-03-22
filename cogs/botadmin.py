@@ -1,6 +1,7 @@
 from typing import Final, List
 from enum import Enum
 import logging
+import sqlite3
 
 import discord
 from discord import app_commands
@@ -30,6 +31,69 @@ class AdminOption(str, Enum):
 
 class PaginationView(View):
     """ページネーション用のカスタムビュー"""
+
+    def __init__(
+        self,
+        embeds: List[discord.Embed],
+        timeout: float = 180.0
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.embeds = embeds
+        self.current_page = 0
+
+        # ボタンの設定
+        self.previous_button = Button(
+            label="前へ",
+            style=discord.ButtonStyle.primary,
+            disabled=True,
+            custom_id="previous_page"
+        )
+        self.next_button = Button(
+            label="次へ",
+            style=discord.ButtonStyle.primary,
+            custom_id="next_page"
+        )
+
+        self.previous_button.callback = self.previous_callback
+        self.next_button.callback = self.next_callback
+
+        self.add_item(self.previous_button)
+        self.add_item(self.next_button)
+
+    async def update_buttons(self) -> None:
+        """ボタンの状態を更新"""
+        self.previous_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page == len(self.embeds) - 1
+
+    async def previous_callback(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """前のページへ移動"""
+        self.current_page = max(0, self.current_page - 1)
+        await self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self
+        )
+
+    async def next_callback(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        """次のページへ移動"""
+        self.current_page = min(
+            len(self.embeds) - 1,
+            self.current_page + 1
+        )
+        await self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self
+        )
+
+class RequestPaginationView(View):
+    """リクエストページネーション用のカスタムビュー"""
 
     def __init__(
         self,
@@ -155,6 +219,40 @@ class BotAdmin(commands.Cog):
             color=EMBED_COLORS["success"]
         )
 
+    async def create_request_embeds(self) -> List[discord.Embed]:
+        conn = sqlite3.connect("data/request.db")
+        c = conn.cursor()
+        c.execute("SELECT user_id, date, message FROM requests ORDER BY date DESC")
+        requests = c.fetchall()
+        conn.close()
+
+        embeds = []
+        current_embed = discord.Embed(
+            title="リクエスト一覧",
+            color=EMBED_COLORS["info"]
+        )
+
+        for i, (user_id, date, message) in enumerate(requests, 1):
+            value = (
+                f"ユーザーID: {user_id}\n"
+                f"日時: {date}\n"
+                f"メッセージ: {message}"
+            )
+            current_embed.add_field(
+                name=f"リクエスト {i}",
+                value=value,
+                inline=False
+            )
+
+            if i % SERVERS_PER_PAGE == 0 or i == len(requests):
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="リクエスト一覧 (続き)",
+                    color=EMBED_COLORS["info"]
+                )
+
+        return embeds
+
     @app_commands.command(
         name="botadmin",
         description="Bot管理コマンド"
@@ -203,6 +301,15 @@ class BotAdmin(commands.Cog):
                 )
                 await interaction.response.send_message(
                     embed=embed,
+                    ephemeral=True
+                )
+
+            elif option == "viewreq":
+                embeds = await self.create_request_embeds()
+                view = RequestPaginationView(embeds)
+                await interaction.response.send_message(
+                    embed=embeds[0],
+                    view=view,
                     ephemeral=True
                 )
 
