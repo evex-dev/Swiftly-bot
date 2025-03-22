@@ -83,8 +83,11 @@ class MessageProcessor:
     @staticmethod
     def sanitize_message(text: str) -> str:
         result = text
-        for pattern in PATTERNS.values():
-            result = re.sub(pattern, "メンション省略", result)
+        for pattern_name, pattern in PATTERNS.items():
+            if pattern_name == "url":
+                result = re.sub(pattern, "URL省略", result)
+            else:
+                result = re.sub(pattern, "メンション省略", result)
         return result
 
     @staticmethod
