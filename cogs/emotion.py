@@ -1,5 +1,3 @@
-# https://github.com/tako0614/emotion-bot/blob/main/bot.py
-# Thanks to the original code developer.
 import discord
 from discord.ext import commands
 import matplotlib.pyplot as plt
@@ -26,19 +24,8 @@ class EmotionCog(commands.Cog):
         if os.path.exists(custom_font_path):
             try:
                 font_prop = fm.FontProperties(fname=custom_font_path)
-                custom_font = fm.FontEntry(
-                    fname=custom_font_path,
-                    name=font_prop.get_name(),
-                    style='normal',
-                    variant='normal',
-                    weight='normal',
-                    stretch='normal',
-                    size='medium'
-                )
-                fm.fontManager.ttflist.insert(0, custom_font)
-                plt.rcParams['font.family'] = 'sans-serif'
-                plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
                 plt.rcParams['font.family'] = font_prop.get_name()
+                plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
             except Exception as e:
                 print(f"カスタムフォントの登録に失敗しました: {e}")
 
@@ -60,7 +47,7 @@ class EmotionCog(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        if message.reference and message.content == "気持ち":
+        if message.reference and message.content == "おきもち":
             referenced_msg = await message.channel.fetch_message(message.reference.message_id)
             if not referenced_msg.content:
                 await message.reply("テキストメッセージにのみ反応できます。")
