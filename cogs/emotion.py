@@ -26,7 +26,7 @@ class EmotionCog(commands.Cog):
                 fm.fontManager.addfont(custom_font_path)
                 font_prop = fm.FontProperties(fname=custom_font_path)
                 plt.rcParams['font.family'] = font_prop.get_name()
-                plt.rcParams['font.sans-serif'] = [font_prop.get_name(), "DejaVu Sans", "Noto Sans CJK JP"]
+                plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
                 mpl.rcParams['pdf.fonttype'] = 42
                 mpl.rcParams['ps.fonttype'] = 42
                 mpl.rcParams['font.family'] = font_prop.get_name()
