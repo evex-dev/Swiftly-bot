@@ -12,11 +12,21 @@ class DepthEstimationCog(commands.Cog):
 
     @commands.command(name='震度推定')
     async def depth_estimation(self, ctx):
-        if not ctx.message.attachments:
+        attachment = None
+
+        # Check if the message has an attachment
+        if ctx.message.attachments:
+            attachment = ctx.message.attachments[0]
+        # Check if the message is a reply and the replied message has an attachment
+        elif ctx.message.reference:
+            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            if replied_message.attachments:
+                attachment = replied_message.attachments[0]
+
+        if not attachment:
             await ctx.send("画像を添付してください。")
             return
 
-        attachment = ctx.message.attachments[0]
         image_data = await attachment.read()
         image = Image.open(io.BytesIO(image_data))
 
