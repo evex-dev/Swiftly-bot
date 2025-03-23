@@ -10,7 +10,7 @@ class DepthEstimationCog(commands.Cog):
         self.bot = bot
         self.pipe = pipeline(task="depth-estimation", model="depth-anything/Depth-Anything-V2-Large-hf")
 
-    @commands.command(name='震度推定')
+    @commands.command(name='深度推定')
     async def depth_estimation(self, ctx):
         attachment = None
 
@@ -38,7 +38,7 @@ class DepthEstimationCog(commands.Cog):
             image = Image.open(buf)
 
         # Send initial message
-        status_message = await ctx.send("震度推定を実行中です...")
+        status_message = await ctx.send("深度推定を実行中です...")
 
         # Perform depth estimation
         depth = self.pipe(image)["depth"]
@@ -56,7 +56,7 @@ class DepthEstimationCog(commands.Cog):
 
         # Send the depth map image
         file = discord.File(buf, filename='depth_estimation.png')
-        await status_message.edit(content="震度推定が完了しました。", attachments=[file])
+        await status_message.edit(content="深度推定が完了しました。", attachments=[file])
 
 # Setup function to add the cog to the bot
 async def setup(bot):
