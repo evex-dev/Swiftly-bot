@@ -120,16 +120,16 @@ class EmotionCog(commands.Cog):
 
         emotion_scores = {k: v for k, v in emotion_scores.items() if k.lower() != 'neutral'}
         emotion_names_ja = {
-            "amaze": "驚き",
-            "anger": "怒り",
-            "dislike": "嫌い",
-            "excite": "興奮",
-            "fear": "怖い",
-            "joy": "嬉しい",
-            "like": "好き",
-            "relief": "安心",
-            "sad": "悲しい",
-            "shame": "恥ずかしい"
+            "amaze": "Amazement",
+            "anger": "Anger",
+            "dislike": "Dislike",
+            "excite": "Excitement",
+            "fear": "Fear",
+            "joy": "Joy",
+            "like": "Like",
+            "relief": "Relief",
+            "sad": "Sadness",
+            "shame": "Shame"
         }
 
         japanese_scores = {emotion_names_ja.get(k, k): v for k, v in emotion_scores.items()}
