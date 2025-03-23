@@ -60,7 +60,7 @@ class EmotionCog(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        if message.reference and message.content == "sw!きもち":
+        if message.reference and message.content == "気持ち":
             referenced_msg = await message.channel.fetch_message(message.reference.message_id)
             if not referenced_msg.content:
                 await message.reply("テキストメッセージにのみ反応できます。")
