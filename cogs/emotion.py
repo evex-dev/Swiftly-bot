@@ -22,7 +22,7 @@ class EmotionCog(commands.Cog):
         self.set_plot_params()
 
     def setup_custom_font(self):
-        custom_font_path = "./assets/fonts/BIZUDPGothic-Regular.ttf"
+        custom_font_path = "./assets/fonts/NotoSansJP-VariableFont_wght.ttf"
         if os.path.exists(custom_font_path):
             try:
                 font_prop = fm.FontProperties(fname=custom_font_path)
