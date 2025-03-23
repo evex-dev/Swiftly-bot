@@ -20,6 +20,16 @@ class DepthEstimationCog(commands.Cog):
         image_data = await attachment.read()
         image = Image.open(io.BytesIO(image_data))
 
+        # Convert image to PNG if necessary
+        if image.format != 'PNG':
+            buf = io.BytesIO()
+            image.save(buf, format='PNG')
+            buf.seek(0)
+            image = Image.open(buf)
+
+        # Send initial message
+        status_message = await ctx.send("震度推定を実行中です...")
+
         # Perform depth estimation
         depth = self.pipe(image)["depth"]
 
@@ -36,7 +46,7 @@ class DepthEstimationCog(commands.Cog):
 
         # Send the depth map image
         file = discord.File(buf, filename='depth_estimation.png')
-        await ctx.send(file=file)
+        await status_message.edit(content="震度推定が完了しました。", attachments=[file])
 
 # Setup function to add the cog to the bot
 async def setup(bot):
