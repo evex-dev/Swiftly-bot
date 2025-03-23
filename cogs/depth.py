@@ -39,5 +39,5 @@ class DepthEstimationCog(commands.Cog):
         await ctx.send(file=file)
 
 # Setup function to add the cog to the bot
-def setup(bot):
-    bot.add_cog(DepthEstimationCog(bot))
+async def setup(bot):
+    await bot.add_cog(DepthEstimationCog(bot))
