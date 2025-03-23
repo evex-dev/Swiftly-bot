@@ -1,3 +1,5 @@
+# https://github.com/tako0614/emotion-bot/blob/main/bot.py
+# Thanks to the original code developer.
 import discord
 from discord.ext import commands
 import matplotlib.pyplot as plt
@@ -197,5 +199,5 @@ class EmotionCog(commands.Cog):
 
         return fig
 
-def setup(bot):
-    bot.add_cog(EmotionCog(bot))
+async def setup(bot):
+    await bot.add_cog(EmotionCog(bot))
