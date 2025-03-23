@@ -146,7 +146,7 @@ class EmotionCog(commands.Cog):
         if num_categories == 1:
             fig, ax = plt.subplots(figsize=(12, 8))
             color = '#5865F2'
-            bar = ax.bar([categories[0]], [values[0]], width=0.5, color=color, alpha=0.9)
+            ax.bar([categories[0]], [values[0]], width=0.5, color=color, alpha=0.9)
             ax.set_ylim(0, 1.1)
             for spine in ax.spines.values():
                 spine.set_color('#ffffff')
@@ -168,10 +168,9 @@ class EmotionCog(commands.Cog):
         ax.set_theta_direction(-1)
 
         colors = [(0.35, 0.4, 0.95, 0.7), (0.45, 0.6, 0.95, 0.8), (0.55, 0.7, 0.95, 0.9)]
-        cmap = LinearSegmentedColormap.from_list('custom_cmap', colors, N=256)
 
         line = ax.plot(angles, values, linewidth=4, linestyle='-', color='#7289DA')[0]
-        ax.fill(angles, values, alpha=0.7, color='#5865F2')
+        ax.plot(angles, values, linewidth=4, linestyle='-', color='#7289DA')
         ax.scatter(angles[:-1], values[:-1], s=180, c='#40E0D0', alpha=1.0, edgecolors='#00BFFF', linewidth=3, zorder=10)
         ax.grid(True, color='white', alpha=0.7, linestyle='-', linewidth=1.5)
         ax.set_xticks(angles[:-1])
