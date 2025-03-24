@@ -87,9 +87,9 @@ class LatencyGraph(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def update_graph(self):
-        # 前回の更新から1時間経過したかチェック
+        # 前回の更新から5分経過したかチェック
         current_time = datetime.datetime.now()
-        if self.last_update is None or (current_time - self.last_update).total_seconds() >= 3600:
+        if self.last_update is None or (current_time - self.last_update).total_seconds() >= 300:
             # レイテンシーデータ更新
             latency = self.bot.latency * 1000  # Convert to milliseconds
             self.latencies.append(latency)
