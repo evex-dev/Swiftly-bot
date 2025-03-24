@@ -50,7 +50,8 @@ class LatencyGraph(commands.Cog):
         draw = ImageDraw.Draw(img)
         font = ImageFont.load_default()
         text = f'Last updated: {last_update}'
-        textwidth, textheight = draw.textsize(text, font)
+        textbbox = draw.textbbox((0, 0), text, font=font)
+        textwidth, textheight = textbbox[2] - textbbox[0], textbbox[3] - textbbox[1]
         width, height = img.size
         x = width - textwidth - 10
         y = height - textheight - 10
