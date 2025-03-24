@@ -23,10 +23,14 @@ class LatencyGraph(commands.Cog):
         self.latencies = [lat for lat, ts in zip(self.latencies, self.timestamps) if ts > one_week_ago]
         self.timestamps = [ts for ts in self.timestamps if ts > one_week_ago]
 
+        # Sort the data by timestamps
+        sorted_data = sorted(zip(self.timestamps, self.latencies))
+        self.timestamps, self.latencies = zip(*sorted_data)
+
         # Plot the graph
         plt.figure(figsize=(10, 5))
         plt.plot(self.timestamps, self.latencies, marker='o')
-        plt.title('Discord Latency Over the Last Week')
+        plt.title('Discord Latency Over the Last Week', color='white')
         plt.xlabel('Time')
         plt.ylabel('Latency (ms)')
         plt.grid(True)
