@@ -148,7 +148,7 @@ class LatencyGraph(commands.Cog):
             
         # データを時間順にソート
         sorted_data = sorted(zip(self.timestamps, self.latencies))
-        self.timestamps, self.latencies = zip(*sorted_data)
+        self.timestamps, self.latencies = map(list, zip(*sorted_data))
 
         # グラフをプロット
         plt.figure(figsize=(10, 5))
