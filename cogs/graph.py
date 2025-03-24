@@ -4,6 +4,7 @@ import datetime
 import os
 
 import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont  # Pillowをインポート
 
 class LatencyGraph(commands.Cog):
     def __init__(self, bot):
@@ -37,16 +38,24 @@ class LatencyGraph(commands.Cog):
         plt.xticks(rotation=45)
         plt.tight_layout()
 
-        # Add the last update time
-        last_update = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        plt.annotate(f'Last updated: {last_update}', xy=(1, 0), xycoords='axes fraction', fontsize=10,
-                     xytext=(-10, 10), textcoords='offset points', ha='right', va='bottom', color='white')
-
         # Save the graph
         if not os.path.exists('public'):
             os.makedirs('public')
         plt.savefig('public/graph.png')
         plt.close()
+
+        # Add the last update time using Pillow
+        last_update = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        img = Image.open('public/graph.png')
+        draw = ImageDraw.Draw(img)
+        font = ImageFont.load_default()
+        text = f'Last updated: {last_update}'
+        textwidth, textheight = draw.textsize(text, font)
+        width, height = img.size
+        x = width - textwidth - 10
+        y = height - textheight - 10
+        draw.text((x, y), text, font=font, fill='white')
+        img.save('public/graph.png')
 
 async def setup(bot):
     await bot.add_cog(LatencyGraph(bot))
