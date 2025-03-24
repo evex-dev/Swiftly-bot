@@ -37,6 +37,11 @@ class LatencyGraph(commands.Cog):
         plt.xticks(rotation=45)
         plt.tight_layout()
 
+        # Add the last update time
+        last_update = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        plt.annotate(f'Last updated: {last_update}', xy=(1, 0), xycoords='axes fraction', fontsize=10,
+                     xytext=(-10, 10), textcoords='offset points', ha='right', va='bottom', color='white')
+
         # Save the graph
         if not os.path.exists('public'):
             os.makedirs('public')
