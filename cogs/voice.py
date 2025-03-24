@@ -115,6 +115,14 @@ class DictionaryManager:
         result = cursor.fetchone()
         return result[0] if result else None
 
+    def list_words(self, limit: int, offset: int) -> List[tuple]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT word, reading FROM dictionary LIMIT ? OFFSET ?",
+            (limit, offset)
+        )
+        return cursor.fetchall()
+
     def close(self) -> None:
         self.conn.close()
 
@@ -238,6 +246,14 @@ class DictionaryManager:
         )
         result = cursor.fetchone()
         return result[0] if result else None
+
+    def list_words(self, limit: int, offset: int) -> List[tuple]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT word, reading FROM dictionary LIMIT ? OFFSET ?",
+            (limit, offset)
+        )
+        return cursor.fetchall()
 
     def close(self) -> None:
         self.conn.close()
@@ -464,6 +480,41 @@ class Voice(commands.Cog):
             await interaction.response.send_message(embed=embed)
         except Exception as e:
             logger.error("Error in dictionary_remove command: %s", e, exc_info=True)
+            embed = discord.Embed(
+                title="エラー",
+                description=ERROR_MESSAGES["unexpected"].format(str(e)),
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.app_commands.command(
+        name="dictionary_list",
+        description="辞書の単語をリストします"
+    )
+    async def dictionary_list(
+        self,
+        interaction: discord.Interaction,
+        page: int = 1
+    ) -> None:
+        try:
+            limit = 10
+            offset = (page - 1) * limit
+            words = self.dictionary.list_words(limit, offset)
+            if not words:
+                await interaction.response.send_message("辞書に単語がありません。", ephemeral=True)
+                return
+
+            embed = discord.Embed(
+                title=f"辞書のリスト (ページ {page})",
+                color=discord.Color.blue()
+            )
+            for word, reading in words:
+                embed.add_field(name=word, value=reading, inline=False)
+
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            logger.error("Error in dictionary_list command: %s", e, exc_info=True)
             embed = discord.Embed(
                 title="エラー",
                 description=ERROR_MESSAGES["unexpected"].format(str(e)),
