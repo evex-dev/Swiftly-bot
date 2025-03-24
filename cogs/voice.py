@@ -7,6 +7,7 @@ from typing import Final, Optional, Dict, List
 import logging
 from pathlib import Path
 from datetime import datetime, timedelta
+import sqlite3
 
 import edge_tts
 import discord
@@ -17,6 +18,7 @@ MAX_MESSAGE_LENGTH: Final[int] = 75
 RATE_LIMIT_SECONDS: Final[int] = 10
 VOLUME_LEVEL: Final[float] = 0.6
 TEMP_DIR: Final[Path] = Path(tempfile.gettempdir()) / "voice_tts"
+DATABASE_PATH: Final[Path] = Path("data/dictionary.db")
 
 PATTERNS: Final[Dict[str, str]] = {
     "url": r"http[s]?://[^\s<>]+",
@@ -77,6 +79,45 @@ class TTSManager:
             logger.error("Error generating audio: %s", e, exc_info=True)
             return None
 
+class DictionaryManager:
+    """辞書管理クラス"""
+
+    def __init__(self) -> None:
+        self.conn = sqlite3.connect(DATABASE_PATH)
+        self._create_table()
+
+    def _create_table(self) -> None:
+        with self.conn:
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS dictionary (word TEXT PRIMARY KEY, reading TEXT)"
+            )
+
+    def add_word(self, word: str, reading: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO dictionary (word, reading) VALUES (?, ?)",
+                (word, reading)
+            )
+
+    def remove_word(self, word: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM dictionary WHERE word = ?",
+                (word,)
+            )
+
+    def get_reading(self, word: str) -> Optional[str]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT reading FROM dictionary WHERE word = ?",
+            (word,)
+        )
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    def close(self) -> None:
+        self.conn.close()
+
 class MessageProcessor:
     """メッセージの処理を行うクラス"""
 
@@ -99,10 +140,16 @@ class MessageProcessor:
     @staticmethod
     def process_message(
         message: str,
-        attachments: List[discord.Attachment] = None
+        attachments: List[discord.Attachment] = None,
+        dictionary: DictionaryManager = None
     ) -> str:
         result = MessageProcessor.sanitize_message(message)
         result = MessageProcessor.limit_message(result)
+        if dictionary:
+            for word in result.split():
+                reading = dictionary.get_reading(word)
+                if reading:
+                    result = result.replace(word, reading)
         if attachments:
             result += f" {len(attachments)}枚の画像"
         return result
@@ -156,6 +203,45 @@ class VoiceState:
             after=after_playing
         )
 
+class DictionaryManager:
+    """辞書管理クラス"""
+
+    def __init__(self) -> None:
+        self.conn = sqlite3.connect(DATABASE_PATH)
+        self._create_table()
+
+    def _create_table(self) -> None:
+        with self.conn:
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS dictionary (word TEXT PRIMARY KEY, reading TEXT)"
+            )
+
+    def add_word(self, word: str, reading: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO dictionary (word, reading) VALUES (?, ?)",
+                (word, reading)
+            )
+
+    def remove_word(self, word: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM dictionary WHERE word = ?",
+                (word,)
+            )
+
+    def get_reading(self, word: str) -> Optional[str]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT reading FROM dictionary WHERE word = ?",
+            (word,)
+        )
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    def close(self) -> None:
+        self.conn.close()
+
 class Voice(commands.Cog):
     """音声機能を提供"""
 
@@ -163,6 +249,7 @@ class Voice(commands.Cog):
         self.bot = bot
         self.state = VoiceState()
         self._last_uses: Dict[int, datetime] = {}
+        self.dictionary = DictionaryManager()
 
     def _check_rate_limit(
         self,
@@ -311,7 +398,7 @@ class Voice(commands.Cog):
                 )
                 return
 
-            processed_message = MessageProcessor.process_message(message)
+            processed_message = MessageProcessor.process_message(message, dictionary=self.dictionary)
             guild_state = self.state.guilds[guild_id]
             async with guild_state.lock:
                 guild_state.tts_queue.append(processed_message)
@@ -331,6 +418,59 @@ class Voice(commands.Cog):
                 ephemeral=True
             )
 
+    @discord.app_commands.command(
+        name="dictionary_add",
+        description="辞書に単語を追加します"
+    )
+    async def dictionary_add(
+        self,
+        interaction: discord.Interaction,
+        word: str,
+        reading: str
+    ) -> None:
+        try:
+            self.dictionary.add_word(word, reading)
+            embed = discord.Embed(
+                title="辞書に追加しました",
+                description=f"✅ {word} -> {reading}",
+                color=discord.Color.green()
+            )
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            logger.error("Error in dictionary_add command: %s", e, exc_info=True)
+            embed = discord.Embed(
+                title="エラー",
+                description=ERROR_MESSAGES["unexpected"].format(str(e)),
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.app_commands.command(
+        name="dictionary_remove",
+        description="辞書から単語を削除します"
+    )
+    async def dictionary_remove(
+        self,
+        interaction: discord.Interaction,
+        word: str
+    ) -> None:
+        try:
+            self.dictionary.remove_word(word)
+            embed = discord.Embed(
+                title="辞書から削除しました",
+                description=f"✅ {word}",
+                color=discord.Color.green()
+            )
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            logger.error("Error in dictionary_remove command: %s", e, exc_info=True)
+            embed = discord.Embed(
+                title="エラー",
+                description=ERROR_MESSAGES["unexpected"].format(str(e)),
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @commands.Cog.listener()
     async def on_message(
         self,
@@ -344,7 +484,8 @@ class Voice(commands.Cog):
                 return
             processed_message = MessageProcessor.process_message(
                 message.content,
-                message.attachments
+                message.attachments,
+                self.dictionary
             )
             guild_state = self.state.guilds[guild.id]
             async with guild_state.lock:
@@ -384,7 +525,7 @@ class Voice(commands.Cog):
             else:
                 return
 
-            processed_message = MessageProcessor.process_message(msg)
+            processed_message = MessageProcessor.process_message(msg, dictionary=self.dictionary)
             async with guild_state.lock:
                 guild_state.tts_queue.append(processed_message)
                 if not voice_client.is_playing():
@@ -399,6 +540,7 @@ class Voice(commands.Cog):
         for guild_state in self.state.guilds.values():
             if guild_state.voice_client.is_connected():
                 await guild_state.voice_client.disconnect()
+        self.dictionary.close()
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Voice(bot))
