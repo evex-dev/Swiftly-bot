@@ -165,9 +165,10 @@ class MessageProcessor:
 class GuildTTS:
     """Guildごとの音声再生状態を管理するクラス"""
 
-    def __init__(self, channel_id: int, voice_client: discord.VoiceClient) -> None:
+    def __init__(self, channel_id: int, voice_client: discord.VoiceClient, text_channel_id: int) -> None:
         self.channel_id = channel_id
         self.voice_client = voice_client
+        self.text_channel_id = text_channel_id    # 追加: /joinが実行されたテキストチャンネルID
         self.tts_queue: List[str] = []
         self.lock = asyncio.Lock()
 
@@ -308,8 +309,9 @@ class Voice(commands.Cog):
                 return
 
             if guild_id in self.state.guilds:
-                # 既存の場合はチャンネル移動
+                # 既存の場合はチャンネル移動とテキストチャンネル更新
                 await self.state.guilds[guild_id].voice_client.move_to(voice_channel)
+                self.state.guilds[guild_id].text_channel_id = interaction.channel.id  # 更新
             else:
                 voice_client = await voice_channel.connect()
                 # ミュート状態に変更
@@ -317,8 +319,7 @@ class Voice(commands.Cog):
                     channel=voice_client.channel,
                     self_deaf=True
                 )
-                self.state.guilds[guild_id] = GuildTTS(voice_channel.id, voice_client)
-
+                self.state.guilds[guild_id] = GuildTTS(voice_channel.id, voice_client, interaction.channel.id)
             self._last_uses[interaction.user.id] = datetime.now()
             await interaction.response.send_message(
                 SUCCESS_MESSAGES["joined"].format(voice_channel.name)
@@ -533,12 +534,15 @@ class Voice(commands.Cog):
             guild = message.guild
             if not guild or guild.id not in self.state.guilds:
                 return
+            guild_state = self.state.guilds[guild.id]
+            # 追加: /joinで指定されたテキストチャンネル以外は処理しない
+            if message.channel.id != guild_state.text_channel_id:
+                return
             processed_message = MessageProcessor.process_message(
                 message.content,
                 message.attachments,
                 self.dictionary
             )
-            guild_state = self.state.guilds[guild.id]
             async with guild_state.lock:
                 guild_state.tts_queue.append(processed_message)
                 if not guild_state.voice_client.is_playing():
