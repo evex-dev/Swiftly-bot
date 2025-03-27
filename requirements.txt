@@ -24,3 +24,4 @@ protobuf
 fugashi
 unidic-lite
 sentencepiece
+prometheus_client

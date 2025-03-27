@@ -17,6 +17,7 @@ import discord
 import dotenv
 from discord.ext import commands
 from module.logger import LoggingCog
+from module.prometheus import PrometheusCog
 
 
 SHARD_COUNT: Final[int] = None
@@ -270,6 +271,7 @@ class SwiftlyBot(commands.AutoShardedBot):
         logger.info("Started watching cogs directory for changes")
 
         await self.add_cog(LoggingCog(self))  # LoggingCogを追加
+        await self.add_cog(PrometheusCog(self))
         await self.tree.sync()
 
     async def _load_extensions(self) -> None:
