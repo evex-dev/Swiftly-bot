@@ -34,7 +34,7 @@ class PrometheusCog(commands.Cog):
         self._unique_users_set = set()
 
         # Start Prometheus HTTP server on port 8000
-        start_http_server(8000)
+        start_http_server(8491)
 
         # Task to update gauges periodically
         self.update_gauges.start()
