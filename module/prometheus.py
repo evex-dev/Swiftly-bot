@@ -39,8 +39,7 @@ class PrometheusCog(commands.Cog):
         )
         self.vc_join_count = Counter(
             'discord_bot_vc_joins_total',
-            'Total number of voice channel joins',
-            ['user_id']
+            'Total number of voice channel joins'
         )
 
         # Temporary message counter
@@ -89,8 +88,7 @@ class PrometheusCog(commands.Cog):
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # Check if the user joined a voice channel
         if before.channel is None and after.channel is not None:
-            user_id = str(member.id)
-            self.vc_join_count.labels(user_id=user_id).inc()
+            self.vc_join_count.inc()
 
     @tasks.loop(seconds=60)
     async def update_gauges(self):
