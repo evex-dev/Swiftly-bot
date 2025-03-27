@@ -8,6 +8,7 @@ from typing import Final, Optional, Set
 import aiohttp
 from urllib.parse import urlparse
 from pathlib import Path
+from collections import deque
 
 
 INVITE_PATTERNS: Final[Set[str]] = {
@@ -38,7 +39,7 @@ class AntiInvite(commands.Cog):
         self.db_exempt_path = self.data_dir / "anti_invite_exempt.db"
 
         self._session: Optional[aiohttp.ClientSession] = None
-        self._url_cache: Set[str] = set()  # キャッシュによるパフォーマンス向上
+        self._url_cache: deque[str] = deque(maxlen=1000)  # キャッシュの最大サイズを1000に設定
 
     async def cog_load(self) -> None:
         self._session = aiohttp.ClientSession()
@@ -132,7 +133,7 @@ class AntiInvite(commands.Cog):
                         final_url = str(response.url)
 
                 if any(pattern in final_url.lower() for pattern in INVITE_PATTERNS):
-                    self._url_cache.add(url)  # キャッシュに追加
+                    self._url_cache.append(url)  # キャッシュに追加
                     return True
 
             except Exception:
