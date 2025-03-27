@@ -41,10 +41,17 @@ class PrometheusCog(commands.Cog):
             'discord_bot_vc_joins_total',
             'Total number of voice channel joins'
         )
+        self.vc_active_count = Gauge(
+            'discord_bot_vc_active_count',
+            'Number of active voice channels the bot is currently in'
+        )
 
         # Temporary message counter
         self._message_count_temp = 0
         self._message_count_lock = Lock()
+
+        # Track active voice channels
+        self._active_vcs = set()
 
         # Start Prometheus HTTP server on port 8000
         start_http_server(8491)
@@ -89,6 +96,17 @@ class PrometheusCog(commands.Cog):
         # Check if the user joined a voice channel
         if before.channel is None and after.channel is not None:
             self.vc_join_count.inc()
+
+        # Check if the bot joined or left a voice channel
+        bot_id = self.bot.user.id
+        if member.id == bot_id:
+            if before.channel is None and after.channel is not None:
+                self._active_vcs.add(after.channel.id)
+            elif before.channel is not None and after.channel is None:
+                self._active_vcs.discard(before.channel.id)
+
+            # Update the active VC count gauge
+            self.vc_active_count.set(len(self._active_vcs))
 
     @tasks.loop(seconds=60)
     async def update_gauges(self):
