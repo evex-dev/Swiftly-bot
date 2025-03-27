@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 from prometheus_client import Counter, Gauge, start_http_server
 import json
 import os
+from asyncio import Lock
 
 class PrometheusCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -32,15 +33,19 @@ class PrometheusCog(commands.Cog):
             'discord_bot_unique_users',
             'Number of unique users who have executed commands'
         )
-        self.message_count = Counter(
-            'discord_bot_messages_received_total',
-            'Total number of messages received'
+        self.message_count_per_minute = Gauge(
+            'discord_bot_messages_received_per_minute',
+            'Number of messages received per minute'
         )
         self.vc_join_count = Counter(
             'discord_bot_vc_joins_total',
             'Total number of voice channel joins',
             ['user_id']
         )
+
+        # Temporary message counter
+        self._message_count_temp = 0
+        self._message_count_lock = Lock()
 
         # Start Prometheus HTTP server on port 8000
         start_http_server(8491)
@@ -75,9 +80,10 @@ class PrometheusCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Increment message received counter
+        # Increment temporary message counter
         if not message.author.bot:  # Ignore bot messages
-            self.message_count.inc()
+            async with self._message_count_lock:
+                self._message_count_temp += 1
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -94,6 +100,11 @@ class PrometheusCog(commands.Cog):
         # Update unique user count from JSON file
         user_count = self.get_unique_user_count()
         self.unique_users.set(user_count)
+
+        # Update message count per minute
+        async with self._message_count_lock:
+            self.message_count_per_minute.set(self._message_count_temp)
+            self._message_count_temp = 0
 
     @update_gauges.before_loop
     async def before_update_gauges(self):
