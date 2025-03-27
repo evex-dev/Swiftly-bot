@@ -295,13 +295,14 @@ class SwiftlyBot(commands.AutoShardedBot):
                     name=f"{count}人のユーザー数 || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(300)  # 5分に変更
+            await asyncio.sleep(10)
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"/help || {round(self.latency * 1000)}ms"
+                    name=f"{len(self.guilds)}のサーバー数 || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(300)  # 5分に変更
+            await asyncio.sleep(10)
+
 
     async def count_unique_users(self) -> None:
         """ユニークユーザー数を集計"""
