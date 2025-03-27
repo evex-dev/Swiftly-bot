@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands, tasks
 from prometheus_client import Counter, Gauge, start_http_server
+import json
+import os
 
 class PrometheusCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -30,8 +32,15 @@ class PrometheusCog(commands.Cog):
             'discord_bot_unique_users',
             'Number of unique users who have executed commands'
         )
-
-        self._unique_users_set = set()
+        self.message_count = Counter(
+            'discord_bot_messages_received_total',
+            'Total number of messages received'
+        )
+        self.vc_join_count = Counter(
+            'discord_bot_vc_joins_total',
+            'Total number of voice channel joins',
+            ['user_id']
+        )
 
         # Start Prometheus HTTP server on port 8000
         start_http_server(8491)
@@ -55,11 +64,6 @@ class PrometheusCog(commands.Cog):
         user_id = str(ctx.author.id)
         self.user_command_count.labels(user_id=user_id).inc()
 
-        # Update unique user gauge if necessary
-        if user_id not in self._unique_users_set:
-            self._unique_users_set.add(user_id)
-            self.unique_users.set(len(self._unique_users_set))
-
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error):
         if not ctx.command:
@@ -69,14 +73,40 @@ class PrometheusCog(commands.Cog):
         # Increment error counter for the command
         self.error_count.labels(command_name=command_name).inc()
 
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Increment message received counter
+        if not message.author.bot:  # Ignore bot messages
+            self.message_count.inc()
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        # Check if the user joined a voice channel
+        if before.channel is None and after.channel is not None:
+            user_id = str(member.id)
+            self.vc_join_count.labels(user_id=user_id).inc()
+
     @tasks.loop(seconds=60)
     async def update_gauges(self):
         # Update server count gauge every 60 seconds
         self.server_count.set(len(self.bot.guilds))
 
+        # Update unique user count from JSON file
+        user_count = self.get_unique_user_count()
+        self.unique_users.set(user_count)
+
     @update_gauges.before_loop
     async def before_update_gauges(self):
         await self.bot.wait_until_ready()
+
+    def get_unique_user_count(self):
+        # Load unique user count from JSON file
+        try:
+            with open('data/user_count.json', 'r') as f:
+                data = json.load(f)
+                return data.get('total_users', 0)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return 0
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(PrometheusCog(bot))
