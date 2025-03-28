@@ -2,6 +2,7 @@ from typing import Final, List
 from enum import Enum
 import logging
 import sqlite3
+import uuid
 
 import discord
 from discord import app_commands
@@ -27,7 +28,6 @@ class AdminOption(str, Enum):
     """管理コマンドのオプション"""
     SERVERS = "servers"
     DEBUG = "debug"
-    SAY = "say:"
 
 class PaginationView(View):
     """ページネーション用のカスタムビュー"""
@@ -253,6 +253,19 @@ class BotAdmin(commands.Cog):
 
         return embeds
 
+    async def generate_premium_token(self, user_id: int) -> str:
+        """指定したユーザーにプレミアムトークンを発行し、DMを送信"""
+        from cogs.premium import PremiumDatabase
+        db = PremiumDatabase()
+        user_data = db.get_user(user_id)
+
+        if user_data:
+            return user_data[0]  # 既存のトークンを返す
+
+        token = str(uuid.uuid4())
+        db.add_user(user_id, token)
+        return token
+
     @app_commands.command(
         name="botadmin",
         description="Bot管理コマンド"
@@ -291,19 +304,6 @@ class BotAdmin(commands.Cog):
                     ephemeral=True
                 )
 
-            elif option.startswith(AdminOption.SAY):
-                message = option[len(AdminOption.SAY):]
-                await interaction.channel.send(message)
-                embed = discord.Embed(
-                    title="Sayコマンド",
-                    description="sayを出力しました",
-                    color=EMBED_COLORS["success"]
-                )
-                await interaction.response.send_message(
-                    embed=embed,
-                    ephemeral=True
-                )
-
             elif option == "viewreq":
                 embeds = await self.create_request_embeds()
                 view = RequestPaginationView(embeds)
@@ -312,6 +312,40 @@ class BotAdmin(commands.Cog):
                     view=view,
                     ephemeral=True
                 )
+
+            elif option.startswith("premium:"):
+                try:
+                    user_id = int(option.split(":")[1])
+                    token = await self.generate_premium_token(user_id)
+                    user = await self.bot.fetch_user(user_id)
+
+                    if user:
+                        await user.send(
+                            f"🎉 **Swiftlyのプレミアムトークンが発行されました！** 🎉\n\n"
+                            f"🔑 `{token}`\n\n"
+                            "プレミアム機能を有効にするには、以下の手順をお試しください:\n"
+                            "1️⃣ `/premium` コマンドを使用してトークンを登録\n"
+                            "2️⃣ プレミアム機能を有効化\n\n"
+                            "✨ **プレミアム特典:**\n"
+                            "🔹 VC読み上げボイスの変更が可能\n"
+                            "🔹 ボイスは `/set_voice` コマンドで設定できます\n\n"
+                            "これからもSwiftlyをよろしくお願いします！"
+                        )
+                        await interaction.response.send_message(
+                            f"ユーザー {user_id} にプレミアムトークンを発行し、DMを送信しました。",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message(
+                            f"ユーザー {user_id} を見つけることができませんでした。",
+                            ephemeral=True
+                        )
+                except Exception as e:
+                    logger.error("Error in premium token generation: %s", e, exc_info=True)
+                    await interaction.response.send_message(
+                        f"エラーが発生しました: {e}",
+                        ephemeral=True
+                    )
 
             else:
                 embed = discord.Embed(

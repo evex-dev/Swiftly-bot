@@ -13,6 +13,8 @@ import edge_tts
 import discord
 from discord.ext import commands
 
+from cogs.premium import PREMIUM_USERS
+
 VOICE: Final[str] = "ja-JP-NanamiNeural"
 MAX_MESSAGE_LENGTH: Final[int] = 75
 RATE_LIMIT_SECONDS: Final[int] = 10
@@ -62,7 +64,8 @@ class TTSManager:
     async def generate_audio(
         self,
         message: str,
-        guild_id: int
+        guild_id: int,
+        voice: str
     ) -> Optional[str]:
         try:
             # guild_idとuuidをファイル名に含める
@@ -71,7 +74,7 @@ class TTSManager:
             temp_path = str(temp_file)
             self.temp_files.append(temp_path)
 
-            tts = edge_tts.Communicate(message, VOICE)
+            tts = edge_tts.Communicate(message, voice)
             await tts.save(temp_path)
             return temp_path
 
@@ -182,14 +185,19 @@ class VoiceState:
     async def play_tts(
         self,
         guild_id: int,
-        message: str
+        message: str,
+        user_id: Optional[int] = None
     ) -> None:
         guild_state = self.guilds.get(guild_id)
         if not guild_state:
             return
 
         voice_client = guild_state.voice_client
-        temp_path = await self.tts_manager.generate_audio(message, guild_id)
+
+        # プレミアムユーザーのボイスを取得
+        voice = PREMIUM_USERS.get(user_id, {}).get("voice", VOICE)
+
+        temp_path = await self.tts_manager.generate_audio(message, guild_id, voice)
         if not temp_path:
             return
 
@@ -201,7 +209,7 @@ class VoiceState:
                     async with guild_state.lock:
                         if guild_state.tts_queue:
                             next_message = guild_state.tts_queue.pop(0)
-                            await self.play_tts(guild_id, next_message)
+                            await self.play_tts(guild_id, next_message, user_id)
             asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
 
         voice_client.play(
@@ -211,53 +219,6 @@ class VoiceState:
             ),
             after=after_playing
         )
-
-class DictionaryManager:
-    """辞書管理クラス"""
-
-    def __init__(self) -> None:
-        self.conn = sqlite3.connect(DATABASE_PATH)
-        self._create_table()
-
-    def _create_table(self) -> None:
-        with self.conn:
-            self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS dictionary (word TEXT PRIMARY KEY, reading TEXT)"
-            )
-
-    def add_word(self, word: str, reading: str) -> None:
-        with self.conn:
-            self.conn.execute(
-                "INSERT OR REPLACE INTO dictionary (word, reading) VALUES (?, ?)",
-                (word, reading)
-            )
-
-    def remove_word(self, word: str) -> None:
-        with self.conn:
-            self.conn.execute(
-                "DELETE FROM dictionary WHERE word = ?",
-                (word,)
-            )
-
-    def get_reading(self, word: str) -> Optional[str]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT reading FROM dictionary WHERE word = ?",
-            (word,)
-        )
-        result = cursor.fetchone()
-        return result[0] if result else None
-
-    def list_words(self, limit: int, offset: int) -> List[tuple]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT word, reading FROM dictionary LIMIT ? OFFSET ?",
-            (limit, offset)
-        )
-        return cursor.fetchall()
-
-    def close(self) -> None:
-        self.conn.close()
 
 class Voice(commands.Cog):
     """音声機能を提供"""
@@ -421,7 +382,7 @@ class Voice(commands.Cog):
                 guild_state.tts_queue.append(processed_message)
                 if not guild_state.voice_client.is_playing():
                     next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild_id, next_message)
+                    await self.state.play_tts(guild_id, next_message, interaction.user.id)
 
             self._last_uses[interaction.user.id] = datetime.now()
             await interaction.response.send_message(
@@ -547,7 +508,7 @@ class Voice(commands.Cog):
                 guild_state.tts_queue.append(processed_message)
                 if not guild_state.voice_client.is_playing():
                     next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild.id, next_message)
+                    await self.state.play_tts(guild.id, next_message, message.author.id)
 
         except Exception as e:
             logger.error("Error in message handler: %s", e, exc_info=True)
@@ -585,7 +546,7 @@ class Voice(commands.Cog):
                 guild_state.tts_queue.append(processed_message)
                 if not voice_client.is_playing():
                     next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild.id, next_message)
+                    await self.state.play_tts(guild.id, next_message, member.id)
 
         except Exception as e:
             logger.error("Error in voice state update: %s", e, exc_info=True)
