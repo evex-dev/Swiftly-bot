@@ -48,7 +48,7 @@ class PremiumDatabase:
         """トークンを検証し、使用済みとして無効化する"""
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT user_id FROM premium_users WHERE token = ?",
+            "SELECT user_id FROM premium_users WHERE token = ? AND token IS NOT NULL",
             (token,)
         )
         result = cursor.fetchone()
