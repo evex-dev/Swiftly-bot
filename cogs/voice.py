@@ -197,7 +197,7 @@ class VoiceState:
 
         # プレミアムユーザーのボイスを取得
         user_data = self.premium_db.get_user(user_id) if user_id else None
-        voice = user_data[1] if user_data else VOICE
+        voice = user_data[0] if user_data and len(user_data) > 0 else VOICE
 
         temp_path = await self.tts_manager.generate_audio(message, guild_id, voice)
         if not temp_path:
