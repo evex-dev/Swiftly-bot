@@ -44,6 +44,24 @@ class PremiumDatabase:
                 (voice, user_id)
             )
 
+    def validate_and_consume_token(self, token: str):
+        """トークンを検証し、使用済みとして無効化する"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM premium_users WHERE token = ?",
+            (token,)
+        )
+        result = cursor.fetchone()
+        if result:
+            user_id = result[0]
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE premium_users SET token = NULL WHERE user_id = ?",
+                    (user_id,)
+                )
+            return user_id
+        return None
+
 class Premium(commands.Cog):
     """プレミアム機能を管理するクラス"""
 
@@ -82,9 +100,8 @@ class Premium(commands.Cog):
         description="プレミアムトークンを登録します"
     )
     async def premium(self, interaction: discord.Interaction, token: str):
-        user_id = interaction.user.id
-        user_data = self.db.get_user(user_id)
-        if user_data and user_data[0] == token:
+        user_id = self.db.validate_and_consume_token(token)
+        if user_id == interaction.user.id:
             await interaction.response.send_message("プレミアム機能が有効になりました！導入ありがとうございます。Swiftlyの共有もお願いします！", ephemeral=True)
         else:
             await interaction.response.send_message("無効なトークンです。", ephemeral=True)
