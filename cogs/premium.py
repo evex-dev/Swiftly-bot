@@ -2,8 +2,16 @@ import sqlite3
 import uuid
 from discord.ext import commands
 import discord
-
+import logging
 DB_PATH = "data/premium.db"
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 class PremiumDatabase:
     def __init__(self):
@@ -72,13 +80,20 @@ class Premium(commands.Cog):
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
         owner = guild.owner
+        if owner is None:
+            try:
+                owner = await self.bot.fetch_user(guild.owner_id)  # fetch_userでオーナーを取得
+            except Exception as e:
+                logger.error("Failed to fetch guild owner: %s", e, exc_info=True)
+                return  # オーナーが取得できない場合は処理をスキップ
+
         user_data = self.db.get_user(owner.id)
         if user_data:
-            # プレミアム機能が既に有効な場合は何もしない
-            return
-        else:
-            token = str(uuid.uuid4())
-            self.db.add_user(owner.id, token)
+            return  # プレミアム機能が既に有効な場合は何もしない
+
+        token = str(uuid.uuid4())
+        self.db.add_user(owner.id, token)
+        try:
             await owner.send(
                 f"🎉 **Swiftlyの導入ありがとうございます！** 🎉\n\n"
                 f"導入の感謝として、**プレミアムトークン**を発行しました:\n"
@@ -94,6 +109,8 @@ class Premium(commands.Cog):
                 "🔗 [公式サイト](https://sakana11.org/swiftly/)\n"
                 "🔗 [Discordアプリページ](https://discord.com/discovery/applications/1310198598213963858)"
             )
+        except Exception as e:
+            logger.error("Failed to send DM to guild owner: %s", e, exc_info=True)
 
     @discord.app_commands.command(
         name="premium",
@@ -118,7 +135,7 @@ class Premium(commands.Cog):
         user_id = interaction.user.id
         user_data = self.db.get_user(user_id)
         if not user_data:
-            await interaction.response.send_message("プレミアムユーザーのみがこの機能を使用できます。\nプレミアムユーザーになるには、自分のサーバーにSwiftlyを導入するとトークンが発行され、プレミアムユーザーになることができます。\nすでに導入済みの場合は開発者(techfish_1)にお問い合わせください。", ephemeral=True)
+            await interaction.response.send_message("プレミアムユーザーのみがこの機能を使用できます。\nプレミアムユーザーになるには、自分のサーバーにSwiftlyを導入するとトークンが発行され、プレミアムユーザーになることができます。\nすでに導入済みの場合やDMが送信されない場合は開発者(techfish_1)にお問い合わせください。", ephemeral=True)
             return
 
         self.db.update_voice(user_id, voice)
