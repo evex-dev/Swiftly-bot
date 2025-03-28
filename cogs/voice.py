@@ -13,7 +13,7 @@ import edge_tts
 import discord
 from discord.ext import commands
 
-from cogs.premium import PREMIUM_USERS
+from cogs.premium import PremiumDatabase
 
 VOICE: Final[str] = "ja-JP-NanamiNeural"
 MAX_MESSAGE_LENGTH: Final[int] = 75
@@ -181,6 +181,7 @@ class VoiceState:
     def __init__(self) -> None:
         self.guilds: Dict[int, GuildTTS] = {}
         self.tts_manager = TTSManager()
+        self.premium_db = PremiumDatabase()  # PremiumDatabaseのインスタンスを追加
 
     async def play_tts(
         self,
@@ -195,7 +196,8 @@ class VoiceState:
         voice_client = guild_state.voice_client
 
         # プレミアムユーザーのボイスを取得
-        voice = PREMIUM_USERS.get(user_id, {}).get("voice", VOICE)
+        user_data = self.premium_db.get_user(user_id) if user_id else None
+        voice = user_data[1] if user_data else VOICE
 
         temp_path = await self.tts_manager.generate_audio(message, guild_id, voice)
         if not temp_path:
