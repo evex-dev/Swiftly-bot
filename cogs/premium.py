@@ -3,7 +3,6 @@ import uuid
 from discord.ext import commands
 import discord
 import logging
-import jwt
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
@@ -58,23 +57,12 @@ class PremiumDatabase:
                 (voice, user_id)
             )
 
-    def generate_token(self, user_id: int) -> str:
-        """JWTトークンを生成"""
-        payload = {
-            "user_id": user_id,
-            "exp": datetime.utcnow() + timedelta(days=7)  # トークンの有効期限を7日間に設定
-        }
-        return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-    def validate_token(self, token: str) -> int:
-        """JWTトークンを検証"""
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            return payload["user_id"]
-        except jwt.ExpiredSignatureError:
-            raise ValueError("トークンの有効期限が切れています。")
-        except jwt.InvalidTokenError:
-            raise ValueError("無効なトークンです。")
+    def remove_user(self, user_id: int):
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM premium_users WHERE user_id = ?",
+                (user_id,)
+            )
 
 class Premium(commands.Cog):
     """プレミアム機能を管理するクラス"""
@@ -93,23 +81,14 @@ class Premium(commands.Cog):
                 logger.error("Failed to fetch guild owner: %s", e, exc_info=True)
                 return  # オーナーが取得できない場合は処理をスキップ
 
-        user_data = self.db.get_user(owner.id)
-        if user_data:
-            return  # プレミアム機能が既に有効な場合は何もしない
-
-        token = self.db.generate_token(owner.id)
-        self.db.add_user(owner.id)
+        self.db.add_user(owner.id)  # オーナーをプレミアムユーザーとして登録
         try:
             await owner.send(
-                f"🎉 **Swiftlyの導入ありがとうございます！** 🎉\n\n"
-                f"導入の感謝として、**プレミアムトークン**を発行しました:\n"
-                f"🔑 `{token}`\n\n"
-                "プレミアム機能を有効にするには、以下の手順をお試しください:\n"
-                "1️⃣ `/premium` コマンドを使用してトークンを登録\n"
-                "2️⃣ プレミアム機能を有効化\n\n"
+                "🎉 **Swiftlyの導入ありがとうございます！** 🎉\n\n"
+                "導入の感謝として、**プレミアム機能**を有効化しました！\n\n"
                 "✨ **プレミアム特典:**\n"
                 "🔹 VC読み上げボイスの変更が可能\n"
-                "🔹 ボイスは `/set_voice` コマンドで設定できます\n\n"
+                "🔹 ボイスは `/set_voice` コマンドで設定できます\n他にもたくさんの特典を追加する予定です！\n"
                 "これからもSwiftlyをよろしくお願いします！\n\n"
                 "🌐 **Swiftlyの共有もお願いします！**\n"
                 "🔗 [公式サイト](https://sakana11.org/swiftly/)\n"
@@ -118,19 +97,22 @@ class Premium(commands.Cog):
         except Exception as e:
             logger.error("Failed to send DM to guild owner: %s", e, exc_info=True)
 
-    @discord.app_commands.command(
-        name="premium",
-        description="プレミアムトークンを登録します"
-    )
-    async def premium(self, interaction: discord.Interaction, token: str):
-        try:
-            user_id = self.db.validate_token(token)
-            if user_id == interaction.user.id:
-                await interaction.response.send_message("プレミアム機能が有効になりました！導入ありがとうございます。Swiftlyの共有もお願いします！", ephemeral=True)
-            else:
-                await interaction.response.send_message("トークンが一致しません。", ephemeral=True)
-        except ValueError as e:
-            await interaction.response.send_message(str(e), ephemeral=True)
+    @commands.Cog.listener()
+    async def on_guild_remove(self, guild: discord.Guild):
+        owner_id = guild.owner_id
+        if owner_id:
+            self.db.remove_user(owner_id)  # サーバー脱退時にオーナーのプレミアムを剥奪
+            logger.info(f"Removed premium status for user {owner_id} as the guild was removed.")
+            try:
+                owner = await self.bot.fetch_user(owner_id)
+                await owner.send(
+                    "⚠️ **Swiftlyのサーバーからの削除を確認しました。** ⚠️\n\n"
+                    "これに伴い、プレミアム機能が無効化されました。\n\n"
+                    "再度Swiftlyを導入することで、プレミアム機能を再び有効化できます。\n"
+                    "Swiftlyをご利用いただきありがとうございました！"
+                )
+            except Exception as e:
+                logger.error("Failed to send DM to guild owner: %s", e, exc_info=True)
 
     @discord.app_commands.command(
         name="set_voice",
@@ -144,7 +126,7 @@ class Premium(commands.Cog):
         user_id = interaction.user.id
         user_data = self.db.get_user(user_id)
         if not user_data:
-            await interaction.response.send_message("プレミアムユーザーのみがこの機能を使用できます。\nプレミアムユーザーになるには、自分のサーバーにSwiftlyを導入するとトークンが発行され、プレミアムユーザーになることができます。\nすでに導入済みの場合やDMが送信されない場合は開発者(techfish_1)にお問い合わせください。", ephemeral=True)
+            await interaction.response.send_message("プレミアムユーザーのみがこの機能を使用できます。\nSwiftlyを自分のサーバーに導入することでプレミアム機能が使用できるようになります。\nすでに導入済みの場合は開発者(techfish_1)にお問い合わせください。", ephemeral=True)
             return
 
         self.db.update_voice(user_id, voice)
