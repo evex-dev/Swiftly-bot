@@ -70,6 +70,16 @@ class WikipediaAPI:
             logger.error("Error getting page info: %s", e, exc_info=True)
             raise
 
+    async def get_random_page(self) -> Tuple[str, str, str]:
+        loop = asyncio.get_event_loop()
+        try:
+            page = await loop.run_in_executor(None, wikipedia.random)
+            page_info = await self.get_page_info(page)
+            return page_info
+        except Exception as e:
+            logger.error("Error getting random page: %s", e, exc_info=True)
+            raise
+
 class MessageProcessor:
     """メッセージ処理を行うクラス"""
 
@@ -194,6 +204,31 @@ class WikipediaCog(commands.Cog):
 
         except Exception as e:
             logger.error("Error in wikipedia search: %s", e, exc_info=True)
+            await interaction.followup.send(
+                ERROR_MESSAGES["unexpected"].format(str(e)),
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="random_wikipedia",
+        description="Wikipediaのおまかせページを表示します"
+    )
+    async def random_wikipedia(
+        self,
+        interaction: discord.Interaction
+    ) -> None:
+        try:
+            await interaction.response.defer()
+
+            # ランダムページ情報の取得
+            title, summary, url = await self.api.get_random_page()
+
+            # 結果の送信
+            embed = self._create_search_embed(title, summary, url)
+            await interaction.followup.send(embed=embed)
+
+        except Exception as e:
+            logger.error("Error in random wikipedia: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True

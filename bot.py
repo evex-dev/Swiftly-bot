@@ -83,6 +83,10 @@ class CogReloader(FileSystemEventHandler):
                 await self.bot.load_extension(cog_name)
                 self._last_reload[cog_name] = current_time
                 logger.info("Reloaded: %s", cog_name)
+
+                # コマンドを再同期
+                await self.bot.tree.sync()
+                logger.info("Commands synced after reloading: %s", cog_name)
             except Exception as e:
                 logger.error("Failed to reload %s: %s", cog_name, e, exc_info=True)
 
@@ -289,19 +293,12 @@ class SwiftlyBot(commands.AutoShardedBot):
     async def update_presence(self) -> None:
         """ステータスを更新"""
         while True:
-            count = self.user_count.get_count()
-            await self.change_presence(
-                activity=discord.Game(
-                    name=f"{count}人のユーザー数 || {round(self.latency * 1000)}ms"
-                )
-            )
-            await asyncio.sleep(5)
             await self.change_presence(
                 activity=discord.Game(
                     name=f"{len(self.guilds)}のサーバー数 || {round(self.latency * 1000)}ms"
                 )
             )
-            await asyncio.sleep(5)
+            await asyncio.sleep(300)  # 5分ごとに更新
 
 
     async def count_unique_users(self) -> None:
