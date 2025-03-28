@@ -120,7 +120,7 @@ class Premium(commands.Cog):
     )
     async def set_voice(self, interaction: discord.Interaction, voice: str):
         if voice not in ["ja-JP-KeitaNeural", "ja-JP-NanamiNeural"]:
-            await interaction.response.send_message("無効なボイスです。", ephemeral=True)
+            await interaction.response.send_message("無効なボイスです。\nボイスは以下から選べます。\n- ja-JP-KeitaNeural\n- ja-JP-NanamiNeural", ephemeral=True)
             return
 
         user_id = interaction.user.id
