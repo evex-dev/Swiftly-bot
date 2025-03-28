@@ -3,7 +3,14 @@ import uuid
 from discord.ext import commands
 import discord
 import logging
+import jwt
+from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
+
 DB_PATH = "data/premium.db"
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")  # .envから読み込み、デフォルト値を設定
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -24,23 +31,22 @@ class PremiumDatabase:
                 """
                 CREATE TABLE IF NOT EXISTS premium_users (
                     user_id INTEGER PRIMARY KEY,
-                    token TEXT NOT NULL,
                     voice TEXT DEFAULT 'ja-JP-NanamiNeural'
                 )
                 """
             )
 
-    def add_user(self, user_id: int, token: str):
+    def add_user(self, user_id: int):
         with self.conn:
             self.conn.execute(
-                "INSERT OR REPLACE INTO premium_users (user_id, token) VALUES (?, ?)",
-                (user_id, token)
+                "INSERT OR REPLACE INTO premium_users (user_id) VALUES (?)",
+                (user_id,)
             )
 
     def get_user(self, user_id: int):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT token, voice FROM premium_users WHERE user_id = ?",
+            "SELECT voice FROM premium_users WHERE user_id = ?",
             (user_id,)
         )
         return cursor.fetchone()
@@ -52,23 +58,23 @@ class PremiumDatabase:
                 (voice, user_id)
             )
 
-    def validate_and_consume_token(self, token: str):
-        """トークンを検証し、使用済みとして無効化する"""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT user_id FROM premium_users WHERE token = ? AND token IS NOT NULL",
-            (token,)
-        )
-        result = cursor.fetchone()
-        if result:
-            user_id = result[0]
-            with self.conn:
-                self.conn.execute(
-                    "UPDATE premium_users SET token = NULL WHERE user_id = ?",
-                    (user_id,)
-                )
-            return user_id
-        return None
+    def generate_token(self, user_id: int) -> str:
+        """JWTトークンを生成"""
+        payload = {
+            "user_id": user_id,
+            "exp": datetime.utcnow() + timedelta(days=7)  # トークンの有効期限を7日間に設定
+        }
+        return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+    def validate_token(self, token: str) -> int:
+        """JWTトークンを検証"""
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            return payload["user_id"]
+        except jwt.ExpiredSignatureError:
+            raise ValueError("トークンの有効期限が切れています。")
+        except jwt.InvalidTokenError:
+            raise ValueError("無効なトークンです。")
 
 class Premium(commands.Cog):
     """プレミアム機能を管理するクラス"""
@@ -91,8 +97,8 @@ class Premium(commands.Cog):
         if user_data:
             return  # プレミアム機能が既に有効な場合は何もしない
 
-        token = str(uuid.uuid4())
-        self.db.add_user(owner.id, token)
+        token = self.db.generate_token(owner.id)
+        self.db.add_user(owner.id)
         try:
             await owner.send(
                 f"🎉 **Swiftlyの導入ありがとうございます！** 🎉\n\n"
@@ -117,11 +123,14 @@ class Premium(commands.Cog):
         description="プレミアムトークンを登録します"
     )
     async def premium(self, interaction: discord.Interaction, token: str):
-        user_id = self.db.validate_and_consume_token(token)
-        if user_id == interaction.user.id:
-            await interaction.response.send_message("プレミアム機能が有効になりました！導入ありがとうございます。Swiftlyの共有もお願いします！", ephemeral=True)
-        else:
-            await interaction.response.send_message("無効なトークンです。", ephemeral=True)
+        try:
+            user_id = self.db.validate_token(token)
+            if user_id == interaction.user.id:
+                await interaction.response.send_message("プレミアム機能が有効になりました！導入ありがとうございます。Swiftlyの共有もお願いします！", ephemeral=True)
+            else:
+                await interaction.response.send_message("トークンが一致しません。", ephemeral=True)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
 
     @discord.app_commands.command(
         name="set_voice",

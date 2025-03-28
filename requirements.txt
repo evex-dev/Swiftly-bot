@@ -25,3 +25,4 @@ fugashi
 unidic-lite
 sentencepiece
 prometheus_client
+jwt
