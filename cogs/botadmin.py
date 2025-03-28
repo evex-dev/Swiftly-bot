@@ -160,6 +160,8 @@ class BotAdmin(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        from cogs.premium import PremiumDatabase
+        self.db = PremiumDatabase()
 
     def is_admin(self, user_id: int) -> bool:
         return user_id == ADMIN_USER_ID
@@ -255,15 +257,13 @@ class BotAdmin(commands.Cog):
 
     async def generate_premium_token(self, user_id: int) -> str:
         """指定したユーザーにプレミアムトークンを発行し、DMを送信"""
-        from cogs.premium import PremiumDatabase
-        db = PremiumDatabase()
-        user_data = db.get_user(user_id)
+        user_data = self.db.get_user(user_id)
 
         if user_data:
             return user_data[0]  # 既存のトークンを返す
 
         token = str(uuid.uuid4())
-        db.add_user(user_id, token)
+        self.db.add_user(user_id, token)
         return token
 
     @app_commands.command(
@@ -316,23 +316,19 @@ class BotAdmin(commands.Cog):
             elif option.startswith("premium:"):
                 try:
                     user_id = int(option.split(":")[1])
-                    token = await self.generate_premium_token(user_id)
+                    self.db.add_user(user_id)  # プレミアムを付与
                     user = await self.bot.fetch_user(user_id)
 
                     if user:
                         await user.send(
-                            f"🎉 **Swiftlyのプレミアムトークンが発行されました！** 🎉\n\n"
-                            f"🔑 `{token}`\n\n"
-                            "プレミアム機能を有効にするには、以下の手順をお試しください:\n"
-                            "1️⃣ `/premium` コマンドを使用してトークンを登録\n"
-                            "2️⃣ プレミアム機能を有効化\n\n"
+                            "🎉 **Swiftlyのプレミアム機能が有効化されました！** 🎉\n\n"
                             "✨ **プレミアム特典:**\n"
                             "🔹 VC読み上げボイスの変更が可能\n"
                             "🔹 ボイスは `/set_voice` コマンドで設定できます\n\n"
                             "これからもSwiftlyをよろしくお願いします！"
                         )
                         await interaction.response.send_message(
-                            f"ユーザー {user_id} にプレミアムトークンを発行し、DMを送信しました。",
+                            f"ユーザー {user_id} にプレミアムを付与し、DMを送信しました。",
                             ephemeral=True
                         )
                     else:
@@ -341,7 +337,7 @@ class BotAdmin(commands.Cog):
                             ephemeral=True
                         )
                 except Exception as e:
-                    logger.error("Error in premium token generation: %s", e, exc_info=True)
+                    logger.error("Error in premium command: %s", e, exc_info=True)
                     await interaction.response.send_message(
                         f"エラーが発生しました: {e}",
                         ephemeral=True
