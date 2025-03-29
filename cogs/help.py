@@ -3,6 +3,7 @@ from discord.ext import commands
 from typing import Final, Dict, List
 import logging
 from collections import defaultdict
+from discord.ui import View, Button
 
 
 EMBED_COLOR: Final[int] = discord.Color.blue().value
@@ -13,6 +14,9 @@ COMMAND_CATEGORIES: Final[Dict[str, str]] = {
     "予測": "AIを使用した予測機能",
     "ユーティリティ": "便利な機能",
     "検索": "情報検索機能",
+    "AI機能": "AI関連の機能",
+    "サーバー管理": "サーバー管理用機能",
+    "エンターテイメント": "遊び系の機能",
     "その他": "その他の機能"
 }
 
@@ -35,16 +39,6 @@ COMMAND_INFO: Final[Dict[str, dict]] = {
             "Prophetモデルを使用",
             "季節性を考慮した予測",
             "長期的な予測に強い"
-        ]
-    },
-    "arima_growth": {
-        "category": "予測",
-        "name": "/arima-growth",
-        "description": "サーバーの成長をARIMAで予測",
-        "features": [
-            "ARIMAモデルを使用",
-            "時系列データに適している",
-            "短中期の予測に適している"
         ]
     },
     "base64": {
@@ -76,10 +70,134 @@ COMMAND_INFO: Final[Dict[str, dict]] = {
             "曖昧さ回避ページの対応",
             "要約表示機能"
         ]
+    },
+    "imagegen": {
+        "category": "AI機能",
+        "name": "/imagegen",
+        "description": "AIによる画像生成",
+        "features": [
+            "テキストから画像を生成",
+            "高品質な画像出力",
+            "様々なスタイルに対応"
+        ]
+    },
+    "youyaku": {
+        "category": "AI機能", 
+        "name": "/youyaku",
+        "description": "チャンネルのメッセージを要約",
+        "features": [
+            "指定チャンネルのメッセージを分析",
+            "最大1000メッセージまで処理可能",
+            "会話の要点をまとめて提供"
+        ]
+    },
+    "antiraid": {
+        "category": "サーバー管理",
+        "name": "/antiraid_enable",
+        "description": "サーバーの荒らし対策機能",
+        "features": [
+            "自動荒らし検出と対応",
+            "カスタマイズ可能な保護設定",
+            "/antiraid_disable で無効化可能"
+        ]
+    },
+    "role_panel": {
+        "category": "サーバー管理",
+        "name": "/role-panel",
+        "description": "リアクションでロール付与パネルを作成",
+        "features": [
+            "カスタムロールパネルの作成",
+            "絵文字リアクションでロール管理",
+            "ユーザーが自分でロールを取得可能"
+        ]
+    },
+    "poll": {
+        "category": "ユーティリティ",
+        "name": "/poll",
+        "description": "匿名投票の作成と管理",
+        "features": [
+            "複数選択肢の投票作成",
+            "投票期間の設定",
+            "結果の自動集計"
+        ]
+    },
+    "sandbox": {
+        "category": "エンターテイメント",
+        "name": "/sandbox",
+        "description": "JavaScriptコード実行環境",
+        "features": [
+            "コードをサンドボックスで実行",
+            "結果をすぐに表示",
+            "?sandbox としても使用可能"
+        ]
+    },
+    "pysandbox": {
+        "category": "エンターテイメント",
+        "name": "/pysandbox",
+        "description": "Pythonコード実行環境",
+        "features": [
+            "Pythonコードをサンドボックスで実行",
+            "結果をすぐに表示",
+            "?pysandbox としても使用可能"
+        ]
+    },
+    "tetri": {
+        "category": "エンターテイメント",
+        "name": "/tetri",
+        "description": "テトリスゲーム",
+        "features": [
+            "Discordでテトリスをプレイ",
+            "リアクションで操作",
+            "スコアの記録"
+        ]
+    },
+    "join": {
+        "category": "ユーティリティ",
+        "name": "/join",
+        "description": "ボイスチャンネル読み上げ機能",
+        "features": [
+            "テキストチャンネルのメッセージを読み上げ",
+            "/leave でVCから退出",
+            "/dictionary_add で読み上げ辞書を編集可能"
+        ]
     }
 }
 
 logger = logging.getLogger(__name__)
+
+
+class HelpPaginator(View):
+    def __init__(self, embeds: List[discord.Embed]):
+        super().__init__(timeout=180)
+        self.embeds = embeds
+        self.current_page = 0
+
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.clear_items()
+
+        if self.current_page > 0:
+            self.add_item(Button(label="前へ", style=discord.ButtonStyle.primary, custom_id="prev"))
+
+        if self.current_page < len(self.embeds) - 1:
+            self.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next"))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True
+
+    @discord.ui.button(label="前へ", style=discord.ButtonStyle.primary, custom_id="prev")
+    async def prev_page(self, interaction: discord.Interaction, button: Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next")
+    async def next_page(self, interaction: discord.Interaction, button: Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
 
 class Help(commands.Cog):
     """Swiftlyのヘルプ機能を提供"""
@@ -114,32 +232,27 @@ class Help(commands.Cog):
 
         return fields
 
-    def _create_help_embed(self) -> discord.Embed:
-        embed = discord.Embed(
-            title="Swiftlyヘルプ",
-            description=(
-                "Swiftlyのコマンドの使い方と特徴を説明します。\n"
-                "各コマンドは目的に応じてカテゴリ分けされています。"
-            ),
-            color=EMBED_COLOR
-        )
+    def _create_paginated_embeds(self) -> List[discord.Embed]:
+        fields = self._create_category_fields()
+        embeds = []
 
-        # カテゴリごとのフィールドを追加
-        for field in self._create_category_fields():
-            embed.add_field(**field)
+        for i in range(0, len(fields), 3):  # 1ページに3つのカテゴリを表示
+            embed = discord.Embed(
+                title="Swiftlyヘルプ",
+                description=(
+                    "Swiftlyのコマンドの使い方と特徴を説明します。\n"
+                    "各コマンドは目的に応じてカテゴリ分けされています。"
+                ),
+                color=EMBED_COLOR
+            )
 
-        # 追加情報
-        embed.add_field(
-            name="その他のコマンド",
-            value=(
-                f"すべてのコマンドは {WEBSITE_URL} "
-                "で確認できます。"
-            ),
-            inline=False
-        )
+            for field in fields[i:i + 3]:
+                embed.add_field(**field)
 
-        embed.set_footer(text=FOOTER_TEXT)
-        return embed
+            embed.set_footer(text=FOOTER_TEXT)
+            embeds.append(embed)
+
+        return embeds
 
     @discord.app_commands.command(
         name="help",
@@ -150,8 +263,9 @@ class Help(commands.Cog):
         interaction: discord.Interaction
     ) -> None:
         try:
-            embed = self._create_help_embed()
-            await interaction.response.send_message(embed=embed)
+            embeds = self._create_paginated_embeds()
+            view = HelpPaginator(embeds)
+            await interaction.response.send_message(embed=embeds[0], view=view)
 
         except Exception as e:
             logger.error("Error in help command: %s", e, exc_info=True)
