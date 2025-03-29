@@ -81,7 +81,7 @@ COMMAND_INFO: Final[Dict[str, dict]] = {
         ]
     },
     "youyaku": {
-        "category": "AI機能", 
+        "category": "ユーティリティ", 
         "name": "/youyaku",
         "description": "チャンネルのメッセージを要約",
         "features": [
