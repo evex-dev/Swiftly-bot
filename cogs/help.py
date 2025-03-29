@@ -167,10 +167,11 @@ logger = logging.getLogger(__name__)
 
 
 class HelpPaginator(View):
-    def __init__(self, embeds: List[discord.Embed]):
+    def __init__(self, embeds: List[discord.Embed], user: discord.User):
         super().__init__(timeout=180)
         self.embeds = embeds
         self.current_page = 0
+        self.user = user
 
         self.update_buttons()
 
@@ -184,6 +185,9 @@ class HelpPaginator(View):
             self.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next"))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user != self.user:
+            await interaction.response.send_message("この操作はコマンドを実行したユーザーのみが使用できます。", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label="前へ", style=discord.ButtonStyle.primary, custom_id="prev")
@@ -262,7 +266,7 @@ class Help(commands.Cog):
     ) -> None:
         try:
             embeds = self._create_paginated_embeds()
-            view = HelpPaginator(embeds)
+            view = HelpPaginator(embeds, interaction.user)
             await interaction.response.send_message(embed=embeds[0], view=view)
 
         except Exception as e:
