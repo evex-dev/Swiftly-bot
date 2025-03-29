@@ -5,7 +5,6 @@ import logging
 from collections import defaultdict
 from discord.ui import View, Button
 
-
 EMBED_COLOR: Final[int] = discord.Color.blue().value
 WEBSITE_URL: Final[str] = "https://sakana11.org/swiftly/commands.html"
 FOOTER_TEXT: Final[str] = "Hosted by TechFish_Lab"
@@ -165,24 +164,21 @@ COMMAND_INFO: Final[Dict[str, dict]] = {
 
 logger = logging.getLogger(__name__)
 
-
 class HelpPaginator(View):
     def __init__(self, embeds: List[discord.Embed], user: discord.User):
         super().__init__(timeout=180)
         self.embeds = embeds
         self.current_page = 0
         self.user = user
-
         self.update_buttons()
 
     def update_buttons(self):
-        self.clear_items()
-
-        if self.current_page > 0:
-            self.add_item(Button(label="前へ", style=discord.ButtonStyle.primary, custom_id="prev"))
-
-        if self.current_page < len(self.embeds) - 1:
-            self.add_item(Button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next"))
+        # 生成済みのボタンのdisabled状態を更新
+        for child in self.children:
+            if child.custom_id == "prev":
+                child.disabled = self.current_page <= 0
+            elif child.custom_id == "next":
+                child.disabled = self.current_page >= len(self.embeds) - 1
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user != self.user:
@@ -192,16 +188,15 @@ class HelpPaginator(View):
 
     @discord.ui.button(label="前へ", style=discord.ButtonStyle.primary, custom_id="prev")
     async def prev_page(self, interaction: discord.Interaction, button: Button):
-        self.current_page -= 1
+        self.current_page = max(self.current_page - 1, 0)
         self.update_buttons()
         await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
 
     @discord.ui.button(label="次へ", style=discord.ButtonStyle.primary, custom_id="next")
     async def next_page(self, interaction: discord.Interaction, button: Button):
-        self.current_page += 1
+        self.current_page = min(self.current_page + 1, len(self.embeds) - 1)
         self.update_buttons()
         await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
-
 
 class Help(commands.Cog):
     """Swiftlyのヘルプ機能を提供"""
@@ -224,9 +219,7 @@ class Help(commands.Cog):
 
             for cmd in commandss:
                 value += f"**{cmd['name']}**\n{cmd['description']}\n"
-                value += "特徴:\n" + "\n".join(
-                    f"- {feature}" for feature in cmd["features"]
-                ) + "\n\n"
+                value += "特徴:\n" + "\n".join(f"- {feature}" for feature in cmd["features"]) + "\n\n"
 
             fields.append({
                 "name": f"【{category}】",
@@ -249,7 +242,6 @@ class Help(commands.Cog):
                 ),
                 color=EMBED_COLOR
             )
-
             embed.add_field(**field)
             embed.set_footer(text=FOOTER_TEXT)
             embeds.append(embed)
@@ -260,22 +252,17 @@ class Help(commands.Cog):
         name="help",
         description="Swiftlyのヘルプを表示します。"
     )
-    async def help_command(
-        self,
-        interaction: discord.Interaction
-    ) -> None:
+    async def help_command(self, interaction: discord.Interaction) -> None:
         try:
             embeds = self._create_paginated_embeds()
             view = HelpPaginator(embeds, interaction.user)
             await interaction.response.send_message(embed=embeds[0], view=view)
-
         except Exception as e:
             logger.error("Error in help command: %s", e, exc_info=True)
             await interaction.response.send_message(
                 f"ヘルプの表示中にエラーが発生しました: {e}",
                 ephemeral=True
             )
-
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Help(bot))
