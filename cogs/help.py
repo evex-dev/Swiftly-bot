@@ -236,7 +236,7 @@ class Help(commands.Cog):
         fields = self._create_category_fields()
         embeds = []
 
-        for i in range(0, len(fields), 3):  # 1ページに3つのカテゴリを表示
+        for field in fields:  # 1ページに1つのカテゴリを表示
             embed = discord.Embed(
                 title="Swiftlyヘルプ",
                 description=(
@@ -246,9 +246,7 @@ class Help(commands.Cog):
                 color=EMBED_COLOR
             )
 
-            for field in fields[i:i + 3]:
-                embed.add_field(**field)
-
+            embed.add_field(**field)
             embed.set_footer(text=FOOTER_TEXT)
             embeds.append(embed)
 
