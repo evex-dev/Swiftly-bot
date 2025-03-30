@@ -40,7 +40,14 @@ class NSFWDetection(commands.Cog):
         images = []
         for att in valid_attachments:
             image_bytes = await att.read()
-            images.append(Image.open(io.BytesIO(image_bytes)).convert("RGB"))
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            # Convert to PNG if not already
+            if not att.filename.lower().endswith('png'):
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+                buffer.seek(0)
+                image = Image.open(buffer)
+            images.append(image)
 
         # Single batch inference
         results = self.classifier(images)
