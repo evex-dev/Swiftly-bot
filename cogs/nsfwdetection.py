@@ -37,16 +37,21 @@ class NSFWDetection(commands.Cog):
 
         # Single batch inference
         results = self.classifier(images)
+
+        # Debugging: Log the results to check the structure
+        print("Debugging results:", results)
+
         final_label = 'SAFE'
         description_lines = []
         for idx, result in enumerate(results, start=1):
-            label = 'SAFE' if result['label'] == 'normal' else 'UNSAFE'
+            # Ensure result is a dictionary and access keys safely
+            label = 'SAFE' if result.get('label') == 'normal' else 'UNSAFE'
             if label == 'UNSAFE':
                 final_label = 'UNSAFE'
             description_lines.append(
                 f"画像 {idx}:\n"
                 f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
-                f"🔍 判定ラベル: {label} (信頼度: {result['score']*100:.2f}%)\n\n"
+                f"🔍 判定ラベル: {label} (信頼度: {result.get('score', 0)*100:.2f}%)\n\n"
             )
 
         embed = discord.Embed(
