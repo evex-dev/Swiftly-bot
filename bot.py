@@ -295,7 +295,7 @@ class SwiftlyBot(commands.AutoShardedBot):
         while True:
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"{len(self.guilds)}のサーバー数 || {round(self.latency * 1000)}ms"
+                    name=f"メンテナンス中...(詳しくは自己紹介欄を確認)",
                 )
             )
             await asyncio.sleep(300)  # 5分ごとに更新
