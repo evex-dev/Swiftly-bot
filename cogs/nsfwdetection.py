@@ -42,14 +42,14 @@ class NSFWDetection(commands.Cog):
         description_lines = []
 
         for idx, result in enumerate(results, start=1):
-            # Map 'normal' to 'SAFE' and 'nsfw' to 'NSFW'
-            label = 'SAFE' if result['label'] == 'normal' else 'NSFW'
+            # Directly check the label from the result
+            label = 'NSFW' if result[0]['label'] == 'nsfw' else 'SAFE'
             if label == 'NSFW':
                 final_label = 'NSFW'
             description_lines.append(
                 f"画像 {idx}:\n"
                 f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
-                f"🔍 判定ラベル: {label} (信頼度: {result['score']*100:.2f}%)\n\n"
+                f"🔍 判定ラベル: {label} (信頼度: {result[0]['score']*100:.2f}%)\n\n"
             )
 
         embed = discord.Embed(
