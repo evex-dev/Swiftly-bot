@@ -5,6 +5,7 @@ from discord.ext import commands
 from transformers import pipeline
 from PIL import Image
 import io
+from cogs.premium import PremiumDatabase
 
 class NSFWDetection(commands.Cog):
     def __init__(self, bot):
@@ -18,6 +19,12 @@ class NSFWDetection(commands.Cog):
 
     @commands.command(name="nsfwdetect")
     async def analyze_nsfw(self, ctx):
+        user_id = ctx.author.id
+        premium_db = PremiumDatabase()
+        user_data = premium_db.get_user(user_id)
+        if not user_data:
+            return await ctx.send("このコマンドはプレミアムユーザー専用です。プレミアム機能を有効化するには、Swiftlyを自分のサーバーに導入してください。既にサーバーに導入済みの場合は、開発者(techfish_1)にお問い合わせください。\n(プレミアム機能は完全無料です。有料ではありません。)")
+
         if not (ctx.message.reference and ctx.message.reference.message_id):
             return await ctx.send("参照先のメッセージに画像を添付してください。")
 

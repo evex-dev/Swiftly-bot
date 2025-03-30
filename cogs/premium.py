@@ -92,7 +92,8 @@ class Premium(commands.Cog):
                 "これからもSwiftlyをよろしくお願いします！\n\n"
                 "🌐 **Swiftlyの共有もお願いします！**\n"
                 "🔗 [公式サイト](https://sakana11.org/swiftly/)\n"
-                "🔗 [Discordアプリページ](https://discord.com/discovery/applications/1310198598213963858)"
+                "🔗 [Discordアプリページ](https://discord.com/discovery/applications/1310198598213963858)\n\n"
+                "(プレミアム機能は完全無料です。有料ではありません。)"
             )
         except Exception as e:
             logger.error("Failed to send DM to guild owner: %s", e, exc_info=True)
