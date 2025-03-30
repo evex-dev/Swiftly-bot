@@ -38,34 +38,19 @@ class NSFWDetection(commands.Cog):
         # Single batch inference
         results = self.classifier(images)
 
-        # Debugging: Log the results to check the structure
-        print("Debugging results:", results)
-
         final_label = 'SAFE'
         description_lines = []
-        all_results_valid = True
 
         for idx, result in enumerate(results, start=1):
-            if isinstance(result, dict):
-                # Map 'normal' to 'SAFE' and 'nsfw' to 'NSFW'
-                label = 'SAFE' if result.get('label') == 'normal' else 'NSFW'
-                if label == 'NSFW':
-                    final_label = 'NSFW'
-                description_lines.append(
-                    f"画像 {idx}:\n"
-                    f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
-                    f"🔍 判定ラベル: {label} (信頼度: {result.get('score', 0)*100:.2f}%)\n\n"
-                )
-            else:
-                all_results_valid = False
-                description_lines.append(
-                    f"画像 {idx}:\n"
-                    f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
-                    f"⚠️ 結果が不明です。\n\n"
-                )
-
-        if not all_results_valid:
-            final_label = '不明'
+            # Map 'normal' to 'SAFE' and 'nsfw' to 'NSFW'
+            label = 'SAFE' if result['label'] == 'normal' else 'NSFW'
+            if label == 'NSFW':
+                final_label = 'NSFW'
+            description_lines.append(
+                f"画像 {idx}:\n"
+                f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
+                f"🔍 判定ラベル: {label} (信頼度: {result['score']*100:.2f}%)\n\n"
+            )
 
         embed = discord.Embed(
             title="NSFW コンテンツ判定結果",
