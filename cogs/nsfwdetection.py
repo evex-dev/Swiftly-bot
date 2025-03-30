@@ -44,15 +44,21 @@ class NSFWDetection(commands.Cog):
         final_label = 'SAFE'
         description_lines = []
         for idx, result in enumerate(results, start=1):
-            # Ensure result is a dictionary and access keys safely
-            label = 'SAFE' if result.get('label') == 'normal' else 'UNSAFE'
-            if label == 'UNSAFE':
-                final_label = 'UNSAFE'
-            description_lines.append(
-                f"画像 {idx}:\n"
-                f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
-                f"🔍 判定ラベル: {label} (信頼度: {result.get('score', 0)*100:.2f}%)\n\n"
-            )
+            if isinstance(result, dict):
+                label = 'SAFE' if result.get('label') == 'normal' else 'NSFW'
+                if label == 'NSFW':
+                    final_label = 'NSFW'
+                description_lines.append(
+                    f"画像 {idx}:\n"
+                    f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
+                    f"🔍 判定ラベル: {label} (信頼度: {result.get('score', 0)*100:.2f}%)\n\n"
+                )
+            else:
+                description_lines.append(
+                    f"画像 {idx}:\n"
+                    f"📄 ファイル名: {valid_attachments[idx-1].filename}\n"
+                    f"⚠️ 結果が不明です。\n\n"
+                )
 
         embed = discord.Embed(
             title="NSFW コンテンツ判定結果",
