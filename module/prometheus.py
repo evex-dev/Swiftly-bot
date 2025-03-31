@@ -4,6 +4,7 @@ from prometheus_client import Counter, Gauge, start_http_server
 import json
 import os
 from asyncio import Lock
+import sqlite3
 
 class PrometheusCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -44,6 +45,10 @@ class PrometheusCog(commands.Cog):
         self.vc_active_count = Gauge(
             'discord_bot_vc_active_count',
             'Number of active voice channels the bot is currently in'
+        )
+        self.premium_user_count = Gauge(
+            'discord_bot_premium_users_total',
+            'Total number of premium users'
         )
 
         # Temporary message counter
@@ -121,6 +126,22 @@ class PrometheusCog(commands.Cog):
         async with self._message_count_lock:
             self.message_count_per_minute.set(self._message_count_temp)
             self._message_count_temp = 0
+
+        # Update premium user count
+        premium_user_count = self.get_premium_user_count()
+        self.premium_user_count.set(premium_user_count)
+
+    def get_premium_user_count(self):
+        # Load premium user count from the database
+        try:
+            conn = sqlite3.connect('data/premium.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM premium_users")
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count
+        except sqlite3.Error:
+            return 0
 
     @update_gauges.before_loop
     async def before_update_gauges(self):
