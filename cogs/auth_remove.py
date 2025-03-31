@@ -18,13 +18,20 @@ class AuthRemove(commands.Cog):
     )
     async def remove_auth_panel(self, interaction: discord.Interaction, message_id: int) -> None:
         async with aiosqlite.connect(DB_PATH) as conn:
-            async with conn.execute("SELECT channel_id FROM panels WHERE message_id = ?", (message_id,)) as cursor:
+            async with conn.execute(
+                "SELECT channel_id, guild_id FROM panels WHERE message_id = ?", (message_id,)
+            ) as cursor:
                 row = await cursor.fetchone()
                 if not row:
                     await interaction.response.send_message("指定されたメッセージIDの認証パネルが見つかりません。", ephemeral=True)
                     return
 
-                channel = interaction.guild.get_channel(row[0])
+                channel_id, guild_id = row
+                if guild_id != interaction.guild.id:
+                    await interaction.response.send_message("指定されたメッセージIDはこのサーバーのものではありません。", ephemeral=True)
+                    return
+
+                channel = interaction.guild.get_channel(channel_id)
                 if channel:
                     try:
                         message = await channel.fetch_message(message_id)
