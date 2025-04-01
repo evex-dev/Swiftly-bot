@@ -160,7 +160,7 @@ class BotAdmin(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        from cogs.premium import PremiumDatabase
+        from cogs.premium.premium import PremiumDatabase
         self.db = PremiumDatabase()
 
     def is_admin(self, user_id: int) -> bool:

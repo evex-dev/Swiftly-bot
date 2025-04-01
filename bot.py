@@ -54,7 +54,8 @@ class CogReloader(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.is_directory and event.src_path.endswith('.py'):
             file_path = Path(event.src_path)
-            if file_path.parent.name == "cogs":
+            # cogsディレクトリ配下のファイルかどうかをチェック
+            if PATHS["cogs_dir"] in file_path.parents:
                 future = asyncio.run_coroutine_threadsafe(
                     self._handle_cog_change(file_path),
                     self.bot.loop
@@ -65,30 +66,33 @@ class CogReloader(FileSystemEventHandler):
                     logger.error("Error in cog reload: %s", e, exc_info=True)
 
     async def _handle_cog_change(self, file_path: Path) -> None:
-        cog_name = f"cogs.{file_path.stem}"
+        # ファイルパスからモジュールパスを構築
+        relative_path = file_path.relative_to(Path("."))
+        module_path = str(relative_path).replace(os.sep, ".")[:-3]  # .pyを削除
+        
         current_time = time.time()
 
         # クールダウンチェック
-        if cog_name in self._last_reload:
-            if current_time - self._last_reload[cog_name] < self.RELOAD_COOLDOWN:
+        if module_path in self._last_reload:
+            if current_time - self._last_reload[module_path] < self.RELOAD_COOLDOWN:
                 return
 
         async with self._reload_lock:
             try:
                 # 既存のCogをアンロード
-                if cog_name in [ext for ext in self.bot.extensions]:
-                    await self.bot.unload_extension(cog_name)
+                if module_path in [ext for ext in self.bot.extensions]:
+                    await self.bot.unload_extension(module_path)
 
                 # Cogを再読み込み
-                await self.bot.load_extension(cog_name)
-                self._last_reload[cog_name] = current_time
-                logger.info("Reloaded: %s", cog_name)
+                await self.bot.load_extension(module_path)
+                self._last_reload[module_path] = current_time
+                logger.info("Reloaded: %s", module_path)
 
                 # コマンドを再同期
                 await self.bot.tree.sync()
-                logger.info("Commands synced after reloading: %s", cog_name)
+                logger.info("Commands synced after reloading: %s", module_path)
             except Exception as e:
-                logger.error("Failed to reload %s: %s", cog_name, e, exc_info=True)
+                logger.error("Failed to reload %s: %s", module_path, e, exc_info=True)
 
 class DatabaseManager:
     """DB操作を管理するクラス"""
@@ -269,10 +273,10 @@ class SwiftlyBot(commands.AutoShardedBot):
         await self.db.initialize()
         await self._load_extensions()
 
-        # ファイル監視を開始
-        self.observer.schedule(self.cog_reloader, str(PATHS["cogs_dir"]), recursive=False)
+        # ファイル監視を開始（再帰的に監視するようにrecursive=Trueに変更）
+        self.observer.schedule(self.cog_reloader, str(PATHS["cogs_dir"]), recursive=True)
         self.observer.start()
-        logger.info("Started watching cogs directory for changes")
+        logger.info("Started watching cogs directory and subdirectories for changes")
 
         await self.add_cog(LoggingCog(self))  # LoggingCogを追加
         await self.add_cog(PrometheusCog(self))
@@ -280,15 +284,19 @@ class SwiftlyBot(commands.AutoShardedBot):
 
     async def _load_extensions(self) -> None:
         """Cogを読み込み"""
-        for file in PATHS["cogs_dir"].glob("*.py"):
+        for file in PATHS["cogs_dir"].glob("**/*.py"):
             if file.stem == "__init__":
                 continue
-
+                
+            # サブディレクトリのパスをモジュールパスに変換
+            relative_path = file.relative_to(Path("."))
+            module_path = str(relative_path).replace(os.sep, ".")[:-3]  # .pyを削除
+            
             try:
-                await self.load_extension(f"cogs.{file.stem}")
-                logger.info("Loaded: cogs.%s", file.stem)
+                await self.load_extension(module_path)
+                logger.info("Loaded: %s", module_path)
             except Exception as e:
-                logger.error("Failed to load: cogs.%s - %s", file.stem, e, exc_info=True)
+                logger.error("Failed to load: %s - %s", module_path, e, exc_info=True)
 
     async def update_presence(self) -> None:
         """ステータスを更新"""

@@ -5,7 +5,7 @@ from discord.ext import commands
 from transformers import pipeline
 from PIL import Image
 import io
-from cogs.premium import PremiumDatabase
+from cogs.premium.premium import PremiumDatabase
 
 class NSFWDetection(commands.Cog):
     def __init__(self, bot):

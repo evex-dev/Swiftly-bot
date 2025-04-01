@@ -13,7 +13,7 @@ import edge_tts
 import discord
 from discord.ext import commands
 
-from cogs.premium import PremiumDatabase
+from cogs.premium.premium import PremiumDatabase
 
 VOICE: Final[str] = "ja-JP-NanamiNeural"
 MAX_MESSAGE_LENGTH: Final[int] = 75
