@@ -172,7 +172,7 @@ class GuildTTS:
         self.channel_id = channel_id
         self.voice_client = voice_client
         self.text_channel_id = text_channel_id    # 追加: /joinが実行されたテキストチャンネルID
-        self.tts_queue: List[str] = []
+        self.tts_queue: List[Dict[str, any]] = []  # メッセージだけでなく、ユーザーIDとボイス情報も格納
         self.lock = asyncio.Lock()
 
 class VoiceState:
@@ -187,7 +187,8 @@ class VoiceState:
         self,
         guild_id: int,
         message: str,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        voice: Optional[str] = None
     ) -> None:
         guild_state = self.guilds.get(guild_id)
         if not guild_state:
@@ -195,9 +196,10 @@ class VoiceState:
 
         voice_client = guild_state.voice_client
 
-        # プレミアムユーザーのボイスを取得
-        user_data = self.premium_db.get_user(user_id) if user_id else None
-        voice = user_data[0] if user_data and len(user_data) > 0 else VOICE
+        # ボイスが指定されていない場合は、プレミアムユーザーのボイスまたはデフォルトボイスを使用
+        if voice is None:
+            user_data = self.premium_db.get_user(user_id) if user_id else None
+            voice = user_data[0] if user_data and len(user_data) > 0 else VOICE
 
         temp_path = await self.tts_manager.generate_audio(message, guild_id, voice)
         if not temp_path:
@@ -210,8 +212,11 @@ class VoiceState:
                 if voice_client.is_connected():
                     async with guild_state.lock:
                         if guild_state.tts_queue:
-                            next_message = guild_state.tts_queue.pop(0)
-                            await self.play_tts(guild_id, next_message, user_id)
+                            next_item = guild_state.tts_queue.pop(0)
+                            next_message = next_item["message"]
+                            next_user_id = next_item.get("user_id")
+                            next_voice = next_item.get("voice")
+                            await self.play_tts(guild_id, next_message, next_user_id, next_voice)
             asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
 
         voice_client.play(
@@ -379,12 +384,29 @@ class Voice(commands.Cog):
                 return
 
             processed_message = MessageProcessor.process_message(message, dictionary=self.dictionary)
+            
+            # プレミアムユーザーのボイス情報を取得
+            user_id = interaction.user.id
+            user_data = self.state.premium_db.get_user(user_id)
+            voice = user_data[0] if user_data and len(user_data) > 0 else None
+            
             guild_state = self.state.guilds[guild_id]
             async with guild_state.lock:
-                guild_state.tts_queue.append(processed_message)
+                # メッセージとユーザーID、ボイス情報をキューに追加
+                guild_state.tts_queue.append({
+                    "message": processed_message,
+                    "user_id": user_id,
+                    "voice": voice
+                })
+                
                 if not guild_state.voice_client.is_playing():
-                    next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild_id, next_message, interaction.user.id)
+                    next_item = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(
+                        guild_id, 
+                        next_item["message"], 
+                        next_item["user_id"],
+                        next_item.get("voice")
+                    )
 
             self._last_uses[interaction.user.id] = datetime.now()
             await interaction.response.send_message(
@@ -506,11 +528,28 @@ class Voice(commands.Cog):
                 message.attachments,
                 self.dictionary
             )
+            
+            # プレミアムユーザーのボイス情報を取得
+            user_id = message.author.id
+            user_data = self.state.premium_db.get_user(user_id) 
+            voice = user_data[0] if user_data and len(user_data) > 0 else None
+            
             async with guild_state.lock:
-                guild_state.tts_queue.append(processed_message)
+                # メッセージとユーザーID、ボイス情報をキューに追加
+                guild_state.tts_queue.append({
+                    "message": processed_message,
+                    "user_id": user_id,
+                    "voice": voice
+                })
+                
                 if not guild_state.voice_client.is_playing():
-                    next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild.id, next_message, message.author.id)
+                    next_item = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(
+                        guild.id, 
+                        next_item["message"], 
+                        next_item["user_id"],
+                        next_item.get("voice")
+                    )
 
         except Exception as e:
             logger.error("Error in message handler: %s", e, exc_info=True)
