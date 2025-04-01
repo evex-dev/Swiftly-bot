@@ -120,19 +120,48 @@ class Premium(commands.Cog):
         name="set_voice",
         description="読み上げボイスを設定します (プレミアムユーザーのみ)"
     )
-    async def set_voice(self, interaction: discord.Interaction, voice: str):
-        if voice not in ["ja-JP-KeitaNeural", "ja-JP-NanamiNeural"]:
-            await interaction.response.send_message("無効なボイスです。\nボイスは以下から選べます。\n- ja-JP-KeitaNeural\n- ja-JP-NanamiNeural", ephemeral=True)
-            return
+    async def set_voice(self, interaction: discord.Interaction):
+        options = [
+            discord.SelectOption(label="Keita", value="ja-JP-KeitaNeural", description="男性ボイス"),
+            discord.SelectOption(label="Nanami", value="ja-JP-NanamiNeural", description="女性ボイス")
+        ]
 
-        user_id = interaction.user.id
-        user_data = self.db.get_user(user_id)
-        if not user_data:
-            await interaction.response.send_message("プレミアムユーザーのみがこの機能を使用できます。\nSwiftlyを自分のサーバーに導入することでプレミアム機能が使用できるようになります。\nすでに導入済みの場合は開発者(techfish_1)にお問い合わせください。", ephemeral=True)
-            return
+        class VoiceSelect(discord.ui.Select):
+            def __init__(self):
+                super().__init__(
+                    placeholder="ボイスを選択してください",
+                    min_values=1,
+                    max_values=1,
+                    options=options
+                )
 
-        self.db.update_voice(user_id, voice)
-        await interaction.response.send_message(f"ボイスを {voice} に設定しました。", ephemeral=True)
+            async def callback(self, interaction: discord.Interaction):
+                selected_voice = self.values[0]
+                user_id = interaction.user.id
+                user_data = self.view.cog.db.get_user(user_id)
+                if not user_data:
+                    await interaction.response.send_message(
+                        "プレミアムユーザーのみがこの機能を使用できます。\n"
+                        "Swiftlyを自分のサーバーに導入することでプレミアム機能が使用できるようになります。\n"
+                        "すでに導入済みの場合は開発者(techfish_1)にお問い合わせください。",
+                        ephemeral=True
+                    )
+                    return
+
+                self.view.cog.db.update_voice(user_id, selected_voice)
+                await interaction.response.send_message(f"ボイスを {selected_voice} に設定しました。", ephemeral=True)
+
+        class VoiceSelectView(discord.ui.View):
+            def __init__(self, cog):
+                super().__init__()
+                self.cog = cog
+                self.add_item(VoiceSelect())
+
+        await interaction.response.send_message(
+            "以下からボイスを選択してください。",
+            view=VoiceSelectView(self),
+            ephemeral=True
+        )
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Premium(bot))
