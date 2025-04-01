@@ -135,6 +135,12 @@ class MessageProcessor:
     @staticmethod
     def sanitize_message(text: str) -> str:
         result = text
+        
+        # 絵文字・スタンプのパターン (<:name:id> または <a:name:id>)
+        emoji_pattern = r"<a?:[a-zA-Z0-9_]+:[0-9]+>"
+        result = re.sub(emoji_pattern, "スタンプ", result)
+        
+        # その他のパターン処理
         for pattern_name, pattern in PATTERNS.items():
             if pattern_name == "url":
                 result = re.sub(pattern, "URL省略", result)
