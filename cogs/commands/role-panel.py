@@ -48,6 +48,18 @@ class RolePanel(commands.Cog):
         except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
             logger.error("Failed to fetch message: %s", e)
             return None
+            
+    async def _check_admin(self, interaction: discord.Interaction) -> bool:
+        """ユーザーがサーバー管理者権限を持っているか確認する"""
+        if not interaction.guild:
+            await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+            return False
+            
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("このコマンドはサーバー管理者のみが使用できます。", ephemeral=True)
+            return False
+            
+        return True
 
     role_panel_group = app_commands.Group(name="role-panel", description="ロールパネル関連のコマンド")
 
@@ -64,6 +76,9 @@ class RolePanel(commands.Cog):
         description: str
     ):
         """新しいロールパネルを作成する"""
+        if not await self._check_admin(interaction):
+            return
+            
         embed = discord.Embed(
             title=title,
             description=description,
