@@ -12,19 +12,46 @@ class Work(commands.Cog):
         self.bot = bot
         self.db_path = 'data/work.db'
         self.economy_cog = None
+        self.currency_name = "スイフト"  # デフォルト値
+        self.currency_symbol = "🪙"  # デフォルト値
         self.cooldowns = {}
         bot.loop.create_task(self.setup_database())
+        bot.loop.create_task(self.load_economy_cog())
     
-    async def cog_load(self):
-        # Economy cogが読み込まれるまで待機
-        while self.economy_cog is None:
-            try:
-                self.economy_cog = self.bot.get_cog("Economy")
-                if self.economy_cog:
-                    break
-            except:
-                pass
-            await asyncio.sleep(1)
+    async def load_economy_cog(self):
+        """Economy cogを読み込む（利用可能になったタイミングで）"""
+        for _ in range(10):  # 10回までリトライ
+            self.economy_cog = self.bot.get_cog("Economy")
+            if self.economy_cog:
+                self.currency_name = self.economy_cog.currency_name
+                self.currency_symbol = self.economy_cog.currency_symbol
+                break
+            await asyncio.sleep(5)  # 5秒待機
+    
+    async def get_currency_info(self):
+        """通貨情報の取得 (Economy cogがない場合はデフォルト値を使用)"""
+        if self.economy_cog:
+            return self.economy_cog.currency_symbol, self.economy_cog.currency_name
+        return self.currency_symbol, self.currency_name
+    
+    async def update_balance(self, user_id, amount):
+        """残高更新 (Economy cogがない場合はFalseを返す)"""
+        if not self.economy_cog:
+            return False
+        await self.economy_cog.update_balance(user_id, amount)
+        return True
+    
+    async def get_balance(self, user_id):
+        """残高取得 (Economy cogがない場合は0を返す)"""
+        if not self.economy_cog:
+            return 0
+        return await self.economy_cog.get_balance(user_id)
+    
+    async def add_transaction(self, sender_id, receiver_id, amount, description):
+        """取引記録 (Economy cogがない場合は何もしない)"""
+        if not self.economy_cog:
+            return
+        await self.economy_cog.add_transaction(sender_id, receiver_id, amount, description)
     
     async def setup_database(self):
         # データディレクトリの確認
@@ -79,6 +106,10 @@ class Work(commands.Cog):
     async def work(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         
+        if not self.economy_cog:
+            await interaction.response.send_message("経済システムが現在利用できません。しばらく経ってから再度お試しください。", ephemeral=True)
+            return
+        
         # クールダウンチェック
         cooldown = self.get_cooldown_remaining(user_id, "work")
         if cooldown:
@@ -110,8 +141,8 @@ class Work(commands.Cog):
         amount = random.randint(job["min"], job["max"])
         
         # 報酬を与える
-        await self.economy_cog.update_balance(user_id, amount)
-        await self.economy_cog.add_transaction(0, user_id, amount, f"Work: {job['name']}")
+        await self.update_balance(user_id, amount)
+        await self.add_transaction(0, user_id, amount, f"Work: {job['name']}")
         await self.log_work(user_id, job["name"], amount)
         
         # クールダウンを設定（30分）
@@ -119,12 +150,12 @@ class Work(commands.Cog):
         
         embed = discord.Embed(
             title=f"{job['emoji']} {job['name']}",
-            description=f"{job['description']}\n\n**+{amount}** {self.economy_cog.currency_symbol} {self.economy_cog.currency_name}を獲得しました！",
+            description=f"{job['description']}\n\n**+{amount}** {self.currency_symbol} {self.currency_name}を獲得しました！",
             color=discord.Color.green()
         )
         
-        new_balance = await self.economy_cog.get_balance(user_id)
-        embed.add_field(name="残高", value=f"{new_balance} {self.economy_cog.currency_symbol}")
+        new_balance = await self.get_balance(user_id)
+        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}")
         embed.set_footer(text="次の仕事まで30分待つ必要があります")
         
         await interaction.response.send_message(embed=embed)
@@ -162,8 +193,8 @@ class Work(commands.Cog):
         amount = random.randint(task["min"], task["max"])
         
         # 報酬を与える
-        await self.economy_cog.update_balance(user_id, amount)
-        await self.economy_cog.add_transaction(0, user_id, amount, f"Task: {task['name']}")
+        await self.update_balance(user_id, amount)
+        await self.add_transaction(0, user_id, amount, f"Task: {task['name']}")
         await self.log_work(user_id, task["name"], amount)
         
         # クールダウンを設定（15分）
@@ -171,12 +202,12 @@ class Work(commands.Cog):
         
         embed = discord.Embed(
             title=f"{task['emoji']} {task['name']}",
-            description=f"{task['description']}\n\n**+{amount}** {self.economy_cog.currency_symbol} {self.economy_cog.currency_name}を獲得しました！",
+            description=f"{task['description']}\n\n**+{amount}** {self.currency_symbol} {self.currency_name}を獲得しました！",
             color=discord.Color.blue()
         )
         
-        new_balance = await self.economy_cog.get_balance(user_id)
-        embed.add_field(name="残高", value=f"{new_balance} {self.economy_cog.currency_symbol}")
+        new_balance = await self.get_balance(user_id)
+        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}")
         embed.set_footer(text="次のタスクまで15分待つ必要があります")
         
         await interaction.response.send_message(embed=embed)
@@ -212,8 +243,8 @@ class Work(commands.Cog):
         amount = random.randint(job["min"], job["max"])
         
         # 報酬を与える
-        await self.economy_cog.update_balance(user_id, amount)
-        await self.economy_cog.add_transaction(0, user_id, amount, f"Part-time: {job['name']}")
+        await self.update_balance(user_id, amount)
+        await self.add_transaction(0, user_id, amount, f"Part-time: {job['name']}")
         await self.log_work(user_id, f"PartTime:{job['name']}", amount)
         
         # クールダウンを設定（60分）
@@ -221,12 +252,12 @@ class Work(commands.Cog):
         
         embed = discord.Embed(
             title=f"{job['emoji']} {job['name']}",
-            description=f"{job['description']}\n\n**+{amount}** {self.economy_cog.currency_symbol} {self.economy_cog.currency_name}を獲得しました！",
+            description=f"{job['description']}\n\n**+{amount}** {self.currency_symbol} {self.currency_name}を獲得しました！",
             color=discord.Color.gold()
         )
         
-        new_balance = await self.economy_cog.get_balance(user_id)
-        embed.add_field(name="残高", value=f"{new_balance} {self.economy_cog.currency_symbol}")
+        new_balance = await self.get_balance(user_id)
+        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}")
         embed.set_footer(text="次のアルバイトまで60分待つ必要があります")
         
         await interaction.response.send_message(embed=embed)

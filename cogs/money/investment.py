@@ -13,26 +13,53 @@ class Investment(commands.Cog):
         self.bot = bot
         self.db_path = 'data/investment.db'
         self.economy_cog = None
+        self.currency_name = "スイフト"  # デフォルト値
+        self.currency_symbol = "🪙"  # デフォルト値
         self.stock_update_task = None
         self.stocks = {}
         bot.loop.create_task(self.setup_database())
+        bot.loop.create_task(self.load_economy_cog())
     
-    async def cog_load(self):
-        # Economy cogが読み込まれるまで待機
-        while self.economy_cog is None:
-            try:
-                self.economy_cog = self.bot.get_cog("Economy")
-                if self.economy_cog:
-                    break
-            except:
-                pass
-            await asyncio.sleep(1)
+    async def load_economy_cog(self):
+        """Economy cogを読み込む（利用可能になったタイミングで）"""
+        for _ in range(10):  # 10回までリトライ
+            self.economy_cog = self.bot.get_cog("Economy")
+            if self.economy_cog:
+                self.currency_name = self.economy_cog.currency_name
+                self.currency_symbol = self.economy_cog.currency_symbol
+                break
+            await asyncio.sleep(5)  # 5秒待機
         
-        # 株価更新タスクの開始
+        # 株価更新タスクの開始（Economy cogがなくても開始）
         self.stock_update_task = self.bot.loop.create_task(self.update_stocks_loop())
         
         # 初期株価の読み込み
         await self.load_stocks()
+    
+    async def get_currency_info(self):
+        """通貨情報の取得 (Economy cogがない場合はデフォルト値を使用)"""
+        if self.economy_cog:
+            return self.economy_cog.currency_symbol, self.economy_cog.currency_name
+        return self.currency_symbol, self.currency_name
+    
+    async def update_balance(self, user_id, amount):
+        """残高更新 (Economy cogがない場合はFalseを返す)"""
+        if not self.economy_cog:
+            return False
+        await self.economy_cog.update_balance(user_id, amount)
+        return True
+    
+    async def get_balance(self, user_id):
+        """残高取得 (Economy cogがない場合は0を返す)"""
+        if not self.economy_cog:
+            return 0
+        return await self.economy_cog.get_balance(user_id)
+    
+    async def add_transaction(self, sender_id, receiver_id, amount, description):
+        """取引記録 (Economy cogがない場合は何もしない)"""
+        if not self.economy_cog:
+            return
+        await self.economy_cog.add_transaction(sender_id, receiver_id, amount, description)
     
     async def cog_unload(self):
         # タスクのキャンセル
@@ -197,13 +224,13 @@ class Investment(commands.Cog):
         total_cost = quantity * current_price
         
         # まず所持金をチェック
-        balance = await self.economy_cog.get_balance(user_id)
+        balance = await self.get_balance(user_id)
         if balance < total_cost:
             return False, "残高不足です"
         
         # 所持金から購入金額を差し引く
-        await self.economy_cog.update_balance(user_id, -total_cost)
-        await self.economy_cog.add_transaction(user_id, 0, total_cost, f"株式購入: {quantity}株")
+        await self.update_balance(user_id, -total_cost)
+        await self.add_transaction(user_id, 0, total_cost, f"株式購入: {quantity}株")
         
         # 株式購入記録
         async with aiosqlite.connect(self.db_path) as db:
@@ -288,8 +315,8 @@ class Investment(commands.Cog):
             await db.commit()
         
         # 売却金額を所持金に追加
-        await self.economy_cog.update_balance(user_id, total_earning)
-        await self.economy_cog.add_transaction(0, user_id, total_earning, f"株式売却: {quantity}株")
+        await self.update_balance(user_id, total_earning)
+        await self.add_transaction(0, user_id, total_earning, f"株式売却: {quantity}株")
         
         return True, "株式売却が完了しました"
     
@@ -303,6 +330,8 @@ class Investment(commands.Cog):
         if not stocks:
             await interaction.response.send_message("現在、株式市場にデータがありません。", ephemeral=True)
             return
+        
+        symbol, name = await self.get_currency_info()
         
         embed = discord.Embed(
             title="📈 株式市場",
@@ -327,86 +356,12 @@ class Investment(commands.Cog):
             
             embed.add_field(
                 name=f"{change_emoji} {stock['symbol']} - {stock['name']}",
-                value=f"価格: **{stock['price']:.2f}** {self.economy_cog.currency_symbol}\n変動: {change_text}",
+                value=f"価格: **{stock['price']:.2f}** {symbol}\n変動: {change_text}",
                 inline=True
             )
         
         last_update = datetime.fromisoformat(stocks[0]['last_update']).strftime('%Y-%m-%d %H:%M:%S')
         embed.set_footer(text=f"最終更新: {last_update} | 株価は1時間ごとに更新されます")
-        
-        await interaction.response.send_message(embed=embed)
-    
-    @app_commands.command(name="portfolio", description="保有している株式ポートフォリオを表示します")
-    async def portfolio(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        holdings = await self.get_user_stocks(user_id)
-        
-        if not holdings:
-            await interaction.response.send_message("あなたはまだ株式を保有していません。", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="📊 投資ポートフォリオ",
-            description=f"{interaction.user.mention}の株式保有状況",
-            color=discord.Color.purple()
-        )
-        
-        total_value = 0
-        total_cost = 0
-        
-        for holding in holdings:
-            current_value = holding['quantity'] * holding['price']
-            purchase_value = holding['quantity'] * holding['purchase_price']
-            profit = current_value - purchase_value
-            profit_percent = (profit / purchase_value) * 100 if purchase_value > 0 else 0
-            
-            total_value += current_value
-            total_cost += purchase_value
-            
-            # 利益・損失の表示
-            if profit > 0:
-                profit_text = f"+{profit:.2f} (+{profit_percent:.2f}%)"
-                profit_emoji = "📈"
-            elif profit < 0:
-                profit_text = f"{profit:.2f} ({profit_percent:.2f}%)"
-                profit_emoji = "📉"
-            else:
-                profit_text = "0.00 (0.00%)"
-                profit_emoji = "➖"
-            
-            # 購入日時
-            purchase_date = datetime.fromisoformat(holding['purchase_date']).strftime('%Y-%m-%d')
-            
-            embed.add_field(
-                name=f"{holding['symbol']} - {holding['name']} (ID: {holding['id']})",
-                value=f"保有数: **{holding['quantity']}**株\n"
-                      f"購入価格: {holding['purchase_price']:.2f} {self.economy_cog.currency_symbol}/株\n"
-                      f"現在価格: {holding['price']:.2f} {self.economy_cog.currency_symbol}/株\n"
-                      f"損益: {profit_emoji} {profit_text}\n"
-                      f"購入日: {purchase_date}",
-                inline=False
-            )
-        
-        # 総合成績
-        total_profit = total_value - total_cost
-        total_profit_percent = (total_profit / total_cost) * 100 if total_cost > 0 else 0
-        
-        if total_profit > 0:
-            total_profit_text = f"+{total_profit:.2f} (+{total_profit_percent:.2f}%)"
-            embed.color = discord.Color.green()
-        elif total_profit < 0:
-            total_profit_text = f"{total_profit:.2f} ({total_profit_percent:.2f}%)"
-            embed.color = discord.Color.red()
-        else:
-            total_profit_text = "0.00 (0.00%)"
-        
-        embed.add_field(
-            name="総合成績",
-            value=f"総投資額: {total_cost:.2f} {self.economy_cog.currency_symbol}\n"
-                  f"現在価値: {total_value:.2f} {self.economy_cog.currency_symbol}\n"
-                  f"総損益: {total_profit_text}",
-            inline=False
-        )
         
         await interaction.response.send_message(embed=embed)
     
@@ -416,6 +371,10 @@ class Investment(commands.Cog):
         quantity="購入する株数"
     )
     async def buystock(self, interaction: discord.Interaction, symbol: str, quantity: int):
+        if not self.economy_cog:
+            await interaction.response.send_message("経済システムが現在利用できません。しばらく経ってから再度お試しください。", ephemeral=True)
+            return
+        
         if quantity <= 0:
             await interaction.response.send_message("購入数量は1以上で指定してください。", ephemeral=True)
             return
@@ -431,10 +390,10 @@ class Investment(commands.Cog):
         total_cost = current_price * quantity
         
         # 残高確認
-        balance = await self.economy_cog.get_balance(user_id)
+        balance = await self.get_balance(user_id)
         if balance < total_cost:
             await interaction.response.send_message(
-                f"残高不足です。必要金額: {total_cost:.2f} {self.economy_cog.currency_symbol}, 現在の残高: {balance:.2f} {self.economy_cog.currency_symbol}",
+                f"残高不足です。必要金額: {total_cost:.2f} {self.currency_symbol}, 現在の残高: {balance:.2f} {self.currency_symbol}",
                 ephemeral=True
             )
             return
@@ -450,11 +409,11 @@ class Investment(commands.Cog):
             )
             
             embed.add_field(name="購入数量", value=f"{quantity}株", inline=True)
-            embed.add_field(name="株価", value=f"{current_price:.2f} {self.economy_cog.currency_symbol}", inline=True)
-            embed.add_field(name="合計金額", value=f"{total_cost:.2f} {self.economy_cog.currency_symbol}", inline=True)
+            embed.add_field(name="株価", value=f"{current_price:.2f} {self.currency_symbol}", inline=True)
+            embed.add_field(name="合計金額", value=f"{total_cost:.2f} {self.currency_symbol}", inline=True)
             
-            new_balance = await self.economy_cog.get_balance(user_id)
-            embed.add_field(name="残高", value=f"{new_balance:.2f} {self.economy_cog.currency_symbol}", inline=False)
+            new_balance = await self.get_balance(user_id)
+            embed.add_field(name="残高", value=f"{new_balance:.2f} {self.currency_symbol}", inline=False)
             
             await interaction.response.send_message(embed=embed)
         else:
@@ -521,12 +480,12 @@ class Investment(commands.Cog):
             )
             
             embed.add_field(name="売却数量", value=f"{quantity}株", inline=True)
-            embed.add_field(name="売却価格", value=f"{current_price:.2f} {self.economy_cog.currency_symbol}/株", inline=True)
-            embed.add_field(name="合計金額", value=f"{total_earning:.2f} {self.economy_cog.currency_symbol}", inline=True)
+            embed.add_field(name="売却価格", value=f"{current_price:.2f} {self.currency_symbol}/株", inline=True)
+            embed.add_field(name="合計金額", value=f"{total_earning:.2f} {self.currency_symbol}", inline=True)
             embed.add_field(name="損益", value=profit_text, inline=True)
             
-            new_balance = await self.economy_cog.get_balance(user_id)
-            embed.add_field(name="残高", value=f"{new_balance:.2f} {self.economy_cog.currency_symbol}", inline=False)
+            new_balance = await self.get_balance(user_id)
+            embed.add_field(name="残高", value=f"{new_balance:.2f} {self.currency_symbol}", inline=False)
             
             if holding['quantity'] == quantity:
                 embed.set_footer(text="すべての株式を売却しました")
@@ -565,11 +524,11 @@ class Investment(commands.Cog):
         
         embed = discord.Embed(
             title=f"{stock['symbol']} - {stock['name']}",
-            description=f"{change_emoji} 現在の株価: **{stock['price']:.2f}** {self.economy_cog.currency_symbol}",
+            description=f"{change_emoji} 現在の株価: **{stock['price']:.2f}** {self.currency_symbol}",
             color=color
         )
         
-        embed.add_field(name="前回価格", value=f"{stock['prev_price']:.2f} {self.economy_cog.currency_symbol}", inline=True)
+        embed.add_field(name="前回価格", value=f"{stock['prev_price']:.2f} {self.currency_symbol}", inline=True)
         embed.add_field(name="変動", value=change_text, inline=True)
         embed.add_field(name="ボラティリティ", value=f"{stock['volatility'] * 100:.2f}%", inline=True)
         
@@ -602,14 +561,96 @@ class Investment(commands.Cog):
             embed.add_field(
                 name="あなたの保有状況",
                 value=f"保有数: **{quantity}**株\n"
-                      f"平均購入価格: {avg_price:.2f} {self.economy_cog.currency_symbol}\n"
-                      f"現在価値: {current_value:.2f} {self.economy_cog.currency_symbol}\n"
+                      f"平均購入価格: {avg_price:.2f} {self.currency_symbol}\n"
+                      f"現在価値: {current_value:.2f} {self.currency_symbol}\n"
                       f"損益: {profit_text}",
                 inline=False
             )
         
         last_update = datetime.fromisoformat(stock['last_update']).strftime('%Y-%m-%d %H:%M:%S')
         embed.set_footer(text=f"最終更新: {last_update}")
+        
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="portfolio", description="保有している株式ポートフォリオを表示します")
+    async def portfolio(self, interaction: discord.Interaction):
+        user_id = interaction.user.id
+        user_stocks = await self.get_user_stocks(user_id)
+        
+        if not user_stocks:
+            await interaction.response.send_message("現在、株式を保有していません。`/buystock` コマンドで株式を購入できます。", ephemeral=True)
+            return
+        
+        symbol, currency_name = await self.get_currency_info()
+        
+        embed = discord.Embed(
+            title="📊 株式ポートフォリオ",
+            description=f"{interaction.user.display_name} さんの保有株式一覧です",
+            color=discord.Color.gold()
+        )
+        
+        total_value = 0
+        total_cost = 0
+        
+        for stock in user_stocks:
+            current_price = stock['price']
+            quantity = stock['quantity']
+            purchase_price = stock['purchase_price']
+            
+            current_value_stock = current_price * quantity
+            purchase_value = purchase_price * quantity
+            profit = current_value_stock - purchase_value
+            profit_percent = (profit / purchase_value) * 100 if purchase_value > 0 else 0
+            
+            total_value += current_value_stock
+            total_cost += purchase_value
+            
+            if profit > 0:
+                profit_text = f"+{profit:.2f} {symbol} (+{profit_percent:.2f}%)"
+                profit_emoji = "🟢"
+            elif profit < 0:
+                profit_text = f"{profit:.2f} {symbol} ({profit_percent:.2f}%)"
+                profit_emoji = "🔴"
+            else:
+                profit_text = f"0.00 {symbol} (0.00%)"
+                profit_emoji = "⚪"
+            
+            purchase_date = datetime.fromisoformat(stock['purchase_date']).strftime('%Y-%m-%d')
+            
+            embed.add_field(
+                name=f"ID: {stock['id']} | {profit_emoji} {stock['symbol']} - {stock['name']}",
+                value=f"🔢 保有数: **{quantity}**株\n"
+                      f"💰 購入価格: {purchase_price:.2f} {symbol}/株\n"
+                      f"📈 現在価格: {current_price:.2f} {symbol}/株\n"
+                      f"📅 購入日: {purchase_date}\n"
+                      f"💵 評価額: {current_value_stock:.2f} {symbol}\n"
+                      f"📊 損益: {profit_text}",
+                inline=False
+            )
+        
+        # 合計の損益情報
+        total_profit = total_value - total_cost
+        total_profit_percent = (total_profit / total_cost) * 100 if total_cost > 0 else 0
+        
+        if total_profit > 0:
+            total_profit_text = f"+{total_profit:.2f} {symbol} (+{total_profit_percent:.2f}%)"
+            footer_emoji = "🟢 総合収益"
+        elif total_profit < 0:
+            total_profit_text = f"{total_profit:.2f} {symbol} ({total_profit_percent:.2f}%)"
+            footer_emoji = "🔴 総合損失"
+        else:
+            total_profit_text = f"0.00 {symbol} (0.00%)"
+            footer_emoji = "⚪ 収支なし"
+        
+        embed.add_field(
+            name="💼 ポートフォリオ合計",
+            value=f"投資額: {total_cost:.2f} {symbol}\n"
+                  f"評価額: {total_value:.2f} {symbol}\n"
+                  f"損益: {total_profit_text}",
+            inline=False
+        )
+        
+        embed.set_footer(text=f"{footer_emoji} | 株式を売却するには /sellstock コマンドを使用してください")
         
         await interaction.response.send_message(embed=embed)
 
