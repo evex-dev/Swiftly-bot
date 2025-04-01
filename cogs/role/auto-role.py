@@ -27,6 +27,18 @@ class AutoRole(commands.Cog):
         conn.commit()
         conn.close()
     
+    async def _check_admin_permission(self, interaction: discord.Interaction) -> bool:
+        """ユーザーが管理者権限を持っているかチェックする"""
+        if not interaction.guild:
+            await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+            return False
+            
+        if interaction.user.guild_permissions.administrator or interaction.user.id == interaction.guild.owner_id:
+            return True
+            
+        await interaction.response.send_message("このコマンドを使用するには管理者権限が必要です。", ephemeral=True)
+        return False
+    
     @app_commands.command(name="auto-role", description="サーバー参加時に自動的に付与するロールを設定します")
     @app_commands.describe(
         human="人間のユーザーに付与するロール",
@@ -35,11 +47,26 @@ class AutoRole(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def auto_role(self, interaction: discord.Interaction, human: discord.Role = None, bot: discord.Role = None):
         """サーバー参加時に自動的に付与するロールを設定します"""
+        # 管理者権限チェック
+        if not await self._check_admin_permission(interaction):
+            return
+            
         if not human and not bot:
             await interaction.response.send_message("少なくとも一つのロールを指定してください。", ephemeral=True)
             return
         
         guild_id = interaction.guild.id
+        
+        # ロールの管理権限チェック
+        if not interaction.guild.me.guild_permissions.manage_roles:
+            await interaction.response.send_message("Botにロールを管理する権限がありません。必要な権限を付与してください。", ephemeral=True)
+            return
+            
+        # 指定されたロールがBotよりも上位ではないかチェック
+        bot_top_role = interaction.guild.me.top_role
+        if (human and human.position >= bot_top_role.position) or (bot and bot.position >= bot_top_role.position):
+            await interaction.response.send_message("指定されたロールがBotの最上位ロールよりも上位にあるため、自動付与できません。", ephemeral=True)
+            return
         
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -84,6 +111,11 @@ class AutoRole(commands.Cog):
         try:
             guild_id = member.guild.id
             
+            # Botにロール管理権限があるか確認
+            if not member.guild.me.guild_permissions.manage_roles:
+                logging.warning(f"サーバー {member.guild.name} でロール管理権限がありません")
+                return
+                
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
@@ -98,12 +130,16 @@ class AutoRole(commands.Cog):
             
             if member.bot and bot_role_id:
                 role = member.guild.get_role(bot_role_id)
-                if role:
+                if role and role.position < member.guild.me.top_role.position:
                     await member.add_roles(role, reason="自動ロール付与: ボット")
+                else:
+                    logging.warning(f"サーバー {member.guild.name} でボットロール付与に失敗: ロールが見つからないか、権限不足")
             elif not member.bot and human_role_id:
                 role = member.guild.get_role(human_role_id)
-                if role:
+                if role and role.position < member.guild.me.top_role.position:
                     await member.add_roles(role, reason="自動ロール付与: 人間")
+                else:
+                    logging.warning(f"サーバー {member.guild.name} で人間ロール付与に失敗: ロールが見つからないか、権限不足")
         except Exception as e:
             logging.error(f"自動ロール付与中にエラーが発生しました: {e}")
 
