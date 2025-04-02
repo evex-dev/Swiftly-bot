@@ -151,10 +151,6 @@ class LoggingCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
-        # まだ応答していなければdeferしてタイムアウトを防ぐ
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-            
         guild_name = interaction.guild.name if interaction.guild else "DM"
         command_name = interaction.command.name if interaction.command else "Unknown"
         self.logger.error("Command error: %s by %s (ID: %s) in guild: %s - %s", command_name, interaction.user.name, interaction.user.id, guild_name, error)
@@ -172,23 +168,16 @@ class LoggingCog(commands.Cog):
                 event_id = sentry_sdk.capture_exception(error)
                 self.logger.info(f"Sent error event to Sentry with ID: {event_id}")
                 
-                # ユーザーにエラーIDを通知
+                # ユーザーにエラーIDをDMで通知
                 try:
                     embed = discord.Embed(
-                        title="エラーが発生しました",
+                        title="コマンド実行でエラーが発生しました",
                         description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
                         color=discord.Color.red()
                     )
-                    
-                    # インタラクション応答の状態を確認
-                    if not interaction.response.is_done():
-                        # まだ応答していない場合
-                        await interaction.response.send_message(embed=embed, ephemeral=True)
-                    else:
-                        # すでに応答済みの場合
-                        await interaction.followup.send(embed=embed, ephemeral=True)
+                    await interaction.user.send(embed=embed)
                 except Exception as e:
-                    self.logger.error(f"Failed to send error message to user: {e}")
+                    self.logger.error(f"Failed to send error message to user via DM: {e}")
 
     @commands.command(name="test_sentry")
     async def test_sentry(self, ctx: commands.Context) -> None:
