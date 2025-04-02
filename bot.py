@@ -200,7 +200,8 @@ class SwiftlyBot(commands.AutoShardedBot):
         super().__init__(
             command_prefix=COMMAND_PREFIX,
             intents=intents,
-            shard_count=SHARD_COUNT
+            shard_count=SHARD_COUNT,
+            help_command=None  # sw!helpコマンドを無効化
         )
 
         self.db = DatabaseManager(PATHS["db"])
