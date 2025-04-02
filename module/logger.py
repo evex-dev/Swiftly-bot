@@ -151,6 +151,10 @@ class LoggingCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
+        # まだ応答していなければdeferしてタイムアウトを防ぐ
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+            
         guild_name = interaction.guild.name if interaction.guild else "DM"
         command_name = interaction.command.name if interaction.command else "Unknown"
         self.logger.error("Command error: %s by %s (ID: %s) in guild: %s - %s", command_name, interaction.user.name, interaction.user.id, guild_name, error)
