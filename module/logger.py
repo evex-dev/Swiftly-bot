@@ -110,11 +110,16 @@ class LoggingCog(commands.Cog):
         guild_name = ctx.guild.name if ctx.guild else "DM"
         self.logger.error("Command error: %s by %s (ID: %s) in guild: %s - %s", ctx.command, ctx.author.name, ctx.author.id, guild_name, error)
         
+        # エラーの種類によって処理を分ける
+        if isinstance(error, commands.CommandNotFound):
+            # コマンドが見つからない場合は何もしない
+            return
+            
         # Sentryにエラーイベントを明示的に送信
         if sentry_sdk.Hub.current.client:
             with sentry_sdk.push_scope() as scope:
                 # コンテキスト情報を追加
-                scope.set_tag("command", str(ctx.command))
+                scope.set_tag("command", str(ctx.command) if ctx.command else "Unknown")
                 scope.set_tag("guild", guild_name)
                 scope.set_user({"id": str(ctx.author.id), "username": ctx.author.name})
                 scope.set_extra("message_content", ctx.message.content if hasattr(ctx.message, "content") else "No content")
@@ -124,7 +129,20 @@ class LoggingCog(commands.Cog):
                 self.logger.info(f"Sent error event to Sentry with ID: {event_id}")
                 
                 # ユーザーにエラーIDを通知
-                await ctx.send(f"エラーが発生しました。\nエラーID: `{event_id}`")
+                try:
+                    embed = discord.Embed(
+                        title="エラーが発生しました",
+                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                        color=discord.Color.red()
+                    )
+                    await ctx.send(embed=embed)
+                except Exception as e:
+                    self.logger.error(f"Failed to send error message to user: {e}")
+                    # バックアップとして通常のメッセージを試す
+                    try:
+                        await ctx.send(f"エラーが発生しました。\nエラーID: `{event_id}`")
+                    except Exception:
+                        pass
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command: discord.app_commands.Command) -> None:
@@ -157,12 +175,13 @@ class LoggingCog(commands.Cog):
                         description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
                         color=discord.Color.red()
                     )
-                    try:
-                        if interaction.response.is_done():
-                            await interaction.followup.send(embed=embed, ephemeral=True)
-                        else:
-                            await interaction.response.send_message(embed=embed, ephemeral=True)
-                    except discord.InteractionResponded:
+                    
+                    # インタラクション応答の状態を確認
+                    if not interaction.response.is_done():
+                        # まだ応答していない場合
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                    else:
+                        # すでに応答済みの場合
                         await interaction.followup.send(embed=embed, ephemeral=True)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message to user: {e}")
