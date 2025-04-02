@@ -157,10 +157,13 @@ class LoggingCog(commands.Cog):
                         description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
                         color=discord.Color.red()
                     )
-                    if interaction.response.is_done():
+                    try:
+                        if interaction.response.is_done():
+                            await interaction.followup.send(embed=embed, ephemeral=True)
+                        else:
+                            await interaction.response.send_message(embed=embed, ephemeral=True)
+                    except discord.InteractionResponded:
                         await interaction.followup.send(embed=embed, ephemeral=True)
-                    else:
-                        await interaction.response.send_message(embed=embed, ephemeral=True)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message to user: {e}")
 
