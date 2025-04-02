@@ -301,7 +301,7 @@ class RolePanel(commands.Cog):
         )
 
         for panel_id, panel_data in self.panels.items():
-            if interaction.guild_id != panel_data["guild_id"]:
+            if panel_data.get("guild_id") != interaction.guild_id:
                 continue
 
             channel = self.bot.get_channel(panel_data["channel_id"])
