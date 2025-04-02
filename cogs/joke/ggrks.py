@@ -66,14 +66,31 @@ class GGRKS(commands.Cog):
         conn.commit()
         conn.close()
 
+    # 管理者権限チェック関数
+    def _is_administrator(self, interaction: discord.Interaction) -> bool:
+        """ユーザーが管理者権限を持っているかチェック"""
+        if interaction.user.guild_permissions.administrator:
+            return True
+        return False
+
     @app_commands.command(name="ggrks-enable", description="「〜って何？」「〜って誰？」などの質問に対してGoogle検索を促す機能を有効化します")
     async def ggrks_enable(self, interaction: discord.Interaction):
+        # 管理者権限チェック
+        if not self._is_administrator(interaction):
+            await interaction.response.send_message("このコマンドはサーバー管理者のみが実行できます。", ephemeral=True)
+            return
+            
         self.enabled_guilds.add(interaction.guild_id)
         self._save_guild_state(interaction.guild_id, True)
         await interaction.response.send_message("GGRKSモードを有効化しました。", ephemeral=True)
 
     @app_commands.command(name="ggrks-disable", description="「〜って何？」「〜って誰？」などの質問に対してGoogle検索を促す機能を無効化します")
     async def ggrks_disable(self, interaction: discord.Interaction):
+        # 管理者権限チェック
+        if not self._is_administrator(interaction):
+            await interaction.response.send_message("このコマンドはサーバー管理者のみが実行できます。", ephemeral=True)
+            return
+            
         if interaction.guild_id in self.enabled_guilds:
             self.enabled_guilds.remove(interaction.guild_id)
             self._save_guild_state(interaction.guild_id, False)
