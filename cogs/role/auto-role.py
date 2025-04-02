@@ -105,6 +105,82 @@ class AutoRole(commands.Cog):
             ephemeral=True
         )
     
+    @app_commands.command(name="auto-role-disable", description="自動ロール付与機能を無効にします")
+    @app_commands.default_permissions(administrator=True)
+    async def auto_role_disable(self, interaction: discord.Interaction):
+        """サーバーの自動ロール付与機能を無効にします"""
+        # 管理者権限チェック
+        if not await self._check_admin_permission(interaction):
+            return
+            
+        guild_id = interaction.guild.id
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 現在の設定を確認
+        cursor.execute("SELECT * FROM autoroles WHERE guild_id = ?", (guild_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            await interaction.response.send_message("このサーバーでは自動ロール機能は既に設定されていません。", ephemeral=True)
+            conn.close()
+            return
+        
+        # 設定を削除
+        cursor.execute("DELETE FROM autoroles WHERE guild_id = ?", (guild_id,))
+        conn.commit()
+        conn.close()
+        
+        await interaction.response.send_message("自動ロール機能を無効化しました。新しく参加するメンバーにはロールが自動付与されなくなります。", ephemeral=True)
+
+    @app_commands.command(name="auto-role-settings", description="現在の自動ロール設定を表示します")
+    @app_commands.default_permissions(administrator=True)
+    async def auto_role_settings(self, interaction: discord.Interaction):
+        """現在のサーバーの自動ロール設定を表示します"""
+        # 管理者権限チェック
+        if not await self._check_admin_permission(interaction):
+            return
+            
+        guild_id = interaction.guild.id
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 現在の設定を取得
+        cursor.execute("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = ?", (guild_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            await interaction.response.send_message("このサーバーでは自動ロール機能は設定されていません。", ephemeral=True)
+            return
+            
+        human_role_id, bot_role_id = result
+        
+        # レスポンスメッセージの作成
+        embed = discord.Embed(
+            title="自動ロール設定",
+            description="サーバーへの新規参加者に自動的に付与されるロール設定です",
+            color=discord.Color.blue()
+        )
+        
+        if human_role_id:
+            human_role = interaction.guild.get_role(human_role_id)
+            human_status = f"{human_role.mention}" if human_role else "設定されたロールが見つかりません"
+            embed.add_field(name="人間ユーザー向けロール", value=human_status, inline=False)
+        else:
+            embed.add_field(name="人間ユーザー向けロール", value="設定されていません", inline=False)
+            
+        if bot_role_id:
+            bot_role = interaction.guild.get_role(bot_role_id)
+            bot_status = f"{bot_role.mention}" if bot_role else "設定されたロールが見つかりません"
+            embed.add_field(name="ボット向けロール", value=bot_status, inline=False)
+        else:
+            embed.add_field(name="ボット向けロール", value="設定されていません", inline=False)
+            
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
     @commands.Cog.listener()
     async def on_member_join(self, member):
         """メンバーがサーバーに参加したときに適切なロールを付与"""
