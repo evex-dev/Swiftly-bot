@@ -119,9 +119,12 @@ class LoggingCog(commands.Cog):
                 scope.set_user({"id": str(ctx.author.id), "username": ctx.author.name})
                 scope.set_extra("message_content", ctx.message.content if hasattr(ctx.message, "content") else "No content")
                 
-                # エラーをキャプチャ
-                sentry_sdk.capture_exception(error)
-                self.logger.info("Sent error event to Sentry")
+                # エラーをキャプチャしてIDを取得
+                event_id = sentry_sdk.capture_exception(error)
+                self.logger.info(f"Sent error event to Sentry with ID: {event_id}")
+                
+                # ユーザーにエラーIDを通知
+                await ctx.send(f"エラーが発生しました。\nエラーID: `{event_id}`")
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command: discord.app_commands.Command) -> None:
@@ -143,9 +146,23 @@ class LoggingCog(commands.Cog):
                 scope.set_user({"id": str(interaction.user.id), "username": interaction.user.name})
                 scope.set_extra("interaction_data", str(interaction.data) if hasattr(interaction, "data") else "No data")
                 
-                # エラーをキャプチャ
-                sentry_sdk.capture_exception(error)
-                self.logger.info("Sent error event to Sentry")
+                # エラーをキャプチャしてIDを取得
+                event_id = sentry_sdk.capture_exception(error)
+                self.logger.info(f"Sent error event to Sentry with ID: {event_id}")
+                
+                # ユーザーにエラーIDを通知
+                try:
+                    embed = discord.Embed(
+                        title="エラーが発生しました",
+                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                        color=discord.Color.red()
+                    )
+                    if interaction.response.is_done():
+                        await interaction.followup.send(embed=embed, ephemeral=True)
+                    else:
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                except Exception as e:
+                    self.logger.error(f"Failed to send error message to user: {e}")
 
     @commands.command(name="test_sentry")
     async def test_sentry(self, ctx: commands.Context) -> None:
