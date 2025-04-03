@@ -19,7 +19,6 @@ class AdminErrorCog(commands.Cog):
             # 意図的にエラーを発生させる
             raise RuntimeError("これはテスト用の意図的なエラーです。")
         except Exception as e:
-            await interaction.response.send_message(f"❌ エラーが発生しました: {e}", ephemeral=True)
             raise  # エラーを再スローしてエラー追跡システムにキャプチャさせる
 
 async def setup(bot: commands.Bot) -> None:
