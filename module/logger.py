@@ -17,7 +17,7 @@ class ErrorReportButton(discord.ui.Button):
     def __init__(self, error_id: str):
         super().__init__(
             style=discord.ButtonStyle.primary,
-            label="エラーを報告",
+            label="詳細なユーザーレポートを報告",
             emoji="📝",
             custom_id=f"error_report:{error_id}"
         )
@@ -53,12 +53,44 @@ class ErrorReportModal(discord.ui.Modal, title="エラー報告フォーム"):
     async def on_submit(self, interaction: discord.Interaction):
         # Sentryにユーザーフィードバックを送信
         if sentry_sdk.Hub.current.client:
-            sentry_sdk.capture_user_feedback(
-                event_id=self.error_id,
-                name=str(interaction.user),
-                email=f"{interaction.user.id}@discord.user",
-                comments=f"状況: {self.description.value}\n\n再現手順: {self.reproduce_steps.value}"
-            )
+            # 関連するエラーイベントIDを使用して新しいメッセージを送信
+            with sentry_sdk.push_scope() as scope:
+                # ユーザー情報を設定
+                scope.set_user({
+                    "id": str(interaction.user.id),
+                    "username": str(interaction.user),
+                    "email": f"{interaction.user.id}@discord.user"
+                })
+                
+                # フィードバック情報をタグとコンテキストとして設定
+                scope.set_tag("feedback_type", "error_report")
+                scope.set_tag("original_error_id", self.error_id)
+                scope.set_context("user_feedback", {
+                    "situation": self.description.value,
+                    "reproduction_steps": self.reproduce_steps.value or "未記入",
+                    "reported_at": str(discord.utils.utcnow()),
+                    "original_error_id": self.error_id
+                })
+                
+                # フィードバックメッセージを送信
+                feedback_id = sentry_sdk.capture_message(
+                    f"User feedback for error {self.error_id}",
+                    level="info"
+                )
+                
+                # 関連するイベントにフィードバックリンクを追加するブレッドクラムを送信
+                sentry_sdk.add_breadcrumb(
+                    category="feedback",
+                    message=f"User provided feedback for error",
+                    level="info",
+                    data={
+                        "feedback_id": feedback_id,
+                        "original_error_id": self.error_id,
+                        "user": str(interaction.user)
+                    }
+                )
+            
+            # ユーザーに完了メッセージを表示
             await interaction.response.send_message("エラー報告ありがとうございます。開発チームに報告しました。", ephemeral=True)
         else:
             await interaction.response.send_message("申し訳ありませんが、現在エラー報告システムが利用できません。", ephemeral=True)
@@ -200,7 +232,7 @@ class LoggingCog(commands.Cog):
                 try:
                     embed = discord.Embed(
                         title="エラーが発生しました",
-                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。\n\nすでにエラーは開発者に報告されていますが、以下のボタンで詳細なユーザーレポートを送信できます。",
                         color=discord.Color.red()
                     )
                     # エラーレポートボタンを追加
@@ -242,7 +274,7 @@ class LoggingCog(commands.Cog):
                 try:
                     embed = discord.Embed(
                         title="コマンド実行でエラーが発生しました",
-                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。\n\nすでにエラーは開発者に報告されていますが、以下のボタンで詳細なユーザーレポートを送信できます。",
                         color=discord.Color.red()
                     )
                     
@@ -287,7 +319,7 @@ class LoggingCog(commands.Cog):
                             ctx = args[0]
                             embed = discord.Embed(
                                 title="エラーが発生しました",
-                                description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                                description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。\n\nすでにエラーは開発者に報告されていますが、以下のボタンで詳細なユーザーレポートを送信できます。",
                                 color=discord.Color.red()
                             )
                             view = ErrorReportView(event_id)
@@ -298,7 +330,7 @@ class LoggingCog(commands.Cog):
                             try:
                                 embed = discord.Embed(
                                     title="エラーが発生しました",
-                                    description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                                    description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。\n\nすでにエラーは開発者に報告されていますが、以下のボタンで詳細なユーザーレポートを送信できます。",
                                     color=discord.Color.red()
                                 )
                                 view = ErrorReportView(event_id)
@@ -352,7 +384,7 @@ class LoggingCog(commands.Cog):
                 try:
                     embed = discord.Embed(
                         title="コマンド実行中にエラーが発生しました",
-                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。\n\nすでにエラーは開発者に報告されていますが、以下のボタンで詳細なユーザーレポートを送信できます。",
                         color=discord.Color.red()
                     )
                     
