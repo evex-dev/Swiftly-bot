@@ -95,8 +95,7 @@ class CaptchaView(ui.View):
             if self.message:
                 await self.message.edit(view=self)
                 await self.message.reply(
-                    SUCCESS_MESSAGES["timeout"],
-                    ephemeral=True
+                    SUCCESS_MESSAGES["timeout"]
                 )
         except Exception as e:
             logger.error("Error in captcha timeout: %s", e, exc_info=True)
