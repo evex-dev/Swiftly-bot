@@ -188,10 +188,10 @@ class LoggingCog(commands.Cog):
                     # インタラクションの応答状態を確認
                     if not interaction.response.is_done():
                         # まだ応答していない場合は通常の応答として送信
-                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                        await interaction.response.send_message(embed=embed, ephemeral=False)
                     else:
                         # 既に応答済みの場合はフォローアップとして送信
-                        await interaction.followup.send(embed=embed, ephemeral=True)
+                        await interaction.followup.send(embed=embed, ephemeral=False)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message via interaction: {e}")
                     # DMを試みる
@@ -281,7 +281,7 @@ class LoggingCog(commands.Cog):
                                             description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
                                             color=discord.Color.red()
                                         ),
-                                        ephemeral=True
+                                        ephemeral=False
                                     )
                                 else:
                                     # まだ応答していない場合は通常の応答として送信
@@ -291,7 +291,7 @@ class LoggingCog(commands.Cog):
                                             description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
                                             color=discord.Color.red()
                                         ),
-                                        ephemeral=True
+                                        ephemeral=False
                                     )
                             except Exception as e:
                                 # インタラクションへの応答が失敗した場合はDMを試みる
@@ -345,9 +345,9 @@ class LoggingCog(commands.Cog):
                     )
                     
                     if not interaction.response.is_done():
-                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                        await interaction.response.send_message(embed=embed, ephemeral=False)
                     else:
-                        await interaction.followup.send(embed=embed, ephemeral=True)
+                        await interaction.followup.send(embed=embed, ephemeral=False)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message via interaction: {e}")
                     try:
