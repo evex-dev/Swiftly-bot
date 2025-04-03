@@ -20,9 +20,13 @@ class LoggingCog(commands.Cog):
         self.logger = logging.getLogger("bot")
         self._init_sentry()
         
-        # グローバルエラーハンドラを設定 - 修正
+        # グローバルエラーハンドラを設定
         self.old_on_error = bot.on_error
         bot.on_error = self.on_global_error
+        
+        # コマンドツリーのエラーハンドラも設定（スラッシュコマンド用）
+        self.old_tree_on_error = bot.tree.on_error
+        bot.tree.on_error = self.on_app_command_tree_error
     
     def _init_sentry(self) -> None:
         """Sentry SDKの初期化"""
@@ -311,6 +315,53 @@ class LoggingCog(commands.Cog):
                 await self.old_on_error(event_method, *args, **kwargs)
             except Exception:
                 pass
+
+    async def on_app_command_tree_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
+        """アプリケーションコマンドツリーレベルのエラーハンドラ"""
+        command_name = interaction.command.name if interaction.command else "Unknown"
+        self.logger.error("App Command Tree error: %s by %s (ID: %s) - %s", 
+                         command_name, interaction.user.name, interaction.user.id, error)
+        
+        # Sentryにエラーイベントを明示的に送信
+        if sentry_sdk.Hub.current.client:
+            with sentry_sdk.push_scope() as scope:
+                # コンテキスト情報を追加
+                scope.set_tag("command", command_name)
+                scope.set_tag("command_type", "app_command")
+                scope.set_tag("guild", interaction.guild.name if interaction.guild else "DM")
+                scope.set_user({"id": str(interaction.user.id), "username": interaction.user.name})
+                scope.set_extra("interaction_data", str(interaction.data) if hasattr(interaction, "data") else "No data")
+                
+                # エラーをキャプチャしてIDを取得
+                event_id = sentry_sdk.capture_exception(error)
+                self.logger.info(f"Sent app command tree error to Sentry with ID: {event_id}")
+                
+                # ユーザーにエラーIDを通知
+                try:
+                    embed = discord.Embed(
+                        title="コマンド実行中にエラーが発生しました",
+                        description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                        color=discord.Color.red()
+                    )
+                    
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                    else:
+                        await interaction.followup.send(embed=embed, ephemeral=True)
+                except Exception as e:
+                    self.logger.error(f"Failed to send error message via interaction: {e}")
+                    try:
+                        # DMを試みる
+                        await interaction.user.send(embed=embed)
+                    except Exception as dm_error:
+                        self.logger.error(f"Failed to send DM with error message: {dm_error}")
+        
+        # 元のエラーハンドラが存在する場合は呼び出す
+        if self.old_tree_on_error:
+            try:
+                await self.old_tree_on_error(interaction, error)
+            except Exception as e:
+                self.logger.error(f"Error in original tree error handler: {e}")
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(LoggingCog(bot))
