@@ -20,9 +20,9 @@ class LoggingCog(commands.Cog):
         self.logger = logging.getLogger("bot")
         self._init_sentry()
         
-        # グローバルエラーハンドラを設定
+        # グローバルエラーハンドラを設定 - 修正
         self.old_on_error = bot.on_error
-        bot.on_error = self.on_error
+        bot.on_error = self.on_global_error
     
     def _init_sentry(self) -> None:
         """Sentry SDKの初期化"""
@@ -173,16 +173,28 @@ class LoggingCog(commands.Cog):
                 event_id = sentry_sdk.capture_exception(error)
                 self.logger.info(f"Sent error event to Sentry with ID: {event_id}")
                 
-                # ユーザーにエラーIDをDMで通知
+                # ユーザーにエラーIDを通知（インタラクションを優先し、失敗したらDMへ）
                 try:
                     embed = discord.Embed(
                         title="コマンド実行でエラーが発生しました",
                         description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
                         color=discord.Color.red()
                     )
-                    await interaction.user.send(embed=embed)
+                    
+                    # インタラクションの応答状態を確認
+                    if not interaction.response.is_done():
+                        # まだ応答していない場合は通常の応答として送信
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                    else:
+                        # 既に応答済みの場合はフォローアップとして送信
+                        await interaction.followup.send(embed=embed, ephemeral=True)
                 except Exception as e:
-                    self.logger.error(f"Failed to send error message to user via DM: {e}")
+                    self.logger.error(f"Failed to send error message via interaction: {e}")
+                    # DMを試みる
+                    try:
+                        await interaction.user.send(embed=embed)
+                    except Exception as dm_error:
+                        self.logger.error(f"Failed to send DM with error message: {dm_error}")
 
     @commands.command(name="test_sentry")
     async def test_sentry(self, ctx: commands.Context) -> None:
@@ -226,7 +238,7 @@ class LoggingCog(commands.Cog):
             self.logger.error(f"Failed to send manual test event to Sentry: {e}")
             await ctx.send(f"❌ Sentryへのテスト送信に失敗しました: {e}")
 
-    async def on_error(self, event_method: str, *args, **kwargs) -> None:
+    async def on_global_error(self, event_method: str, *args, **kwargs) -> None:
         """グローバルな未処理例外ハンドラ"""
         error_type, error_value, error_traceback = sys.exc_info()
         self.logger.error(f"Uncaught exception in {event_method}: {error_type.__name__}: {error_value}")
