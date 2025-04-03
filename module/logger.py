@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -18,6 +19,10 @@ class LoggingCog(commands.Cog):
         self.bot = bot
         self.logger = logging.getLogger("bot")
         self._init_sentry()
+        
+        # グローバルエラーハンドラを設定
+        self.old_on_error = bot.on_error
+        bot.on_error = self.on_error
     
     def _init_sentry(self) -> None:
         """Sentry SDKの初期化"""
@@ -220,6 +225,80 @@ class LoggingCog(commands.Cog):
         except Exception as e:
             self.logger.error(f"Failed to send manual test event to Sentry: {e}")
             await ctx.send(f"❌ Sentryへのテスト送信に失敗しました: {e}")
+
+    async def on_error(self, event_method: str, *args, **kwargs) -> None:
+        """グローバルな未処理例外ハンドラ"""
+        error_type, error_value, error_traceback = sys.exc_info()
+        self.logger.error(f"Uncaught exception in {event_method}: {error_type.__name__}: {error_value}")
+        
+        # Sentryにエラーを送信
+        if sentry_sdk.Hub.current.client:
+            with sentry_sdk.push_scope() as scope:
+                scope.set_tag("event", event_method)
+                scope.set_extra("traceback", f"{error_type.__name__}: {error_value}")
+                
+                # エラーをキャプチャ
+                event_id = sentry_sdk.capture_exception()
+                self.logger.info(f"Sent uncaught error to Sentry with ID: {event_id}")
+                
+                # コマンド種類を特定してユーザーに通知
+                try:
+                    if args and len(args) > 0:
+                        if isinstance(args[0], commands.Context):
+                            # 伝統的なコマンドの場合
+                            ctx = args[0]
+                            embed = discord.Embed(
+                                title="エラーが発生しました",
+                                description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                                color=discord.Color.red()
+                            )
+                            await ctx.send(embed=embed)
+                        elif isinstance(args[0], discord.Interaction):
+                            # スラッシュコマンドの場合
+                            interaction = args[0]
+                            try:
+                                if interaction.response.is_done():
+                                    # 既に応答済みの場合はフォローアップとして送信
+                                    await interaction.followup.send(
+                                        embed=discord.Embed(
+                                            title="エラーが発生しました",
+                                            description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                                            color=discord.Color.red()
+                                        ),
+                                        ephemeral=True
+                                    )
+                                else:
+                                    # まだ応答していない場合は通常の応答として送信
+                                    await interaction.response.send_message(
+                                        embed=discord.Embed(
+                                            title="エラーが発生しました",
+                                            description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                                            color=discord.Color.red()
+                                        ),
+                                        ephemeral=True
+                                    )
+                            except Exception as e:
+                                # インタラクションへの応答が失敗した場合はDMを試みる
+                                self.logger.error(f"Failed to send error message via interaction: {e}")
+                                try:
+                                    await interaction.user.send(
+                                        embed=discord.Embed(
+                                            title="コマンド実行でエラーが発生しました",
+                                            description=f"エラーID: `{event_id}`\n問い合わせの際は、エラーIDも一緒にしていただけると幸いです。",
+                                            color=discord.Color.red()
+                                        )
+                                    )
+                                except Exception as dm_error:
+                                    self.logger.error(f"Failed to send DM with error message: {dm_error}")
+                except Exception as notify_error:
+                    self.logger.error(f"Failed to notify user about error: {notify_error}")
+        
+        # 必要に応じて元のエラーハンドラを呼び出す
+        if self.old_on_error:
+            try:
+                await self.old_on_error(event_method, *args, **kwargs)
+            except Exception:
+                pass
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(LoggingCog(bot))
