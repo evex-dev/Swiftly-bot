@@ -56,7 +56,7 @@ class AutoMod(commands.Cog):
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
                         trigger_metadata={"keyword_filter": ["discord.gg", "discord.com/invite"]},
-                        actions=[{"type": discord.AutoModActionType.block_message}],
+                        actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
@@ -68,7 +68,7 @@ class AutoMod(commands.Cog):
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
                         trigger_metadata={"keyword_filter": ["http://", "https://"]},
-                        actions=[{"type": discord.AutoModActionType.block_message}],
+                        actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
@@ -80,7 +80,7 @@ class AutoMod(commands.Cog):
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
                         trigger_metadata={"mention_limit": 5},
-                        actions=[{"type": discord.AutoModActionType.block_message}],
+                        actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
@@ -92,7 +92,7 @@ class AutoMod(commands.Cog):
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
                         trigger_metadata={},
-                        actions=[{"type": discord.AutoModActionType.block_message}],
+                        actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
@@ -104,7 +104,7 @@ class AutoMod(commands.Cog):
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
                         trigger_metadata={"mention_limit": 5},
-                        actions=[{"type": discord.AutoModActionType.block_message}],
+                        actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
