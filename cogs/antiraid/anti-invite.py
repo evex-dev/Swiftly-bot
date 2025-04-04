@@ -259,23 +259,61 @@ class AntiInvite(commands.Cog):
                 pass
 
     async def setup_automod_rule(self, guild: discord.Guild) -> None:
-        """Automodルールを設定"""
-        try:
-            rules = await guild.fetch_automod_rules()
-            if any(rule.name == "Anti-Invite Rule" for rule in rules):
-                return  # 既にルールが存在する場合はスキップ
+        """Automodルールを直接Discord APIにリクエストを送信して設定"""
+        if not self.bot.user:
+            return
 
-            invite_patterns = [f"*{pattern}*" for pattern in INVITE_PATTERNS]
-            await guild.create_automod_rule(
-                name="Anti-Invite Rule",
-                event_type=discord.AutoModRuleEventType.message_send,
-                trigger=discord.AutoModRuleTriggerType.keyword,
-                trigger_metadata=discord.AutoModTriggerMetadata(keyword_filter=invite_patterns),
-                actions=[discord.AutoModRuleAction(type=discord.AutoModRuleActionType.block_message)],
-                enabled=True
-            )
-        except Exception as e:
-            print(f"Automodルールの設定中にエラーが発生しました: {e}")
+        bot_token = os.getenv("DISCORD_BOT_TOKEN")  # 環境変数からトークンを取得
+        if not bot_token:
+            print("Botトークンが設定されていません。")
+            return
+
+        headers = {
+            "Authorization": f"Bot {bot_token}",
+            "Content-Type": "application/json"
+        }
+
+        invite_patterns = [f"*{pattern}*" for pattern in INVITE_PATTERNS]
+        payload = {
+            "name": "Anti-Invite Rule",
+            "event_type": 1,  # message_send
+            "trigger_type": 1,  # keyword
+            "trigger_metadata": {
+                "keyword_filter": invite_patterns
+            },
+            "actions": [
+                {
+                    "type": 1  # block_message
+                }
+            ],
+            "enabled": True
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                # 既存のAutomodルールを取得
+                async with session.get(
+                    f"https://discord.com/api/v10/guilds/{guild.id}/auto-moderation/rules",
+                    headers=headers
+                ) as response:
+                    if response.status == 200:
+                        rules = await response.json()
+                        if any(rule["name"] == "Anti-Invite Rule" for rule in rules):
+                            return  # 既にルールが存在する場合はスキップ
+
+                # Automodルールを作成
+                async with session.post(
+                    f"https://discord.com/api/v10/guilds/{guild.id}/auto-moderation/rules",
+                    headers=headers,
+                    json=payload
+                ) as response:
+                    if response.status == 201:
+                        print(f"Automodルールがサーバー {guild.name} に作成されました。")
+                    else:
+                        print(f"Automodルール作成に失敗しました: {response.status}")
+                        print(await response.text())
+            except Exception as e:
+                print(f"Automodルールの設定中にエラーが発生しました: {e}")
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
