@@ -201,6 +201,10 @@ class VoiceState:
             return
 
         voice_client = guild_state.voice_client
+        
+        # ボイスクライアントが接続されていない場合は処理しない
+        if not voice_client or not voice_client.is_connected():
+            return
 
         # ボイスが指定されていない場合は、プレミアムユーザーのボイスまたはデフォルトボイスを使用
         if voice is None:
@@ -588,12 +592,25 @@ class Voice(commands.Cog):
             else:
                 return
 
+            # ボイスクライアントが接続されていることを確認
+            if not voice_client or not voice_client.is_connected():
+                return
+
             processed_message = MessageProcessor.process_message(msg, dictionary=self.dictionary)
             async with guild_state.lock:
-                guild_state.tts_queue.append(processed_message)
+                guild_state.tts_queue.append({
+                    "message": processed_message,
+                    "user_id": member.id,
+                    "voice": None
+                })
                 if not voice_client.is_playing():
-                    next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild.id, next_message, member.id)
+                    next_item = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(
+                        guild.id, 
+                        next_item["message"], 
+                        next_item.get("user_id"),
+                        next_item.get("voice")
+                    )
 
         except Exception as e:
             logger.error("Error in voice state update: %s", e, exc_info=True)
