@@ -320,6 +320,14 @@ class ServerBoard(commands.Cog):
         """サーバーの表示順位を上げる"""
         await interaction.response.defer(ephemeral=False)
         try:
+            # DMでコマンドが使用された場合のチェック
+            if not interaction.guild:
+                await interaction.followup.send(
+                    "このコマンドはサーバー内でのみ使用できます。",
+                    ephemeral=True
+                )
+                return
+                
             current_time = datetime.datetime.now()
 
             async with aiosqlite.connect(DB_PATH) as conn:

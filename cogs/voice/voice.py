@@ -12,6 +12,7 @@ import sqlite3
 import edge_tts
 import discord
 from discord.ext import commands
+from discord import ClientException, ConnectionClosed  # ConnectionClosedをインポート
 
 from cogs.premium.premium import PremiumDatabase
 
@@ -21,6 +22,8 @@ RATE_LIMIT_SECONDS: Final[int] = 10
 VOLUME_LEVEL: Final[float] = 0.6
 TEMP_DIR: Final[Path] = Path(tempfile.gettempdir()) / "voice_tts"
 DATABASE_PATH: Final[Path] = Path("data/dictionary.db")
+RECONNECT_ATTEMPTS: Final[int] = 3  # 再接続試行回数
+RECONNECT_DELAY: Final[int] = 5  # 再接続の間隔（秒）
 
 PATTERNS: Final[Dict[str, str]] = {
     "url": r"http[s]?://[^\s<>]+",
@@ -68,18 +71,45 @@ class TTSManager:
         voice: str
     ) -> Optional[str]:
         try:
+            # メッセージが空か空白のみの場合は処理しない
+            if not message or message.isspace():
+                logger.warning("Empty message received for TTS, skipping audio generation")
+                return None
+                
+            # 文字列が有効であることを確認（制御文字などを除去）
+            message = ''.join(char for char in message if char.isprintable() or char.isspace())
+            if not message:
+                logger.warning("Message contains only non-printable characters, skipping audio generation")
+                return None
+
             # guild_idとuuidをファイル名に含める
             unique_id = uuid.uuid4().hex
             temp_file = TEMP_DIR / f"{guild_id}_{unique_id}.mp3"
             temp_path = str(temp_file)
             self.temp_files.append(temp_path)
 
-            tts = edge_tts.Communicate(message, voice)
-            await tts.save(temp_path)
-            return temp_path
-
+            # 最大試行回数を設定
+            max_attempts = 2
+            for attempt in range(max_attempts):
+                try:
+                    tts = edge_tts.Communicate(message, voice)
+                    await tts.save(temp_path)
+                    return temp_path
+                except Exception as e:
+                    if attempt < max_attempts - 1:
+                        logger.warning(f"TTS generation failed on attempt {attempt+1}, retrying: {e}")
+                        await asyncio.sleep(1)  # 少し待ってからリトライ
+                    else:
+                        raise  # 最大試行回数に達したら例外を再度投げる
         except Exception as e:
-            logger.error("Error generating audio: %s", e, exc_info=True)
+            logger.error(f"Error generating audio: {e}", exc_info=True)
+            # 一時ファイルが作成されていたら削除
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                    self.temp_files.remove(temp_path)
+                except Exception as cleanup_error:
+                    logger.error(f"Error cleaning up temp file after failed TTS: {cleanup_error}")
             return None
 
 class DictionaryManager:
@@ -180,6 +210,7 @@ class GuildTTS:
         self.text_channel_id = text_channel_id    # 追加: /joinが実行されたテキストチャンネルID
         self.tts_queue: List[Dict[str, any]] = []  # メッセージだけでなく、ユーザーIDとボイス情報も格納
         self.lock = asyncio.Lock()
+        self.reconnecting = False  # 再接続中かどうかのフラグ
 
 class VoiceState:
     """複数ギルド・複数チャンネルに対応した状態管理クラス"""
@@ -188,6 +219,70 @@ class VoiceState:
         self.guilds: Dict[int, GuildTTS] = {}
         self.tts_manager = TTSManager()
         self.premium_db = PremiumDatabase()  # PremiumDatabaseのインスタンスを追加
+
+    async def reconnect_voice(self, guild_id: int, bot) -> bool:
+        """ボイス接続が切断された場合に再接続を試みる"""
+        guild_state = self.guilds.get(guild_id)
+        if not guild_state or guild_state.reconnecting:
+            return False
+
+        guild_state.reconnecting = True
+        
+        try:
+            guild = bot.get_guild(guild_id)
+            if not guild:
+                logger.error(f"Guild {guild_id} not found during reconnection attempt")
+                return False
+                
+            voice_channel = guild.get_channel(guild_state.channel_id)
+            if not voice_channel:
+                logger.error(f"Voice channel {guild_state.channel_id} not found during reconnection attempt")
+                return False
+                
+            for attempt in range(RECONNECT_ATTEMPTS):
+                try:
+                    logger.info(f"Attempting to reconnect to voice channel in guild {guild_id} (attempt {attempt+1}/{RECONNECT_ATTEMPTS})")
+                    
+                    # 古い接続をクリーンアップ
+                    old_voice_client = guild_state.voice_client
+                    if old_voice_client and old_voice_client.is_connected():
+                        try:
+                            await old_voice_client.disconnect(force=True)
+                        except Exception as e:
+                            logger.warning(f"Error disconnecting old voice client: {e}")
+                    
+                    # 新しい接続を確立
+                    new_voice_client = await voice_channel.connect()
+                    
+                    # 自己ミュート状態に設定
+                    await new_voice_client.guild.change_voice_state(
+                        channel=new_voice_client.channel,
+                        self_deaf=True
+                    )
+                    
+                    # 状態を更新
+                    guild_state.voice_client = new_voice_client
+                    
+                    logger.info(f"Successfully reconnected to voice channel in guild {guild_id}")
+                    return True
+                    
+                except (ClientException, ConnectionClosed) as e:
+                    logger.warning(f"Reconnection attempt {attempt+1} failed: {e}")
+                    if attempt < RECONNECT_ATTEMPTS - 1:
+                        await asyncio.sleep(RECONNECT_DELAY)
+                    else:
+                        logger.error(f"All reconnection attempts failed for guild {guild_id}")
+                        # 再接続に失敗した場合は状態をクリーンアップ
+                        del self.guilds[guild_id]
+                        return False
+        except Exception as e:
+            logger.error(f"Unexpected error during voice reconnection: {e}", exc_info=True)
+            return False
+        finally:
+            if guild_id in self.guilds:
+                self.guilds[guild_id].reconnecting = False
+        
+        return False
 
     async def play_tts(
         self,
@@ -201,6 +296,10 @@ class VoiceState:
             return
 
         voice_client = guild_state.voice_client
+        
+        # ボイスクライアントが接続されていない場合は処理しない
+        if not voice_client or not voice_client.is_connected():
+            return
 
         # ボイスが指定されていない場合は、プレミアムユーザーのボイスまたはデフォルトボイスを使用
         if voice is None:
@@ -214,8 +313,12 @@ class VoiceState:
         def after_playing(error: Optional[Exception]) -> None:
             if error:
                 logger.error("Error playing audio: %s", error, exc_info=True)
+                # ConnectionClosedエラーを検出して再接続ロジックをトリガー
+                if isinstance(error, ConnectionClosed):
+                    asyncio.create_task(self._handle_connection_closed(guild_id))
+            
             async def play_next():
-                if voice_client.is_connected():
+                if guild_id in self.guilds and self.guilds[guild_id].voice_client.is_connected():
                     async with guild_state.lock:
                         if guild_state.tts_queue:
                             next_item = guild_state.tts_queue.pop(0)
@@ -223,15 +326,44 @@ class VoiceState:
                             next_user_id = next_item.get("user_id")
                             next_voice = next_item.get("voice")
                             await self.play_tts(guild_id, next_message, next_user_id, next_voice)
+            
             asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
 
-        voice_client.play(
-            discord.FFmpegPCMAudio(
-                temp_path,
-                options=f"-filter:a 'volume={VOLUME_LEVEL}'"
-            ),
-            after=after_playing
-        )
+        try:
+            voice_client.play(
+                discord.FFmpegPCMAudio(
+                    temp_path,
+                    options=f"-filter:a 'volume={VOLUME_LEVEL}'"
+                ),
+                after=after_playing
+            )
+        except Exception as e:
+            logger.error(f"Error starting voice playback: {e}", exc_info=True)
+            # 再生中にエラーが発生した場合も再接続を試みる
+            if isinstance(e, ConnectionClosed):
+                asyncio.create_task(self._handle_connection_closed(guild_id))
+
+    async def _handle_connection_closed(self, guild_id: int):
+        """ConnectionClosedエラーを処理し、必要に応じて再接続を試みる"""
+        logger.warning(f"Voice connection closed unexpectedly for guild {guild_id}, attempting to reconnect")
+        # Voice.botへの参照を取得するため、一時的な回避策としてcogからbotを取得
+        for cog in self.guilds[guild_id].voice_client.client.cogs.values():
+            if isinstance(cog, Voice):
+                success = await self.reconnect_voice(guild_id, cog.bot)
+                if success and guild_id in self.guilds:
+                    # 再接続に成功した場合、キューに残っているメッセージを処理
+                    guild_state = self.guilds[guild_id]
+                    async with guild_state.lock:
+                        if guild_state.tts_queue:
+                            next_item = guild_state.tts_queue[0]  # キューから削除せずに次のアイテムを取得
+                            guild_state.tts_queue.pop(0)  # キューから削除
+                            await self.play_tts(
+                                guild_id, 
+                                next_item["message"], 
+                                next_item.get("user_id"),
+                                next_item.get("voice")
+                            )
+                break
 
 class Voice(commands.Cog):
     """音声機能を提供"""
@@ -588,12 +720,25 @@ class Voice(commands.Cog):
             else:
                 return
 
+            # ボイスクライアントが接続されていることを確認
+            if not voice_client or not voice_client.is_connected():
+                return
+
             processed_message = MessageProcessor.process_message(msg, dictionary=self.dictionary)
             async with guild_state.lock:
-                guild_state.tts_queue.append(processed_message)
+                guild_state.tts_queue.append({
+                    "message": processed_message,
+                    "user_id": member.id,
+                    "voice": None
+                })
                 if not voice_client.is_playing():
-                    next_message = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(guild.id, next_message, member.id)
+                    next_item = guild_state.tts_queue.pop(0)
+                    await self.state.play_tts(
+                        guild.id, 
+                        next_item["message"], 
+                        next_item.get("user_id"),
+                        next_item.get("voice")
+                    )
 
         except Exception as e:
             logger.error("Error in voice state update: %s", e, exc_info=True)
