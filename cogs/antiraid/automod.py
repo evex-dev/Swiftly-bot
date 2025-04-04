@@ -49,66 +49,77 @@ class AutoMod(commands.Cog):
                         await rule.delete()
 
                 # 新しいルールを作成
-                # 各モデレーションタイプに応じた設定
+                # Discord.pyのバージョンによってAPIが異なるため、最もシンプルな方法を使用
                 if moderate == "discordinvite":
-                    # Discordの招待リンクをブロック
-                    await interaction.guild.create_automod_rule(
+                    # 基本的なルール作成パラメータ
+                    rule = await interaction.guild.create_automod_rule(
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
-                        trigger_metadata={"keyword_filter": ["discord.gg", "discord.com/invite"]},
                         actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
-                        trigger_type=discord.AutoModRuleTriggerType.keyword
+                        reason="自動モデレーション設定"
+                    )
+                    # 作成後にルールを更新
+                    await rule.edit(
+                        trigger_type=discord.AutoModRuleTriggerType.keyword,
+                        keyword_filter=["discord.gg", "discord.com/invite"]
                     )
                 elif moderate == "httplink":
-                    # HTTPリンクをブロック
-                    await interaction.guild.create_automod_rule(
+                    rule = await interaction.guild.create_automod_rule(
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
-                        trigger_metadata={"keyword_filter": ["http://", "https://"]},
                         actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
-                        trigger_type=discord.AutoModRuleTriggerType.keyword
+                        reason="自動モデレーション設定"
+                    )
+                    await rule.edit(
+                        trigger_type=discord.AutoModRuleTriggerType.keyword,
+                        keyword_filter=["http://", "https://"]
                     )
                 elif moderate == "mentionspam":
-                    # メンションスパムをブロック
-                    await interaction.guild.create_automod_rule(
+                    rule = await interaction.guild.create_automod_rule(
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
-                        trigger_metadata={"mention_limit": 5},
                         actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
-                        trigger_type=discord.AutoModRuleTriggerType.mention_spam
+                        reason="自動モデレーション設定"
+                    )
+                    await rule.edit(
+                        trigger_type=discord.AutoModRuleTriggerType.mention_spam,
+                        mention_limit=5
                     )
                 elif moderate == "spam":
-                    # スパムをブロック
-                    await interaction.guild.create_automod_rule(
+                    rule = await interaction.guild.create_automod_rule(
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
-                        trigger_metadata={},
                         actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
+                        reason="自動モデレーション設定"
+                    )
+                    await rule.edit(
                         trigger_type=discord.AutoModRuleTriggerType.spam
                     )
                 elif moderate == "mention":
-                    # 過剰なメンションをブロック (spam同様の設定だが名前を変えてわかりやすく)
-                    await interaction.guild.create_automod_rule(
+                    rule = await interaction.guild.create_automod_rule(
                         name=f"Automod: {moderate}",
                         event_type=discord.AutoModRuleEventType.message_send,
-                        trigger_metadata={"mention_limit": 5},
                         actions=[{"type": 1}],  # 1 = block_message
                         enabled=True,
                         exempt_roles=exempt_roles,
                         exempt_channels=[],
-                        trigger_type=discord.AutoModRuleTriggerType.mention_spam
+                        reason="自動モデレーション設定"
+                    )
+                    await rule.edit(
+                        trigger_type=discord.AutoModRuleTriggerType.mention_spam,
+                        mention_limit=5
                     )
                 
                 await interaction.response.send_message(f"`{moderate}` の自動モデレーションを有効にしました。", ephemeral=True)
