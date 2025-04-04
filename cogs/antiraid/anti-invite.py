@@ -243,21 +243,6 @@ class AntiInvite(commands.Cog):
             except (discord.errors.Forbidden, Exception):
                 pass
 
-    @commands.Cog.listener()
-    async def on_automod_action(self, event: discord.AutoModActionExecutionEvent) -> None:
-        """Automod APIを使用して招待リンクを検出"""
-        if not event.guild or not await self.get_setting(event.guild.id):
-            return
-
-        if event.action.type == discord.AutoModRuleActionType.block_message:
-            try:
-                await event.message.delete()
-                warning = await event.channel.send(INVITE_WARNING)
-                await asyncio.sleep(5)
-                await warning.delete()
-            except (discord.errors.Forbidden, Exception):
-                pass
-
     async def setup_automod_rule(self, guild: discord.Guild) -> None:
         """Automodルールを直接Discord APIにリクエストを送信して設定"""
         if not self.bot.user:
