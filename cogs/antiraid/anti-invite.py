@@ -50,13 +50,23 @@ class AntiInvite(commands.Cog):
 
         # メインDB
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    guild_id INTEGER PRIMARY KEY,
-                    anti_invite_enabled INTEGER NOT NULL DEFAULT 0,
-                    automod_rule_id TEXT
-                )
-            """)
+            # 既存のテーブル構造を確認
+            async with db.execute("PRAGMA table_info(settings)") as cursor:
+                columns = [row[1] for row in await cursor.fetchall()]
+                
+            # 基本テーブルが存在しない場合は作成
+            if not columns:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS settings (
+                        guild_id INTEGER PRIMARY KEY,
+                        anti_invite_enabled INTEGER NOT NULL DEFAULT 0,
+                        automod_rule_id TEXT
+                    )
+                """)
+            # automod_rule_idカラムが存在しない場合は追加
+            elif "automod_rule_id" not in columns:
+                await db.execute("ALTER TABLE settings ADD COLUMN automod_rule_id TEXT")
+                
             await db.commit()
 
         # 除外リストDB
@@ -71,11 +81,14 @@ class AntiInvite(commands.Cog):
             await db.commit()
             
         # 既存のAutomodルールIDを読み込む
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("SELECT guild_id, automod_rule_id FROM settings WHERE automod_rule_id IS NOT NULL") as cursor:
-                async for row in cursor:
-                    if row[1]:  # automod_rule_idが存在する場合
-                        self.automod_rules[row[0]] = row[1]
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute("SELECT guild_id, automod_rule_id FROM settings WHERE automod_rule_id IS NOT NULL") as cursor:
+                    async for row in cursor:
+                        if row[1]:  # automod_rule_idが存在する場合
+                            self.automod_rules[row[0]] = row[1]
+        except Exception as e:
+            print(f"Automodルール情報の読み込み中にエラーが発生しました: {e}")
 
     async def cog_unload(self) -> None:
         if self._session:
