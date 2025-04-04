@@ -29,13 +29,7 @@ class AutoMod(commands.Cog):
             return
 
         # Discord AutoMod のルールタイプ設定用のマッピング
-        rule_types = {
-            "spam": discord.AutoModRuleActionType.block_message,
-            "mentionspam": discord.AutoModRuleActionType.block_message,
-            "discordinvite": discord.AutoModRuleActionType.block_message,
-            "httplink": discord.AutoModRuleActionType.block_message,
-            "mention": discord.AutoModRuleActionType.block_message
-        }
+        action_type = discord.AutoModRuleActionType.block_message
 
         # キーワードに基づいたルールトリガー設定
         trigger_types = {
@@ -46,26 +40,10 @@ class AutoMod(commands.Cog):
             "mention": discord.AutoModRuleTriggerType.mention_spam
         }
 
-        # 特別な設定が必要なルールの追加設定
-        trigger_metadata = None
-        if moderate == "discordinvite":
-            trigger_metadata = discord.AutoModRuleTriggerMetadata(
-                keyword_filter=["discord.gg", "discord.com/invite"]
-            )
-        elif moderate == "httplink":
-            trigger_metadata = discord.AutoModRuleTriggerMetadata(
-                keyword_filter=["http://", "https://"]
-            )
-        elif moderate == "mentionspam":
-            trigger_metadata = discord.AutoModRuleTriggerMetadata(
-                mention_limit=5
-            )
-
         try:
             # 除外ロールと特定ロールの設定
             exempt_roles = [roles_to_exclude.id] if roles_to_exclude else []
-            specific_roles = [only_for_this_role.id] if only_for_this_role else []
-
+            
             if action == "enable":
                 # 既存のルールを確認して、同じタイプのルールがある場合は削除
                 existing_rules = await interaction.guild.fetch_automod_rules()
@@ -74,19 +52,58 @@ class AutoMod(commands.Cog):
                         await rule.delete()
 
                 # 新しいルールを作成
-                await interaction.guild.create_automod_rule(
-                    name=f"Automod: {moderate}",
-                    event_type=discord.AutoModRuleEventType.message_send,
-                    trigger_type=trigger_types[moderate],
-                    trigger_metadata=trigger_metadata,
-                    actions=[discord.AutoModRuleAction(
-                        type=rule_types[moderate],
-                        metadata=discord.AutoModRuleActionMetadata()
-                    )],
-                    exempt_roles=exempt_roles,
-                    enabled=True,
-                    exempt_channels=[],
-                )
+                # トリガータイプに応じた設定
+                if moderate == "discordinvite":
+                    await interaction.guild.create_automod_rule(
+                        name=f"Automod: {moderate}",
+                        event_type=discord.AutoModRuleEventType.message_send,
+                        trigger_type=discord.AutoModRuleTriggerType.keyword,
+                        trigger_metadata={"keyword_filter": ["discord.gg", "discord.com/invite"]},
+                        actions=[discord.AutoModRuleAction(
+                            type=action_type
+                        )],
+                        exempt_roles=exempt_roles,
+                        enabled=True,
+                        exempt_channels=[],
+                    )
+                elif moderate == "httplink":
+                    await interaction.guild.create_automod_rule(
+                        name=f"Automod: {moderate}",
+                        event_type=discord.AutoModRuleEventType.message_send,
+                        trigger_type=discord.AutoModRuleTriggerType.keyword,
+                        trigger_metadata={"keyword_filter": ["http://", "https://"]},
+                        actions=[discord.AutoModRuleAction(
+                            type=action_type
+                        )],
+                        exempt_roles=exempt_roles,
+                        enabled=True,
+                        exempt_channels=[],
+                    )
+                elif moderate == "mentionspam":
+                    await interaction.guild.create_automod_rule(
+                        name=f"Automod: {moderate}",
+                        event_type=discord.AutoModRuleEventType.message_send,
+                        trigger_type=discord.AutoModRuleTriggerType.mention_spam,
+                        trigger_metadata={"mention_limit": 5},
+                        actions=[discord.AutoModRuleAction(
+                            type=action_type
+                        )],
+                        exempt_roles=exempt_roles,
+                        enabled=True,
+                        exempt_channels=[],
+                    )
+                else:  # spam や mention
+                    await interaction.guild.create_automod_rule(
+                        name=f"Automod: {moderate}",
+                        event_type=discord.AutoModRuleEventType.message_send,
+                        trigger_type=trigger_types[moderate],
+                        actions=[discord.AutoModRuleAction(
+                            type=action_type
+                        )],
+                        exempt_roles=exempt_roles,
+                        enabled=True,
+                        exempt_channels=[],
+                    )
                 await interaction.response.send_message(f"`{moderate}` の自動モデレーションを有効にしました。", ephemeral=True)
             
             else:  # action == "disable"
