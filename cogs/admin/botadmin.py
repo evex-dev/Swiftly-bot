@@ -314,6 +314,18 @@ class BotAdmin(commands.Cog):
                 )
 
             elif option.startswith("premium:"):
+                if not self.is_admin(interaction.user.id):
+                    embed = discord.Embed(
+                        title="エラー",
+                        description=ERROR_MESSAGES["no_permission"],
+                        color=EMBED_COLORS["error"]
+                    )
+                    await interaction.response.send_message(
+                        embed=embed,
+                        ephemeral=True
+                    )
+                    return
+
                 try:
                     user_id = int(option.split(":")[1])
                     self.db.add_user(user_id)  # プレミアムを付与
