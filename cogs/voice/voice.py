@@ -68,18 +68,45 @@ class TTSManager:
         voice: str
     ) -> Optional[str]:
         try:
+            # メッセージが空か空白のみの場合は処理しない
+            if not message or message.isspace():
+                logger.warning("Empty message received for TTS, skipping audio generation")
+                return None
+                
+            # 文字列が有効であることを確認（制御文字などを除去）
+            message = ''.join(char for char in message if char.isprintable() or char.isspace())
+            if not message:
+                logger.warning("Message contains only non-printable characters, skipping audio generation")
+                return None
+
             # guild_idとuuidをファイル名に含める
             unique_id = uuid.uuid4().hex
             temp_file = TEMP_DIR / f"{guild_id}_{unique_id}.mp3"
             temp_path = str(temp_file)
             self.temp_files.append(temp_path)
 
-            tts = edge_tts.Communicate(message, voice)
-            await tts.save(temp_path)
-            return temp_path
-
+            # 最大試行回数を設定
+            max_attempts = 2
+            for attempt in range(max_attempts):
+                try:
+                    tts = edge_tts.Communicate(message, voice)
+                    await tts.save(temp_path)
+                    return temp_path
+                except Exception as e:
+                    if attempt < max_attempts - 1:
+                        logger.warning(f"TTS generation failed on attempt {attempt+1}, retrying: {e}")
+                        await asyncio.sleep(1)  # 少し待ってからリトライ
+                    else:
+                        raise  # 最大試行回数に達したら例外を再度投げる
         except Exception as e:
-            logger.error("Error generating audio: %s", e, exc_info=True)
+            logger.error(f"Error generating audio: {e}", exc_info=True)
+            # 一時ファイルが作成されていたら削除
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                    self.temp_files.remove(temp_path)
+                except Exception as cleanup_error:
+                    logger.error(f"Error cleaning up temp file after failed TTS: {cleanup_error}")
             return None
 
 class DictionaryManager:
