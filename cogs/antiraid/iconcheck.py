@@ -159,6 +159,10 @@ class IconCheck(commands.Cog):
     ) -> None:
         """Automodルールを作成"""
         try:
+            if not hasattr(guild, "auto_moderation_rules"):
+                logger.error("Automod API is not supported for this guild or bot version.")
+                return
+
             rules = await guild.auto_moderation_rules()
             if any(rule.name == "Default Avatar and New Account Filter" for rule in rules):
                 logger.info("Automod rule already exists in guild: %s", guild.id)
@@ -181,6 +185,8 @@ class IconCheck(commands.Cog):
                 exempt_channels=[]
             )
             logger.info("Automod rule created in guild: %s", guild.id)
+        except AttributeError:
+            logger.error("Automod API is not available. Please update Discord.py to 2.1.0 or later.")
         except Exception as e:
             logger.error("Error creating Automod rule: %s", e, exc_info=True)
 
@@ -190,12 +196,18 @@ class IconCheck(commands.Cog):
     ) -> None:
         """Automodルールを削除"""
         try:
+            if not hasattr(guild, "auto_moderation_rules"):
+                logger.error("Automod API is not supported for this guild or bot version.")
+                return
+
             rules = await guild.auto_moderation_rules()
             for rule in rules:
                 if rule.name == "Default Avatar and New Account Filter":
                     await rule.delete()
                     logger.info("Automod rule deleted in guild: %s", guild.id)
                     return
+        except AttributeError:
+            logger.error("Automod API is not available. Please update Discord.py to 2.1.0 or later.")
         except Exception as e:
             logger.error("Error deleting Automod rule: %s", e, exc_info=True)
 
