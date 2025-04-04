@@ -153,64 +153,6 @@ class IconCheck(commands.Cog):
         """Cogのロード時にDBを初期化"""
         await AntiRaidDatabase.init_db()
 
-    async def _create_automod_rule(
-        self,
-        guild: discord.Guild
-    ) -> None:
-        """Automodルールを作成"""
-        try:
-            if not hasattr(guild, "auto_moderation_rules"):
-                logger.error("Automod API is not supported for this guild or bot version.")
-                return
-
-            rules = await guild.auto_moderation_rules()
-            if any(rule.name == "Default Avatar and New Account Filter" for rule in rules):
-                logger.info("Automod rule already exists in guild: %s", guild.id)
-                return
-
-            await guild.create_auto_moderation_rule(
-                name="Default Avatar and New Account Filter",
-                event_type=discord.AutoModerationEventType.message_send,
-                trigger_type=discord.AutoModerationTriggerType.keyword,
-                trigger_metadata=discord.AutoModerationTriggerMetadata(
-                    keyword_filter=["*"]
-                ),
-                actions=[
-                    discord.AutoModerationAction(
-                        type=discord.AutoModerationActionType.block_message
-                    )
-                ],
-                enabled=True,
-                exempt_roles=[],
-                exempt_channels=[]
-            )
-            logger.info("Automod rule created in guild: %s", guild.id)
-        except AttributeError:
-            logger.error("Automod API is not available. Please update Discord.py to 2.1.0 or later.")
-        except Exception as e:
-            logger.error("Error creating Automod rule: %s", e, exc_info=True)
-
-    async def _delete_automod_rule(
-        self,
-        guild: discord.Guild
-    ) -> None:
-        """Automodルールを削除"""
-        try:
-            if not hasattr(guild, "auto_moderation_rules"):
-                logger.error("Automod API is not supported for this guild or bot version.")
-                return
-
-            rules = await guild.auto_moderation_rules()
-            for rule in rules:
-                if rule.name == "Default Avatar and New Account Filter":
-                    await rule.delete()
-                    logger.info("Automod rule deleted in guild: %s", guild.id)
-                    return
-        except AttributeError:
-            logger.error("Automod API is not available. Please update Discord.py to 2.1.0 or later.")
-        except Exception as e:
-            logger.error("Error deleting Automod rule: %s", e, exc_info=True)
-
     def _create_embed(
         self,
         title: str,
@@ -270,14 +212,15 @@ class IconCheck(commands.Cog):
             )
             return
 
-        await AntiRaidDatabase.enable(interaction.guild_id)
-        await self._create_automod_rule(interaction.guild)
+        embed = self._create_embed(
+            "説明",
+            FEATURE_DESCRIPTION,
+            "info"
+        )
+        view = EnableAnticheatView(interaction.guild_id)
         await interaction.response.send_message(
-            embed=self._create_embed(
-                "完了",
-                SUCCESS_MESSAGES["enabled"],
-                "success"
-            ),
+            embed=embed,
+            view=view,
             ephemeral=True
         )
 
@@ -309,7 +252,6 @@ class IconCheck(commands.Cog):
             return
 
         await AntiRaidDatabase.disable(interaction.guild_id)
-        await self._delete_automod_rule(interaction.guild)
         await interaction.response.send_message(
             embed=self._create_embed(
                 "完了",
@@ -318,6 +260,43 @@ class IconCheck(commands.Cog):
             ),
             ephemeral=True
         )
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        """メッセージ送信時の処理"""
+        if message.author.bot or not message.guild:
+            return
+
+        try:
+            if await AntiRaidDatabase.is_enabled(message.guild.id):
+                user = message.author
+                is_default_avatar = user.avatar is None
+                created_at_utc = user.created_at.replace(tzinfo=timezone.utc)
+                is_new_account = (
+                    created_at_utc.date() ==
+                    datetime.now(timezone.utc).date()
+                )
+
+                if is_default_avatar and is_new_account:
+                    await message.delete()
+                    logger.info(f"Deleted message from {user} in {message.guild.name} ({message.guild.id})")
+                    warning_embed = self._create_embed(
+                        "警告",
+                        f"{user.mention}、デフォルトのアバターかつ"
+                        "本日作成されたアカウントではメッセージを送信できません。",
+                        "error"
+                    )
+                    warning_message = await message.channel.send(
+                        embed=warning_embed
+                    )
+                    await warning_message.delete(delay=WARNING_DELETE_DELAY)
+
+        except Exception as e:
+            logger.error(
+                "Error processing message in anti-raid: %s", e,
+                exc_info=True
+            )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(IconCheck(bot))

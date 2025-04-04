@@ -233,19 +233,7 @@ class AntiInvite(commands.Cog):
         if not message.guild or message.author.bot:
             return
 
-        if not await self.get_setting(message.guild.id):
-            return
-
-        async with aiosqlite.connect(self.db_exempt_path) as db:
-            async with db.execute(
-                "SELECT channel_id FROM whitelist WHERE guild_id = ?",
-                (message.guild.id,)
-            ) as cursor:
-                whitelist_channels = [row[0] async for row in cursor]
-
-        if message.channel.id in whitelist_channels:
-            return
-
+        # 短縮リンクの検出処理
         if await self.contains_invite(message.content):
             try:
                 await message.delete()
@@ -254,6 +242,51 @@ class AntiInvite(commands.Cog):
                 await warning.delete()
             except (discord.errors.Forbidden, Exception):
                 pass
+
+    @commands.Cog.listener()
+    async def on_automod_action(self, event: discord.AutoModActionExecutionEvent) -> None:
+        """Automod APIを使用して招待リンクを検出"""
+        if not event.guild or not await self.get_setting(event.guild.id):
+            return
+
+        if event.action.type == discord.AutoModRuleActionType.block_message:
+            try:
+                await event.message.delete()
+                warning = await event.channel.send(INVITE_WARNING)
+                await asyncio.sleep(5)
+                await warning.delete()
+            except (discord.errors.Forbidden, Exception):
+                pass
+
+    async def setup_automod_rule(self, guild: discord.Guild) -> None:
+        """Automodルールを設定"""
+        try:
+            rules = await guild.fetch_automod_rules()
+            if any(rule.name == "Anti-Invite Rule" for rule in rules):
+                return  # 既にルールが存在する場合はスキップ
+
+            invite_patterns = [f"*{pattern}*" for pattern in INVITE_PATTERNS]
+            await guild.create_automod_rule(
+                name="Anti-Invite Rule",
+                event_type=discord.AutoModRuleEventType.message_send,
+                trigger=discord.AutoModRuleTriggerType.keyword,
+                trigger_metadata=discord.AutoModTriggerMetadata(keyword_filter=invite_patterns),
+                actions=[discord.AutoModRuleAction(type=discord.AutoModRuleActionType.block_message)],
+                enabled=True
+            )
+        except Exception as e:
+            print(f"Automodルールの設定中にエラーが発生しました: {e}")
+
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """Botが起動した際にAutomodルールを設定"""
+        for guild in self.bot.guilds:
+            await self.setup_automod_rule(guild)
+
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """Botが新しいサーバーに参加した際にAutomodルールを設定"""
+        await self.setup_automod_rule(guild)
 
 
 async def setup(bot: commands.Bot) -> None:
