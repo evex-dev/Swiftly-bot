@@ -218,6 +218,13 @@ class MemberWelcomeCog(commands.Cog):
         channel: Optional[discord.TextChannel] = None
     ) -> None:
         """ウェルカムメッセージの設定を行うコマンド"""
+        if not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message(
+                ERROR_MESSAGES["no_permission"],
+                ephemeral=True
+            )
+            return
+
         try:
             if not interaction.user.guild_permissions.manage_guild:
                 await interaction.response.send_message(
@@ -291,6 +298,13 @@ class MemberWelcomeCog(commands.Cog):
         channel: Optional[discord.TextChannel] = None
     ) -> None:
         """退室メッセージの設定を行うコマンド"""
+        if not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message(
+                ERROR_MESSAGES["no_permission"],
+                ephemeral=True
+            )
+            return
+
         try:
             if not interaction.user.guild_permissions.manage_guild:
                 await interaction.response.send_message(
