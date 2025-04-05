@@ -273,7 +273,7 @@ class MemberWelcomeCog(commands.Cog):
             )
 
     @app_commands.command(
-        name="leave message",
+        name="leave-message",
         description="退室メッセージの設定"
     )
     @app_commands.describe(
