@@ -270,34 +270,35 @@ class SwiftlyBot(commands.AutoShardedBot):
         pil_logger.addHandler(console_handler)
 
     async def setup_hook(self) -> None:
-        """ボットのセットアップ処理"""
-        await self.db.initialize()
-        await self._load_extensions()
-
-        # ファイル監視を開始（再帰的に監視するようにrecursive=Trueに変更）
+        # 並行にDB初期化, Extension読み込み, Cog追加を実行
+        db_task = asyncio.create_task(self.db.initialize())
+        ext_task = asyncio.create_task(self._load_extensions())
+        cog_task = asyncio.gather(
+            self.add_cog(LoggingCog(self)),
+            self.add_cog(PrometheusCog(self))
+        )
+        await asyncio.gather(db_task, ext_task, cog_task)
         self.observer.schedule(self.cog_reloader, str(PATHS["cogs_dir"]), recursive=True)
         self.observer.start()
         logger.info("Started watching cogs directory and subdirectories for changes")
-
-        await self.add_cog(LoggingCog(self))  # LoggingCogを追加
-        await self.add_cog(PrometheusCog(self))
         await self.tree.sync()
 
     async def _load_extensions(self) -> None:
-        """Cogを読み込み"""
+        tasks = []
         for file in PATHS["cogs_dir"].glob("**/*.py"):
             if file.stem == "__init__":
                 continue
-                
-            # サブディレクトリのパスをモジュールパスに変換
             relative_path = file.relative_to(Path("."))
             module_path = str(relative_path).replace(os.sep, ".")[:-3]  # .pyを削除
-            
-            try:
-                await self.load_extension(module_path)
-                logger.info("Loaded: %s", module_path)
-            except Exception as e:
-                logger.error("Failed to load: %s - %s", module_path, e, exc_info=True)
+            tasks.append(self._load_extension_wrapper(module_path))
+        await asyncio.gather(*tasks)
+    
+    async def _load_extension_wrapper(self, module_path: str) -> None:
+        try:
+            await self.load_extension(module_path)
+            logger.info("Loaded: %s", module_path)
+        except Exception as e:
+            logger.error("Failed to load: %s - %s", module_path, e, exc_info=True)
 
     async def update_presence(self) -> None:
         """ステータスを更新"""
