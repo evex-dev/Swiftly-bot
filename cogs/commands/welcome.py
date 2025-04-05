@@ -16,6 +16,8 @@ MIN_INCREMENT: Final[int] = 5
 MAX_INCREMENT: Final[int] = 1000
 JOIN_COOLDOWN: Final[int] = 3  # seconds
 
+LEAVE_DB_PATH: Final[Path] = Path("data/leavemessage.db")
+
 ERROR_MESSAGES: Final[dict] = {
     "no_permission": "コマンドを使用するにはサーバーの管理権限が必要です。",
     "invalid_action": "enableまたはdisableを指定してください。",
@@ -42,11 +44,26 @@ WELCOME_MESSAGES: Final[dict] = {
     )
 }
 
+LEAVE_MESSAGES: Final[dict] = {
+    "leave": (
+        "{mention} さんがサーバーを退室しました。\n"
+        "現在のメンバー数: {member_count}人"
+    )
+}
+
 CREATE_TABLE_SQL: Final[str] = """
 CREATE TABLE IF NOT EXISTS welcome_settings (
     guild_id INTEGER PRIMARY KEY,
     is_enabled INTEGER DEFAULT 0,
     member_increment INTEGER DEFAULT 100,
+    channel_id INTEGER DEFAULT NULL
+)
+"""
+
+CREATE_LEAVE_TABLE_SQL: Final[str] = """
+CREATE TABLE IF NOT EXISTS leave_settings (
+    guild_id INTEGER PRIMARY KEY,
+    is_enabled INTEGER DEFAULT 0,
     channel_id INTEGER DEFAULT NULL
 )
 """
@@ -113,6 +130,61 @@ class WelcomeDatabase:
             )
             await db.commit()
 
+class LeaveDatabase:
+    """退室メッセージの設定を管理するDB"""
+
+    @staticmethod
+    async def init_database() -> None:
+        """DBを初期化"""
+        os.makedirs(LEAVE_DB_PATH.parent, exist_ok=True)
+        async with aiosqlite.connect(LEAVE_DB_PATH) as db:
+            await db.execute(CREATE_LEAVE_TABLE_SQL)
+            await db.commit()
+
+    @staticmethod
+    async def get_settings(
+        guild_id: int
+    ) -> Tuple[bool, Optional[int]]:
+        async with aiosqlite.connect(LEAVE_DB_PATH) as db:
+            async with db.execute(
+                """
+                SELECT is_enabled, channel_id
+                FROM leave_settings WHERE guild_id = ?
+                """,
+                (guild_id,)
+            ) as cursor:
+                result = await cursor.fetchone()
+                return (
+                    bool(result[0]),
+                    result[1]
+                ) if result else (False, None)
+
+    @staticmethod
+    async def update_settings(
+        guild_id: int,
+        is_enabled: bool,
+        channel_id: Optional[int] = None
+    ) -> None:
+        """サーバーの設定を更新"""
+        async with aiosqlite.connect(LEAVE_DB_PATH) as db:
+            await db.execute(
+                """
+                INSERT INTO leave_settings
+                (guild_id, is_enabled, channel_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(guild_id) DO UPDATE SET
+                    is_enabled = excluded.is_enabled,
+                    channel_id = COALESCE(?, leave_settings.channel_id)
+                """,
+                (
+                    guild_id,
+                    is_enabled,
+                    channel_id,
+                    channel_id
+                )
+            )
+            await db.commit()
+
 class MemberWelcomeCog(commands.Cog):
     """メンバー参加時のウェルカムメッセージを管理"""
 
@@ -123,6 +195,7 @@ class MemberWelcomeCog(commands.Cog):
     async def cog_load(self) -> None:
         """Cogのロード時にDBを初期化"""
         await WelcomeDatabase.init_database()
+        await LeaveDatabase.init_database()
 
     @app_commands.command(
         name="welcome",
@@ -199,6 +272,67 @@ class MemberWelcomeCog(commands.Cog):
                 ephemeral=True
             )
 
+    @app_commands.command(
+        name="leave",
+        description="退室メッセージの設定"
+    )
+    @app_commands.describe(
+        action="退室メッセージをON/OFFにします",
+        channel="メッセージを送信するチャンネル"
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="enable", value="enable"),
+        app_commands.Choice(name="disable", value="disable")
+    ])
+    async def leave_command(
+        self,
+        interaction: discord.Interaction,
+        action: Literal["enable", "disable"],
+        channel: Optional[discord.TextChannel] = None
+    ) -> None:
+        """退室メッセージの設定を行うコマンド"""
+        try:
+            if not interaction.user.guild_permissions.manage_guild:
+                await interaction.response.send_message(
+                    ERROR_MESSAGES["no_permission"],
+                    ephemeral=True
+                )
+                return
+
+            is_enabled = action == "enable"
+
+            if is_enabled and not channel:
+                await interaction.response.send_message(
+                    ERROR_MESSAGES["no_channel"],
+                    ephemeral=True
+                )
+                return
+
+            channel_id = channel.id if channel else None
+            await LeaveDatabase.update_settings(
+                interaction.guild_id,
+                is_enabled,
+                channel_id
+            )
+
+            if is_enabled:
+                await interaction.response.send_message(
+                    f"退室メッセージをONにしました! チャンネル: {channel.mention}",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "退室メッセージを無効にしました!",
+                    ephemeral=True
+                )
+
+        except Exception as e:
+            logger.error("Error in leave command: %s", e, exc_info=True)
+            await interaction.response.send_message(
+                f"エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
         """メンバー参加時のイベントハンドラ"""
@@ -249,6 +383,38 @@ class MemberWelcomeCog(commands.Cog):
         except Exception as e:
             logger.error(
                 "Error processing member join: %s", e,
+                exc_info=True
+            )
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member) -> None:
+        """メンバー退室時のイベントハンドラ"""
+        try:
+            is_enabled, channel_id = await LeaveDatabase.get_settings(
+                member.guild.id
+            )
+            if not is_enabled:
+                return
+
+            channel = member.guild.get_channel(channel_id)
+            if not channel:
+                await LeaveDatabase.update_settings(
+                    member.guild.id,
+                    False
+                )
+                return
+
+            member_count = len(member.guild.members)
+            message = LEAVE_MESSAGES["leave"].format(
+                mention=member.mention,
+                member_count=member_count
+            )
+
+            await channel.send(message)
+
+        except Exception as e:
+            logger.error(
+                "Error processing member leave: %s", e,
                 exc_info=True
             )
 
