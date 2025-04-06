@@ -305,7 +305,7 @@ class SwiftlyBot(commands.AutoShardedBot):
         while True:
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"{len(self.guilds)}のサーバー数 || {round(self.latency * 1000)}ms",
+                    name=f"{len(self.guilds)}のサーバー数 || {round(self.latency * 1000)}ms || {self.shard_count}shards",
                 )
             )
             await asyncio.sleep(300)  # 5分ごとに更新
