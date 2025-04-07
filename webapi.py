@@ -220,6 +220,7 @@ class ServerBoardAPI:
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
         self.app.delete("/admin/requests/{user_id}/{message}/{date}")(self.delete_request)
+        self.app.get("/api/analytics/")(self.get_analytics)  # 新規追加
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
@@ -326,6 +327,37 @@ class ServerBoardAPI:
                 status_code=500,
                 detail=ERROR_MESSAGES["db_error"].format(str(e))
             ) from e
+
+    async def get_analytics(self, guildid: int) -> Dict[str, Any]:
+        """指定されたguildidの最新のアナリティクスデータを取得するエンドポイント"""
+        from fastapi import HTTPException
+        import json
+        analytics_db = Path(__file__).parent / "data/analytics.db"
+        if not analytics_db.exists():
+            raise HTTPException(status_code=500, detail=f"Analytics DBが見つかりません: {analytics_db}")
+
+        try:
+            conn = sqlite3.connect(str(analytics_db), detect_types=sqlite3.PARSE_DECLTYPES)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("""
+                SELECT * FROM analytics_data
+                WHERE guild_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (guildid,))
+            row = c.fetchone()
+            conn.close()
+            if not row:
+                raise HTTPException(status_code=404, detail="指定されたguildidのアナリティクスデータは存在しません")
+            result = dict(row)
+            # JSON形式のカラムを変換
+            result["daily_messages"] = json.loads(result["daily_messages"])
+            result["daily_active_users"] = json.loads(result["daily_active_users"])
+            return result
+
+        except sqlite3.Error as e:
+            raise HTTPException(status_code=500, detail=f"Analytics DBエラー: {e}")
 
     def basic_auth(self, credentials: HTTPBasicCredentials = Depends(security)) -> None:
         """Basic認証の検証"""
