@@ -17,6 +17,10 @@ class Economy(commands.Cog):
         self.transfer_fee_rate = 0.05  # 送金手数料率 (5%)
         self.bank_user_id = 0  # システム/銀行のユーザーID
         self.current_event = None
+        self.event_start_time = None
+        self.event_duration = 3600  # デフォルトイベント期間 (1時間)
+        self.base_daily_min = 100  # デイリーボーナスの基本最小値
+        self.base_daily_max = 500  # デイリーボーナスの基本最大値
         bot.loop.create_task(self.setup_database())
         bot.loop.create_task(self.event_generator())
         
@@ -111,9 +115,14 @@ class Economy(commands.Cog):
         
         sender_balance = await self.get_balance(sender_id)
         
+        # 現在のイベントによる手数料率の調整
+        fee_rate = self.transfer_fee_rate
+        if self.current_event and 'transfer_fee_rate' in self.current_event['effects']:
+            fee_rate = self.current_event['effects']['transfer_fee_rate']
+            
         # 手数料の計算
-        fee = int(amount * self.transfer_fee_rate)
-        if fee < 1:
+        fee = int(amount * fee_rate)
+        if fee < 1 and fee_rate > 0:
             fee = 1  # 最低手数料
         
         total_cost = amount + fee
@@ -146,6 +155,10 @@ class Economy(commands.Cog):
         new_balance = await self.get_balance(sender_id)
         embed.add_field(name="あなたの残高", value=f"{new_balance} {self.currency_symbol}", inline=False)
         
+        # イベント情報があれば追加
+        if self.current_event and 'transfer_fee_rate' in self.current_event['effects']:
+            embed.add_field(name="特別イベント", value=f"🎉 {self.current_event['name']}: {self.current_event['description']}", inline=False)
+        
         await interaction.response.send_message(embed=embed)
     
     @app_commands.command(name="daily", description="デイリーボーナスを受け取ります")
@@ -169,7 +182,22 @@ class Economy(commands.Cog):
                     time_left = next_daily - now
             
             if can_claim:
-                bonus = random.randint(100, 500)
+                # イベントによるボーナス調整
+                min_bonus = self.base_daily_min
+                max_bonus = self.base_daily_max
+                bonus_multiplier = 1.0
+                
+                if self.current_event:
+                    if 'daily_min' in self.current_event['effects']:
+                        min_bonus = self.current_event['effects']['daily_min']
+                    if 'daily_max' in self.current_event['effects']:
+                        max_bonus = self.current_event['effects']['daily_max']
+                    if 'daily_multiplier' in self.current_event['effects']:
+                        bonus_multiplier = self.current_event['effects']['daily_multiplier']
+                
+                base_bonus = random.randint(min_bonus, max_bonus)
+                bonus = int(base_bonus * bonus_multiplier)
+                
                 await self.update_balance(user_id, bonus)
                 await db.execute('UPDATE user_balance SET last_daily = ? WHERE user_id = ?', (now.isoformat(), user_id))
                 await db.commit()
@@ -179,6 +207,16 @@ class Economy(commands.Cog):
                     description=f"{bonus} {self.currency_symbol} {self.currency_name}を獲得しました！",
                     color=discord.Color.gold()
                 )
+                
+                # イベント情報があれば追加
+                if self.current_event and (
+                    'daily_min' in self.current_event['effects'] or 
+                    'daily_max' in self.current_event['effects'] or 
+                    'daily_multiplier' in self.current_event['effects']):
+                    embed.add_field(name="特別イベント", value=f"🎉 {self.current_event['name']}: {self.current_event['description']}", inline=False)
+                    if bonus_multiplier != 1.0:
+                        embed.add_field(name="ボーナス倍率", value=f"{bonus_multiplier}倍", inline=True)
+                
                 await interaction.response.send_message(embed=embed)
             else:
                 hours, remainder = divmod(time_left.seconds, 3600)
@@ -259,16 +297,219 @@ class Economy(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="event", description="現在進行中の経済イベントを確認します")
+    async def check_event(self, interaction: discord.Interaction):
+        if not self.current_event or not self.event_start_time:
+            embed = discord.Embed(
+                title="経済イベント",
+                description="現在、特別な経済イベントは開催されていません。",
+                color=discord.Color.light_grey()
+            )
+            await interaction.response.send_message(embed=embed)
+            return
+            
+        now = datetime.now()
+        elapsed = now - self.event_start_time
+        remaining = timedelta(seconds=self.event_duration) - elapsed
+        
+        if remaining.total_seconds() <= 0:
+            embed = discord.Embed(
+                title="経済イベント",
+                description="イベントが終了間近です。まもなく新しいイベントが始まります。",
+                color=discord.Color.orange()
+            )
+            await interaction.response.send_message(embed=embed)
+            return
+            
+        hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        embed = discord.Embed(
+            title=f"🎉 {self.current_event['name']}",
+            description=self.current_event['description'],
+            color=discord.Color.gold()
+        )
+        
+        # イベント効果の詳細を表示
+        effects_details = []
+        for key, value in self.current_event['effects'].items():
+            if key == 'transfer_fee_rate':
+                effects_details.append(f"送金手数料率: {value * 100}%")
+            elif key == 'daily_multiplier':
+                effects_details.append(f"デイリーボーナス倍率: {value}倍")
+            elif key == 'daily_min':
+                effects_details.append(f"デイリー最小額: {value}")
+            elif key == 'daily_max':
+                effects_details.append(f"デイリー最大額: {value}")
+            elif key == 'price_multiplier':
+                effects_details.append(f"市場価格変動: {value}倍")
+            elif key == 'lottery_odds':
+                effects_details.append(f"宝くじ当選確率: {value}倍")
+            
+        if effects_details:
+            embed.add_field(name="効果", value="\n".join(effects_details), inline=False)
+            
+        embed.add_field(name="残り時間", value=f"{hours}時間 {minutes}分 {seconds}秒", inline=False)
+        embed.set_footer(text="イベント中はさまざまな特典や変更があります。有効活用しましょう！")
+        
+        await interaction.response.send_message(embed=embed)
+
     async def event_generator(self):
         """経済イベントを定期的に生成"""
+        await self.bot.wait_until_ready()
+        
         events = [
-            {"name": "税率引き下げ", "description": "税率が一時的に引き下げられます。", "effects": {"tax_rate": 0.05}},
-            {"name": "手数料無料キャンペーン", "description": "送金手数料が無料になります。", "effects": {"transfer_fee_rate": 0.0}},
-            {"name": "取引手数料割引", "description": "株式取引手数料が半額になります。", "effects": {"trade_fee_rate": 0.01}},
+            # 基本的な経済イベント
+            {
+                "name": "送金手数料無料キャンペーン", 
+                "description": "期間中、送金手数料が無料になります！", 
+                "effects": {"transfer_fee_rate": 0.0},
+                "duration": 3600,  # 1時間
+                "weight": 10
+            },
+            {
+                "name": "送金手数料半額キャンペーン", 
+                "description": "期間中、送金手数料が半額になります！", 
+                "effects": {"transfer_fee_rate": 0.025},
+                "duration": 7200,  # 2時間
+                "weight": 15
+            },
+            {
+                "name": "富の恵み", 
+                "description": "デイリーボーナスが通常より多くなります！", 
+                "effects": {"daily_multiplier": 2.0},
+                "duration": 3600,  # 1時間
+                "weight": 10
+            },
+            {
+                "name": "大富豪の祝福", 
+                "description": "デイリーボーナスが大幅に増加します！", 
+                "effects": {"daily_multiplier": 3.0},
+                "duration": 1800,  # 30分
+                "weight": 5
+            },
+            {
+                "name": "保証付きデイリー", 
+                "description": "デイリーボーナスの最低額が増加します！", 
+                "effects": {"daily_min": 300, "daily_max": 700},
+                "duration": 3600,  # 1時間
+                "weight": 10
+            },
+            {
+                "name": "豊穣の時代", 
+                "description": "全てのお金の獲得量が増加します！", 
+                "effects": {"daily_multiplier": 1.5, "transfer_fee_rate": 0.03},
+                "duration": 5400,  # 1時間30分
+                "weight": 8
+            },
+            {
+                "name": "不景気", 
+                "description": "経済が停滞し、デイリーボーナスが減少します...", 
+                "effects": {"daily_multiplier": 0.7},
+                "duration": 3600,  # 1時間
+                "weight": 7
+            },
+            {
+                "name": "増税期間", 
+                "description": "送金手数料が一時的に増加します。", 
+                "effects": {"transfer_fee_rate": 0.08},
+                "duration": 2700,  # 45分
+                "weight": 7
+            },
+            {
+                "name": "市場バブル", 
+                "description": "株式や商品の価格が急上昇しています！", 
+                "effects": {"price_multiplier": 1.5},
+                "duration": 2700,  # 45分
+                "weight": 8
+            },
+            {
+                "name": "市場暴落", 
+                "description": "株式や商品の価格が大幅に下落しています...", 
+                "effects": {"price_multiplier": 0.6},
+                "duration": 2700,  # 45分
+                "weight": 8
+            },
+            {
+                "name": "インフレーション", 
+                "description": "物価が上昇し、デイリーボーナスが増加する代わりに手数料も上昇します。", 
+                "effects": {"daily_multiplier": 1.3, "transfer_fee_rate": 0.07},
+                "duration": 3600,  # 1時間
+                "weight": 6
+            },
+            {
+                "name": "デフレーション", 
+                "description": "物価が下落し、デイリーボーナスが減少する代わりに手数料も下がります。", 
+                "effects": {"daily_multiplier": 0.8, "transfer_fee_rate": 0.03},
+                "duration": 3600,  # 1時間
+                "weight": 6
+            },
+            {
+                "name": "短期豊作", 
+                "description": "一時的な好景気！すべての経済活動が活発化します。", 
+                "effects": {"daily_multiplier": 1.4, "transfer_fee_rate": 0.02},
+                "duration": 1800,  # 30分
+                "weight": 4
+            }
         ]
+        
         while True:
-            self.current_event = random.choice(events)
-            await asyncio.sleep(3600)  # 1時間ごとにイベントを変更
+            # イベントをランダムに選択（重み付け）
+            weights = [event.get("weight", 10) for event in events]
+            selected_event = random.choices(events, weights=weights, k=1)[0]
+            
+            self.current_event = selected_event
+            self.event_start_time = datetime.now()
+            self.event_duration = selected_event.get("duration", 3600)
+            
+            # 新しいイベントの通知をサーバーの全体チャンネルに送信
+            for guild in self.bot.guilds:
+                system_channel = guild.system_channel
+                if system_channel and system_channel.permissions_for(guild.me).send_messages:
+                    embed = discord.Embed(
+                        title=f"🎉 新しい経済イベント: {selected_event['name']}",
+                        description=selected_event['description'],
+                        color=discord.Color.gold()
+                    )
+                    
+                    # イベント効果の詳細を表示
+                    effects_details = []
+                    for key, value in selected_event['effects'].items():
+                        if key == 'transfer_fee_rate':
+                            effects_details.append(f"送金手数料率: {value * 100}%")
+                        elif key == 'daily_multiplier':
+                            effects_details.append(f"デイリーボーナス倍率: {value}倍")
+                        elif key == 'daily_min':
+                            effects_details.append(f"デイリー最小額: {value}")
+                        elif key == 'daily_max':
+                            effects_details.append(f"デイリー最大額: {value}")
+                        elif key == 'price_multiplier':
+                            effects_details.append(f"市場価格変動: {value}倍")
+                        elif key == 'lottery_odds':
+                            effects_details.append(f"宝くじ当選確率: {value}倍")
+                    
+                    if effects_details:
+                        embed.add_field(name="効果", value="\n".join(effects_details), inline=False)
+                    
+                    # イベント期間を計算
+                    duration_hours = self.event_duration // 3600
+                    duration_minutes = (self.event_duration % 3600) // 60
+                    duration_text = ""
+                    if duration_hours > 0:
+                        duration_text += f"{duration_hours}時間"
+                    if duration_minutes > 0:
+                        duration_text += f" {duration_minutes}分"
+                    
+                    embed.add_field(name="イベント期間", value=duration_text, inline=False)
+                    embed.set_footer(text="詳細は /event コマンドで確認できます")
+                    
+                    try:
+                        await system_channel.send(embed=embed)
+                    except discord.HTTPException:
+                        pass  # 送信に失敗しても続行
+            
+            # イベント期間が終了するまで待機
+            await asyncio.sleep(self.event_duration)
 
 async def setup(bot):
     await bot.add_cog(Economy(bot))
