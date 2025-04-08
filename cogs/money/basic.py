@@ -462,52 +462,6 @@ class Economy(commands.Cog):
             self.event_start_time = datetime.now()
             self.event_duration = selected_event.get("duration", 3600)
             
-            # 新しいイベントの通知をサーバーの全体チャンネルに送信
-            for guild in self.bot.guilds:
-                system_channel = guild.system_channel
-                if system_channel and system_channel.permissions_for(guild.me).send_messages:
-                    embed = discord.Embed(
-                        title=f"🎉 新しい経済イベント: {selected_event['name']}",
-                        description=selected_event['description'],
-                        color=discord.Color.gold()
-                    )
-                    
-                    # イベント効果の詳細を表示
-                    effects_details = []
-                    for key, value in selected_event['effects'].items():
-                        if key == 'transfer_fee_rate':
-                            effects_details.append(f"送金手数料率: {value * 100}%")
-                        elif key == 'daily_multiplier':
-                            effects_details.append(f"デイリーボーナス倍率: {value}倍")
-                        elif key == 'daily_min':
-                            effects_details.append(f"デイリー最小額: {value}")
-                        elif key == 'daily_max':
-                            effects_details.append(f"デイリー最大額: {value}")
-                        elif key == 'price_multiplier':
-                            effects_details.append(f"市場価格変動: {value}倍")
-                        elif key == 'lottery_odds':
-                            effects_details.append(f"宝くじ当選確率: {value}倍")
-                    
-                    if effects_details:
-                        embed.add_field(name="効果", value="\n".join(effects_details), inline=False)
-                    
-                    # イベント期間を計算
-                    duration_hours = self.event_duration // 3600
-                    duration_minutes = (self.event_duration % 3600) // 60
-                    duration_text = ""
-                    if duration_hours > 0:
-                        duration_text += f"{duration_hours}時間"
-                    if duration_minutes > 0:
-                        duration_text += f" {duration_minutes}分"
-                    
-                    embed.add_field(name="イベント期間", value=duration_text, inline=False)
-                    embed.set_footer(text="詳細は /event コマンドで確認できます")
-                    
-                    try:
-                        await system_channel.send(embed=embed)
-                    except discord.HTTPException:
-                        pass  # 送信に失敗しても続行
-            
             # イベント期間が終了するまで待機
             await asyncio.sleep(self.event_duration)
 
