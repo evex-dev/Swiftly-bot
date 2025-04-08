@@ -17,8 +17,14 @@ class Investment(commands.Cog):
         self.currency_symbol = "🪙"  # デフォルト値
         self.stock_update_task = None
         self.stocks = {}
+        self.bank_user_id = 0  # システム/銀行のユーザーID
+        self.trade_fee_rate = 0.02  # 取引手数料率 (2%)
+        self.dynamic_trade_fee_rate = self.trade_fee_rate  # イベントによる動的な取引手数料率
+        self.market_events = []  # 市場イベントのリスト
+        self.last_market_event = None
         bot.loop.create_task(self.setup_database())
         bot.loop.create_task(self.load_economy_cog())
+        bot.loop.create_task(self.event_listener())
     
     async def load_economy_cog(self):
         """Economy cogを読み込む（利用可能になったタイミングで）"""
@@ -151,10 +157,43 @@ class Investment(commands.Cog):
         """定期的に株価を更新するループ"""
         try:
             while True:
+                # 市場イベントの更新（20%の確率）
+                if random.random() < 0.2:
+                    await self.generate_market_event()
+                
                 await self.update_stock_prices()
                 await asyncio.sleep(3600)  # 1時間ごとに更新
         except asyncio.CancelledError:
             pass
+    
+    async def generate_market_event(self):
+        """市場イベントの生成"""
+        events = [
+            {"name": "市場好調", "description": "市場全体が好調に推移しています。", "effect": (0.05, 0.15), "emoji": "📈"},
+            {"name": "市場低迷", "description": "市場全体が低迷しています。", "effect": (-0.15, -0.05), "emoji": "📉"},
+            {"name": "テクノロジーブーム", "description": "テクノロジー関連企業の株価が急上昇しています。", "effect": (0.1, 0.2), "emoji": "💻", "sectors": ["SWFT", "DIGI", "GAME"]},
+            {"name": "医療業界の躍進", "description": "医療関連企業の株価が上昇しています。", "effect": (0.1, 0.2), "emoji": "🏥", "sectors": ["MEDC"]},
+            {"name": "エネルギー危機", "description": "エネルギー関連企業の株価が下落しています。", "effect": (-0.2, -0.1), "emoji": "⚡", "sectors": ["ENER"]},
+            {"name": "消費者需要増加", "description": "小売業とフード関連企業の株価が上昇しています。", "effect": (0.05, 0.15), "emoji": "🛒", "sectors": ["FOOD", "LUXR"]},
+            {"name": "金融不安", "description": "銀行と金融関連企業の株価が下落しています。", "effect": (-0.15, -0.05), "emoji": "🏦", "sectors": ["BANK"]}
+        ]
+        
+        # ランダムにイベントを選択
+        event = random.choice(events)
+        self.last_market_event = event
+        self.market_events.append({
+            "event": event,
+            "timestamp": datetime.now()
+        })
+        
+        # イベントに基づいて、関連する株式のボラティリティを一時的に変更
+        if "sectors" in event:
+            for symbol in event["sectors"]:
+                if symbol in self.stocks:
+                    stock = self.stocks[symbol]
+                    effect_min, effect_max = event["effect"]
+                    # 影響を与える（実際の更新は次のupdate_stock_pricesで行われる）
+                    stock["event_effect"] = random.uniform(effect_min, effect_max)
     
     async def update_stock_prices(self):
         """株価の更新処理"""
@@ -168,7 +207,16 @@ class Investment(commands.Cog):
             for stock in stocks:
                 # 価格変動のシミュレーション
                 volatility = stock['volatility']
-                change_percent = random.uniform(-volatility, volatility)
+                
+                # 市場イベントの影響を加味
+                event_effect = 0
+                if stock["symbol"] in self.stocks and "event_effect" in self.stocks[stock["symbol"]]:
+                    event_effect = self.stocks[stock["symbol"]]["event_effect"]
+                    # イベント効果はこの更新後にリセット
+                    del self.stocks[stock["symbol"]]["event_effect"]
+                
+                # 基本変動 + イベント効果
+                change_percent = random.uniform(-volatility, volatility) + event_effect
                 old_price = stock['price']
                 new_price = max(1, old_price * (1 + change_percent))
                 new_price = round(new_price, 2)
@@ -320,6 +368,17 @@ class Investment(commands.Cog):
         
         return True, "株式売却が完了しました"
     
+    async def event_listener(self):
+        """経済イベントの影響を受けるリスナー"""
+        while True:
+            if self.economy_cog and hasattr(self.economy_cog, "current_event"):
+                event = self.economy_cog.current_event
+                if event and "trade_fee_rate" in event["effects"]:
+                    self.dynamic_trade_fee_rate = event["effects"]["trade_fee_rate"]
+                else:
+                    self.dynamic_trade_fee_rate = self.trade_fee_rate
+            await asyncio.sleep(60)  # 1分ごとにチェック
+    
     @app_commands.command(name="stocks", description="株式市場の一覧を表示します")
     async def stocks(self, interaction: discord.Interaction):
         async with aiosqlite.connect(self.db_path) as db:
@@ -387,18 +446,32 @@ class Investment(commands.Cog):
             return
         
         current_price = stock['price']
-        total_cost = current_price * quantity
+        # 株式の価値
+        stock_value = current_price * quantity
+        # 取引手数料の計算
+        fee = int(stock_value * self.dynamic_trade_fee_rate)  # 動的手数料率を使用
+        if fee < 1:
+            fee = 1  # 最低手数料
+        
+        total_cost = stock_value + fee
         
         # 残高確認
         balance = await self.get_balance(user_id)
         if balance < total_cost:
             await interaction.response.send_message(
-                f"残高不足です。必要金額: {total_cost:.2f} {self.currency_symbol}, 現在の残高: {balance:.2f} {self.currency_symbol}",
+                f"残高不足です。必要金額: {total_cost:.2f} {self.currency_symbol} (株式: {stock_value:.2f} + 手数料: {fee:.2f}), "
+                f"現在の残高: {balance:.2f} {self.currency_symbol}",
                 ephemeral=True
             )
             return
         
         # 購入処理
+        # まず手数料をシステムに支払う
+        await self.update_balance(user_id, -fee)
+        await self.update_balance(self.bank_user_id, fee)
+        await self.add_transaction(user_id, self.bank_user_id, fee, f"Stock purchase fee: {stock['symbol']}")
+        
+        # 次に株を購入
         success, message = await self.buy_stock(user_id, stock['id'], quantity, current_price)
         
         if success:
@@ -409,11 +482,21 @@ class Investment(commands.Cog):
             )
             
             embed.add_field(name="購入数量", value=f"{quantity}株", inline=True)
-            embed.add_field(name="株価", value=f"{current_price:.2f} {self.currency_symbol}", inline=True)
-            embed.add_field(name="合計金額", value=f"{total_cost:.2f} {self.currency_symbol}", inline=True)
+            embed.add_field(name="株価", value=f"{current_price:.2f} {self.currency_symbol}/株", inline=True)
+            embed.add_field(name="株式価値", value=f"{stock_value:.2f} {self.currency_symbol}", inline=True)
+            embed.add_field(name="取引手数料", value=f"{fee:.2f} {self.currency_symbol} (2%)", inline=True)
+            embed.add_field(name="合計支払額", value=f"{total_cost:.2f} {self.currency_symbol}", inline=True)
             
             new_balance = await self.get_balance(user_id)
             embed.add_field(name="残高", value=f"{new_balance:.2f} {self.currency_symbol}", inline=False)
+            
+            # 市場イベント情報があれば表示
+            if self.last_market_event:
+                embed.add_field(
+                    name=f"📊 市場情報: {self.last_market_event['emoji']} {self.last_market_event['name']}",
+                    value=self.last_market_event['description'],
+                    inline=False
+                )
             
             await interaction.response.send_message(embed=embed)
         else:
@@ -451,7 +534,18 @@ class Investment(commands.Cog):
             return
         
         current_price = holding['price']
-        total_earning = current_price * quantity
+        # 株式の価値
+        stock_value = current_price * quantity
+        # 取引手数料の計算
+        fee = int(stock_value * self.trade_fee_rate)
+        if fee < 1:
+            fee = 1  # 最低手数料
+        
+        net_earning = stock_value - fee
+        
+        # まず手数料をシステムに支払う（売却額から差し引く）
+        await self.update_balance(self.bank_user_id, fee)
+        await self.add_transaction(user_id, self.bank_user_id, fee, f"Stock selling fee: {holding['symbol']}")
         
         # 売却処理
         success, message = await self.sell_stock(user_id, holding_id, quantity, current_price)
@@ -481,7 +575,9 @@ class Investment(commands.Cog):
             
             embed.add_field(name="売却数量", value=f"{quantity}株", inline=True)
             embed.add_field(name="売却価格", value=f"{current_price:.2f} {self.currency_symbol}/株", inline=True)
-            embed.add_field(name="合計金額", value=f"{total_earning:.2f} {self.currency_symbol}", inline=True)
+            embed.add_field(name="株式価値", value=f"{stock_value:.2f} {self.currency_symbol}", inline=True)
+            embed.add_field(name="取引手数料", value=f"{fee:.2f} {self.currency_symbol} (2%)", inline=True)
+            embed.add_field(name="純受取額", value=f"{net_earning:.2f} {self.currency_symbol}", inline=True)
             embed.add_field(name="損益", value=profit_text, inline=True)
             
             new_balance = await self.get_balance(user_id)
@@ -491,6 +587,14 @@ class Investment(commands.Cog):
                 embed.set_footer(text="すべての株式を売却しました")
             else:
                 embed.set_footer(text=f"残り保有数: {holding['quantity'] - quantity}株")
+            
+            # 市場イベント情報があれば表示
+            if self.last_market_event:
+                embed.add_field(
+                    name=f"📊 市場情報: {self.last_market_event['emoji']} {self.last_market_event['name']}",
+                    value=self.last_market_event['description'],
+                    inline=False
+                )
             
             await interaction.response.send_message(embed=embed)
         else:
@@ -651,6 +755,103 @@ class Investment(commands.Cog):
         )
         
         embed.set_footer(text=f"{footer_emoji} | 株式を売却するには /sellstock コマンドを使用してください")
+        
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="market", description="現在の市場動向と最新のイベントを表示します")
+    async def market_trends(self, interaction: discord.Interaction):
+        # 現在のイベント情報
+        if self.last_market_event:
+            event = self.last_market_event
+            event_description = f"{event['emoji']} **{event['name']}**: {event['description']}"
+        else:
+            event_description = "現在、特筆すべき市場イベントはありません。"
+        
+        # 各セクターの動向
+        sectors = {
+            "テクノロジー": ["SWFT", "DIGI", "GAME"],
+            "金融": ["BANK"],
+            "エネルギー": ["ENER"],
+            "医療": ["MEDC"],
+            "消費財": ["FOOD", "LUXR"]
+        }
+        
+        sector_trends = {}
+        
+        for sector_name, symbols in sectors.items():
+            total_change = 0
+            count = 0
+            
+            for symbol in symbols:
+                if symbol in self.stocks:
+                    stock = self.stocks[symbol]
+                    price_change = (stock['price'] - stock['prev_price']) / stock['prev_price']
+                    total_change += price_change
+                    count += 1
+            
+            if count > 0:
+                avg_change = total_change / count
+                
+                if avg_change > 0.05:
+                    trend = "🟢 急上昇"
+                elif avg_change > 0:
+                    trend = "🟢 上昇"
+                elif avg_change < -0.05:
+                    trend = "🔴 急下落"
+                elif avg_change < 0:
+                    trend = "🔴 下落"
+                else:
+                    trend = "⚪ 横ばい"
+                
+                sector_trends[sector_name] = {
+                    "trend": trend,
+                    "change": avg_change * 100  # パーセンテージに変換
+                }
+        
+        # 過去のイベント履歴（最新5件）
+        recent_events = self.market_events[-5:] if len(self.market_events) > 0 else []
+        
+        embed = discord.Embed(
+            title="📊 市場概況",
+            description=f"現在の市場動向と最新のイベント情報です\n\n{event_description}",
+            color=discord.Color.gold()
+        )
+        
+        # セクター動向
+        sectors_text = ""
+        for sector_name, data in sector_trends.items():
+            sectors_text += f"{data['trend']} **{sector_name}** セクター: {data['change']:.2f}%\n"
+        
+        if sectors_text:
+            embed.add_field(name="セクター動向", value=sectors_text, inline=False)
+        
+        # 過去のイベント
+        if recent_events:
+            events_text = ""
+            for idx, event_data in enumerate(reversed(recent_events), 1):
+                event = event_data["event"]
+                timestamp = event_data["timestamp"].strftime("%Y-%m-%d %H:%M")
+                events_text += f"{idx}. {timestamp} - {event['emoji']} **{event['name']}**\n"
+            
+            embed.add_field(name="最近の市場イベント", value=events_text, inline=False)
+        
+        # 取引ヒント
+        trading_tips = [
+            "上昇トレンドのセクターの株を買うことを検討しましょう。",
+            "下落トレンドのセクターでも、底値で買うチャンスがあるかもしれません。",
+            "分散投資が重要です。複数のセクターに投資しましょう。",
+            "長期的な視点で投資することでリスクを軽減できます。",
+            "市場イベントは一時的な株価変動を引き起こすことがあります。"
+        ]
+        
+        embed.add_field(
+            name="💡 取引ヒント",
+            value=random.choice(trading_tips),
+            inline=False
+        )
+        
+        last_update = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        embed.set_footer(text=f"情報更新: {last_update}")
         
         await interaction.response.send_message(embed=embed)
 

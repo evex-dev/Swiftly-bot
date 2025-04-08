@@ -15,8 +15,12 @@ class Work(commands.Cog):
         self.currency_name = "スイフト"  # デフォルト値
         self.currency_symbol = "🪙"  # デフォルト値
         self.cooldowns = {}
+        self.bank_user_id = 0  # システム/銀行のユーザーID
+        self.tax_rate = 0.08  # 所得税率 (8%)
+        self.dynamic_tax_rate = self.tax_rate  # イベントによる動的な税率
         bot.loop.create_task(self.setup_database())
         bot.loop.create_task(self.load_economy_cog())
+        bot.loop.create_task(self.event_listener())
     
     async def load_economy_cog(self):
         """Economy cogを読み込む（利用可能になったタイミングで）"""
@@ -102,6 +106,17 @@ class Work(commands.Cog):
         expiration = datetime.now() + timedelta(seconds=seconds)
         self.cooldowns[user_id][command_name] = expiration
     
+    async def event_listener(self):
+        """経済イベントの影響を受けるリスナー"""
+        while True:
+            if self.economy_cog and hasattr(self.economy_cog, "current_event"):
+                event = self.economy_cog.current_event
+                if event and "tax_rate" in event["effects"]:
+                    self.dynamic_tax_rate = event["effects"]["tax_rate"]
+                else:
+                    self.dynamic_tax_rate = self.tax_rate
+            await asyncio.sleep(60)  # 1分ごとにチェック
+    
     @app_commands.command(name="work", description="働いてお金を稼ぎます")
     async def work(self, interaction: discord.Interaction):
         user_id = interaction.user.id
@@ -138,24 +153,39 @@ class Work(commands.Cog):
         
         # ランダムな仕事を選択
         job = random.choice(jobs)
-        amount = random.randint(job["min"], job["max"])
+        gross_amount = random.randint(job["min"], job["max"])
+        
+        # 税金の計算
+        tax = int(gross_amount * self.dynamic_tax_rate)  # 動的税率を使用
+        if tax < 1:
+            tax = 1  # 最低税額
+        
+        # 手取り額
+        net_amount = gross_amount - tax
         
         # 報酬を与える
-        await self.update_balance(user_id, amount)
-        await self.add_transaction(0, user_id, amount, f"Work: {job['name']}")
-        await self.log_work(user_id, job["name"], amount)
+        await self.update_balance(user_id, net_amount)
+        await self.update_balance(self.bank_user_id, tax)  # 税金はシステムへ
+        
+        await self.add_transaction(0, user_id, net_amount, f"Work: {job['name']}")
+        await self.add_transaction(user_id, self.bank_user_id, tax, "Income tax")
+        await self.log_work(user_id, job["name"], gross_amount)
         
         # クールダウンを設定（30分）
         self.set_cooldown(user_id, "work", 1800)
         
         embed = discord.Embed(
             title=f"{job['emoji']} {job['name']}",
-            description=f"{job['description']}\n\n**+{amount}** {self.currency_symbol} {self.currency_name}を獲得しました！",
+            description=f"{job['description']}",
             color=discord.Color.green()
         )
         
+        embed.add_field(name="総収入", value=f"{gross_amount} {self.currency_symbol}", inline=True)
+        embed.add_field(name="税金 (8%)", value=f"-{tax} {self.currency_symbol}", inline=True)
+        embed.add_field(name="手取り額", value=f"**+{net_amount}** {self.currency_symbol} {self.currency_name}", inline=True)
+        
         new_balance = await self.get_balance(user_id)
-        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}")
+        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}", inline=False)
         embed.set_footer(text="次の仕事まで30分待つ必要があります")
         
         await interaction.response.send_message(embed=embed)
@@ -190,24 +220,39 @@ class Work(commands.Cog):
         
         # ランダムなタスクを選択
         task = random.choice(tasks)
-        amount = random.randint(task["min"], task["max"])
+        gross_amount = random.randint(task["min"], task["max"])
+        
+        # 税金の計算
+        tax = int(gross_amount * self.tax_rate)
+        if tax < 1:
+            tax = 1  # 最低税額
+        
+        # 手取り額
+        net_amount = gross_amount - tax
         
         # 報酬を与える
-        await self.update_balance(user_id, amount)
-        await self.add_transaction(0, user_id, amount, f"Task: {task['name']}")
-        await self.log_work(user_id, task["name"], amount)
+        await self.update_balance(user_id, net_amount)
+        await self.update_balance(self.bank_user_id, tax)  # 税金はシステムへ
+        
+        await self.add_transaction(0, user_id, net_amount, f"Task: {task['name']}")
+        await self.add_transaction(user_id, self.bank_user_id, tax, "Income tax")
+        await self.log_work(user_id, task["name"], gross_amount)
         
         # クールダウンを設定（15分）
         self.set_cooldown(user_id, "tasks", 900)
         
         embed = discord.Embed(
             title=f"{task['emoji']} {task['name']}",
-            description=f"{task['description']}\n\n**+{amount}** {self.currency_symbol} {self.currency_name}を獲得しました！",
+            description=f"{task['description']}",
             color=discord.Color.blue()
         )
         
+        embed.add_field(name="総収入", value=f"{gross_amount} {self.currency_symbol}", inline=True)
+        embed.add_field(name="税金 (8%)", value=f"-{tax} {self.currency_symbol}", inline=True)
+        embed.add_field(name="手取り額", value=f"**+{net_amount}** {self.currency_symbol} {self.currency_name}", inline=True)
+        
         new_balance = await self.get_balance(user_id)
-        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}")
+        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}", inline=False)
         embed.set_footer(text="次のタスクまで15分待つ必要があります")
         
         await interaction.response.send_message(embed=embed)
