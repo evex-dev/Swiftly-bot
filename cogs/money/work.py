@@ -223,7 +223,7 @@ class Work(commands.Cog):
         gross_amount = random.randint(task["min"], task["max"])
         
         # 税金の計算
-        tax = int(gross_amount * self.tax_rate)
+        tax = int(gross_amount * self.dynamic_tax_rate)  # 動的税率を使用
         if tax < 1:
             tax = 1  # 最低税額
         
@@ -248,7 +248,7 @@ class Work(commands.Cog):
         )
         
         embed.add_field(name="総収入", value=f"{gross_amount} {self.currency_symbol}", inline=True)
-        embed.add_field(name="税金 (8%)", value=f"-{tax} {self.currency_symbol}", inline=True)
+        embed.add_field(name=f"税金 ({int(self.dynamic_tax_rate * 100)}%)", value=f"-{tax} {self.currency_symbol}", inline=True)
         embed.add_field(name="手取り額", value=f"**+{net_amount}** {self.currency_symbol} {self.currency_name}", inline=True)
         
         new_balance = await self.get_balance(user_id)
@@ -285,24 +285,39 @@ class Work(commands.Cog):
         
         # ランダムなアルバイトを選択
         job = random.choice(part_time_jobs)
-        amount = random.randint(job["min"], job["max"])
+        gross_amount = random.randint(job["min"], job["max"])
+        
+        # 税金の計算
+        tax = int(gross_amount * self.dynamic_tax_rate)  # 動的税率を使用
+        if tax < 1:
+            tax = 1  # 最低税額
+        
+        # 手取り額
+        net_amount = gross_amount - tax
         
         # 報酬を与える
-        await self.update_balance(user_id, amount)
-        await self.add_transaction(0, user_id, amount, f"Part-time: {job['name']}")
-        await self.log_work(user_id, f"PartTime:{job['name']}", amount)
+        await self.update_balance(user_id, net_amount)
+        await self.update_balance(self.bank_user_id, tax)  # 税金はシステムへ
+        
+        await self.add_transaction(0, user_id, net_amount, f"Part-time: {job['name']}")
+        await self.add_transaction(user_id, self.bank_user_id, tax, "Income tax")
+        await self.log_work(user_id, f"PartTime:{job['name']}", gross_amount)
         
         # クールダウンを設定（60分）
         self.set_cooldown(user_id, "parttime", 3600)
         
         embed = discord.Embed(
             title=f"{job['emoji']} {job['name']}",
-            description=f"{job['description']}\n\n**+{amount}** {self.currency_symbol} {self.currency_name}を獲得しました！",
+            description=f"{job['description']}",
             color=discord.Color.gold()
         )
         
+        embed.add_field(name="総収入", value=f"{gross_amount} {self.currency_symbol}", inline=True)
+        embed.add_field(name=f"税金 ({int(self.dynamic_tax_rate * 100)}%)", value=f"-{tax} {self.currency_symbol}", inline=True)
+        embed.add_field(name="手取り額", value=f"**+{net_amount}** {self.currency_symbol} {self.currency_name}", inline=True)
+        
         new_balance = await self.get_balance(user_id)
-        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}")
+        embed.add_field(name="残高", value=f"{new_balance} {self.currency_symbol}", inline=False)
         embed.set_footer(text="次のアルバイトまで60分待つ必要があります")
         
         await interaction.response.send_message(embed=embed)
