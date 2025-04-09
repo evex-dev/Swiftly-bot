@@ -303,12 +303,12 @@ class ServerBoard(commands.Cog):
                     ephemeral=True
                 )
                 return
-                
+
             current_time = datetime.datetime.now()
 
             async with aiosqlite.connect(DB_PATH) as conn:
                 async with conn.execute(
-                    "SELECT last_up_time FROM servers WHERE server_id = ?",
+                    "SELECT last_up_time, invite_url FROM servers WHERE server_id = ?",
                     (interaction.guild.id,)
                 ) as cursor:
                     result = await cursor.fetchone()
@@ -320,8 +320,23 @@ class ServerBoard(commands.Cog):
                         )
                         return
 
-                    if result[0]:
-                        last_up = datetime.datetime.fromisoformat(result[0])
+                    last_up_time, invite_url = result
+
+                    # 招待リンクの有効性をチェック
+                    if invite_url:
+                        try:
+                            invite = await self.bot.fetch_invite(invite_url)
+                            if invite.revoked or invite.expires_at:
+                                raise discord.NotFound
+                        except (discord.NotFound, discord.HTTPException):
+                            await interaction.followup.send(
+                                "登録されている招待リンクが無効です。\n一度/unregisterを行い登録を解除してから/registerコマンドで再登録してください。",
+                                ephemeral=False
+                            )
+                            return
+
+                    if last_up_time:
+                        last_up = datetime.datetime.fromisoformat(last_up_time)
                         if (current_time - last_up).total_seconds() < UP_COOLDOWN:
                             remaining_time = datetime.timedelta(
                                 seconds=UP_COOLDOWN
