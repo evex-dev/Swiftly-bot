@@ -8,6 +8,7 @@ class MessageLink(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        # メッセージリンクの正規表現
         link_pattern = r"https://discord\.com/channels/(\d+)/(\d+)/(\d+)"
         match = re.search(link_pattern, message.content)
         if match:
@@ -22,11 +23,11 @@ class MessageLink(commands.Cog):
                 target_message = await channel.fetch_message(message_id)
                 embed = discord.Embed(
                     description=target_message.content,
-                    color=discord.Color.light_blue()
+                    color=discord.Color.blue()
                 )
                 embed.set_author(
                     name=target_message.author.display_name,
-                    icon_url=target_message.author.display_avatar.url
+                    icon_url=target_message.author.avatar.url if target_message.author.avatar else None
                 )
                 embed.set_footer(
                     text=f"Sent on {target_message.created_at.strftime('%Y-%m-%d %H:%M:%S')} in {guild.name}"
