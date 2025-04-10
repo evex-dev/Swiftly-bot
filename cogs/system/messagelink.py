@@ -26,7 +26,7 @@ class MessageLink(commands.Cog):
                 )
                 embed.set_author(
                     name=target_message.author.display_name,
-                    icon_url=target_message.author.avatar.url if target_message.author.avatar else None
+                    icon_url=target_message.author.display_avatar.url
                 )
                 embed.set_footer(
                     text=f"Sent on {target_message.created_at.strftime('%Y-%m-%d %H:%M:%S')} in {guild.name}"
