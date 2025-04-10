@@ -8,7 +8,6 @@ class MessageLink(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # メッセージリンクの正規表現
         link_pattern = r"https://(?:canary\.|ptb\.)?discord\.com/channels/(\d+)/(\d+)/(\d+)"
         match = re.search(link_pattern, message.content)
         if match:

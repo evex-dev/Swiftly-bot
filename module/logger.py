@@ -58,7 +58,7 @@ class ErrorReportModal(discord.ui.Modal, title="エラー報告フォーム"):
                 # ユーザー情報を設定
                 scope.set_user({
                     "id": str(interaction.user.id),
-                    "username": str(interaction.user),
+                    "username": str(interaction.user.id),  # ユーザーネームの代わりにユーザーIDを設定
                     "email": f"{interaction.user.id}@discord.user"
                 })
                 
@@ -221,7 +221,7 @@ class LoggingCog(commands.Cog):
                 # コンテキスト情報を追加
                 scope.set_tag("command", str(ctx.command) if ctx.command else "Unknown")
                 scope.set_tag("guild", guild_name)
-                scope.set_user({"id": str(ctx.author.id), "username": ctx.author.name})
+                scope.set_user({"id": str(ctx.author.id), "username": str(ctx.author.id)})  # ユーザーネームの代わりにユーザーIDを設定
                 scope.set_extra("message_content", ctx.message.content if hasattr(ctx.message, "content") else "No content")
                 
                 # エラーをキャプチャしてIDを取得
@@ -263,7 +263,7 @@ class LoggingCog(commands.Cog):
                 # コンテキスト情報を追加
                 scope.set_tag("command", command_name)
                 scope.set_tag("guild", guild_name)
-                scope.set_user({"id": str(interaction.user.id), "username": interaction.user.name})
+                scope.set_user({"id": str(interaction.user.id), "username": str(interaction.user.id)})  # ユーザーネームの代わりにユーザーIDを設定
                 scope.set_extra("interaction_data", str(interaction.data) if hasattr(interaction, "data") else "No data")
                 
                 # エラーをキャプチャしてIDを取得
@@ -373,7 +373,7 @@ class LoggingCog(commands.Cog):
                 scope.set_tag("command", command_name)
                 scope.set_tag("command_type", "app_command")
                 scope.set_tag("guild", interaction.guild.name if interaction.guild else "DM")
-                scope.set_user({"id": str(interaction.user.id), "username": interaction.user.name})
+                scope.set_user({"id": str(interaction.user.id), "username": str(interaction.user.id)})  # ユーザーネームの代わりにユーザーIDを設定
                 scope.set_extra("interaction_data", str(interaction.data) if hasattr(interaction, "data") else "No data")
                 
                 # エラーをキャプチャしてIDを取得
