@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+import re
 from typing import Final, Optional, Tuple, Dict, Any
 import logging
 from datetime import datetime, timedelta
@@ -40,7 +41,17 @@ class CodeExecutor:
 
     def __init__(self, code: str) -> None:
         self.code = code
+        self._sanitize_code()
         self._validate_code()
+
+    def _sanitize_code(self) -> None:
+        """
+        Discordのコードブロック（```）が含まれている場合に、それを取り除きます。
+        """
+        pattern = r"^```(?:\w+\n)?(.*?)```$"
+        m = re.match(pattern, self.code, re.DOTALL)
+        if m:
+            self.code = m.group(1).strip()
 
     def _validate_code(self) -> None:
         """コードのバリデーション"""
@@ -210,26 +221,17 @@ class Sandbox(commands.Cog):
             if not self._session:
                 self._session = aiohttp.ClientSession()
 
-            result, error, elapsed_time = await executor.execute(
-                self._session
-            )
+            result, error, elapsed_time = await executor.execute(self._session)
 
             # レート制限の更新
             self._last_uses[interaction.user.id] = datetime.now()
 
             # 結果の送信
-            embed = await self.create_result_embed(
-                result,
-                error,
-                elapsed_time
-            )
+            embed = await self.create_result_embed(result, error, elapsed_time)
             await interaction.followup.send(embed=embed)
 
         except ValueError as e:
-            await interaction.response.send_message(
-                str(e),
-                ephemeral=True
-            )
+            await interaction.response.send_message(str(e), ephemeral=True)
         except Exception as e:
             logger.error("Error in sandbox command: %s", e, exc_info=True)
             await interaction.followup.send(
@@ -247,45 +249,34 @@ class Sandbox(commands.Cog):
 
         try:
             # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                message.author.id
-            )
+            is_limited, remaining = self._check_rate_limit(message.author.id)
             if is_limited:
                 await message.channel.send(
                     ERROR_MESSAGES["rate_limit"].format(remaining)
                 )
                 return
 
+            # コード取得（"?sandbox "の後の部分）
             code = message.content[len("?sandbox "):].strip()
             if not code:
-                await message.channel.send(
-                    ERROR_MESSAGES["no_code"]
-                )
+                await message.channel.send(ERROR_MESSAGES["no_code"])
                 return
 
             # 進捗表示
-            progress_message = await message.channel.send(
-                "実行中..."
-            )
+            progress_message = await message.channel.send("実行中...")
 
             # コードの実行
             executor = CodeExecutor(code)
             if not self._session:
                 self._session = aiohttp.ClientSession()
 
-            result, error, elapsed_time = await executor.execute(
-                self._session
-            )
+            result, error, elapsed_time = await executor.execute(self._session)
 
             # レート制限の更新
             self._last_uses[message.author.id] = datetime.now()
 
             # 結果の送信
-            embed = await self.create_result_embed(
-                result,
-                error,
-                elapsed_time
-            )
+            embed = await self.create_result_embed(result, error, elapsed_time)
             await progress_message.edit(content=None, embed=embed)
 
         except ValueError as e:

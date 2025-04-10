@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+import re
 from typing import Final, Optional, Tuple, Dict, Any
 import logging
 from datetime import datetime, timedelta
@@ -40,7 +41,18 @@ class CodeExecutor:
 
     def __init__(self, code: str) -> None:
         self.code = code
+        self._sanitize_code()
         self._validate_code()
+
+    def _sanitize_code(self) -> None:
+        """
+        Discordのコードブロック（```）が含まれている場合に削除します。
+        """
+        # 正規表現でコードブロックを除去する（オプションの言語指定に対応）
+        pattern = r"^```(?:\w+\n)?(.*?)```$"
+        m = re.match(pattern, self.code, re.DOTALL)
+        if m:
+            self.code = m.group(1).strip()
 
     def _validate_code(self) -> None:
         """コードのバリデーション"""
