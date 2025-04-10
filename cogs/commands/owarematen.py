@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS answers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT,
     user_id INTEGER,
-    user_name TEXT,
     answer TEXT,
     UNIQUE(session_id, user_id)
 )
@@ -106,12 +105,12 @@ class DiscowaremaTen(commands.Cog):
     async def _get_answers(
         self,
         session_id: str
-    ) -> List[Tuple[str, str]]:
+    ) -> List[Tuple[int, str]]:
         """セッションの回答を取得"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 """
-                SELECT user_name, answer
+                SELECT user_id, answer
                 FROM answers
                 WHERE session_id = ?
                 """,
@@ -136,7 +135,7 @@ class DiscowaremaTen(commands.Cog):
         self,
         title: str,
         session: Optional[GameSession] = None,
-        answers: Optional[List[Tuple[str, str]]] = None,
+        answers: Optional[List[Tuple[int, str]]] = None,
         color_key: str = "success",
         error_message: Optional[str] = None
     ) -> discord.Embed:
@@ -169,9 +168,9 @@ class DiscowaremaTen(commands.Cog):
                         inline=False
                     )
                 else:
-                    for user_name, answer in answers:
+                    for user_id, answer in answers:
                         embed.add_field(
-                            name=f"{user_name}の回答",
+                            name=f"ユーザーID: {user_id}の回答",
                             value=answer,
                             inline=False
                         )
@@ -376,13 +375,12 @@ class DiscowaremaTen(commands.Cog):
                 await db.execute(
                     """
                     INSERT INTO answers
-                    (session_id, user_id, user_name, answer)
-                    VALUES (?, ?, ?, ?)
+                    (session_id, user_id, answer)
+                    VALUES (?, ?, ?)
                     """,
                     (
                         session.session_id,
                         interaction.user.id,
-                        interaction.user.name,
                         answer
                     )
                 )
@@ -407,7 +405,7 @@ class DiscowaremaTen(commands.Cog):
             # 全体通知
             notify_embed = discord.Embed(
                 title="回答受付",
-                description=f"{interaction.user.name}が回答しました。",
+                description=f"ユーザーID: {interaction.user.id}が回答しました。",
                 color=EMBED_COLORS["notify"]
             )
             notify_embed.add_field(
