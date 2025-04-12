@@ -163,7 +163,7 @@ class Auth(commands.Cog):
     @discord.app_commands.default_permissions(administrator=True)
     @discord.app_commands.describe(
         role="認証成功時に付与するロール",
-        difficulty="CAPTCHAの難易度 (1-10)"
+        difficulty="CAPTCHAの難易度 (1-10)(よほどのことがない限り1をおすすめします。)"
     )
     async def create_auth_panel(self, interaction: discord.Interaction, role: discord.Role, difficulty: int = MIN_DIFFICULTY) -> None:
         if not MIN_DIFFICULTY <= difficulty <= MAX_DIFFICULTY:
