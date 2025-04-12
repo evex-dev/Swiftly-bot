@@ -114,7 +114,6 @@ class Sandboxpy(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._session: Optional[aiohttp.ClientSession] = None
-        self._last_uses = {}
 
     async def cog_load(self) -> None:
         self._session = aiohttp.ClientSession()
@@ -123,18 +122,6 @@ class Sandboxpy(commands.Cog):
         if self._session and not self._session.closed:
             await self._session.close()
             self._session = None
-
-    def _check_rate_limit(
-        self,
-        user_id: int
-    ) -> tuple[bool, Optional[int]]:
-        now = datetime.now()
-        if user_id in self._last_uses:
-            time_diff = now - self._last_uses[user_id]
-            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
-                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
-                return True, remaining
-        return False, None
 
     async def create_result_embed(
         self,
@@ -204,17 +191,6 @@ class Sandboxpy(commands.Cog):
         code: str
     ) -> None:
         try:
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                interaction.user.id
-            )
-            if is_limited:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["rate_limit"].format(remaining),
-                    ephemeral=True
-                )
-                return
-
             await interaction.response.defer(thinking=True)
 
             # コードの実行
@@ -225,9 +201,6 @@ class Sandboxpy(commands.Cog):
             result, error, elapsed_time = await executor.execute(
                 self._session
             )
-
-            # レート制限の更新
-            self._last_uses[interaction.user.id] = datetime.now()
 
             # 結果の送信
             embed = await self.create_result_embed(
@@ -258,16 +231,6 @@ class Sandboxpy(commands.Cog):
             return
 
         try:
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                message.author.id
-            )
-            if is_limited:
-                await message.channel.send(
-                    ERROR_MESSAGES["rate_limit"].format(remaining)
-                )
-                return
-
             code = message.content[len("?pysandbox "):].strip()
             if not code:
                 await message.channel.send(
@@ -288,9 +251,6 @@ class Sandboxpy(commands.Cog):
             result, error, elapsed_time = await executor.execute(
                 self._session
             )
-
-            # レート制限の更新
-            self._last_uses[message.author.id] = datetime.now()
 
             # 結果の送信
             embed = await self.create_result_embed(
