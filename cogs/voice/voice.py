@@ -237,8 +237,7 @@ class VoiceState:
 
     async def initialize(self) -> None:
         """状態管理の初期化"""
-        # PremiumDatabaseを初期化
-        await self.premium_db.initialize()
+        pass
 
     async def reconnect_voice(self, guild_id: int, bot) -> bool:
         """ボイス接続が切断された場合に再接続を試みる"""
