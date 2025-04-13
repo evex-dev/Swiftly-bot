@@ -6,39 +6,82 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+import asyncpg  # 追加
+from dotenv import load_dotenv  # 追加
 
 logger = logging.getLogger(__name__)
+
+# 環境変数の読み込み
+load_dotenv()
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = "role_panel"
 
 class RolePanel(commands.Cog):
     """ユーザーがリアクションを通じてロールを取得できるパネルを管理するコグ"""
 
     def __init__(self, bot):
         self.bot = bot
+        self.db_pool: Optional[asyncpg.Pool] = None  # データベース接続プール
         self.panels = {}
-        self.data_file = "data/role_panels.json"
-        self._load_panels()
 
-    def _load_panels(self):
-        """データファイルからロールパネル情報を読み込む"""
-        os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
+    async def cog_load(self):
+        """Cogがロードされたときにデータベース接続プールを初期化"""
+        self.db_pool = await asyncpg.create_pool(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        await self._load_panels()
+
+    async def cog_unload(self):
+        """Cogがアンロードされたときにデータベース接続プールを閉じる"""
+        if self.db_pool:
+            await self.db_pool.close()
+
+    async def _load_panels(self):
+        """データベースからロールパネル情報を読み込む"""
         try:
-            if os.path.exists(self.data_file):
-                with open(self.data_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    # Convert string keys back to integer
-                    self.panels = {int(k): v for k, v in data.items()}
+            async with self.db_pool.acquire() as conn:
+                rows = await conn.fetch("SELECT * FROM role_panels")
+                self.panels = {
+                    row["panel_id"]: {
+                        "title": row["title"],
+                        "description": row["description"],
+                        "channel_id": row["channel_id"],
+                        "guild_id": row["guild_id"],
+                        "roles": json.loads(row["roles"])
+                    }
+                    for row in rows
+                }
         except Exception as e:
-            print(f"ロールパネルデータの読み込みに失敗しました: {e}")
+            logger.error(f"ロールパネルデータの読み込みに失敗しました: {e}")
             self.panels = {}
 
-    def _save_panels(self):
-        """ロールパネル情報をデータファイルに保存する"""
+    async def _save_panels(self):
+        """ロールパネル情報をデータベースに保存する"""
         try:
-            os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
-            with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump(self.panels, f, ensure_ascii=False, indent=4)
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("TRUNCATE TABLE role_panels")
+                for panel_id, panel_data in self.panels.items():
+                    await conn.execute(
+                        """
+                        INSERT INTO role_panels (panel_id, title, description, channel_id, guild_id, roles)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        """,
+                        panel_id,
+                        panel_data["title"],
+                        panel_data["description"],
+                        panel_data["channel_id"],
+                        panel_data["guild_id"],
+                        json.dumps(panel_data["roles"])
+                    )
         except Exception as e:
-            print(f"ロールパネルデータの保存に失敗しました: {e}")
+            logger.error(f"ロールパネルデータの保存に失敗しました: {e}")
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Optional[discord.Message]:
         """チャンネルとメッセージIDからメッセージを取得する"""
