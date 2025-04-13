@@ -133,7 +133,7 @@ class ServerBoard(commands.Cog):
 		self.bot = bot
 		self.pool_main = None
 		self.pool_up = None
-		self.setup_database.start()
+		self.setup_database_task = None  # タスクの参照を保持
 		self.check_up_reminder.start()
 
 	async def cog_load(self) -> None:
@@ -157,15 +157,18 @@ class ServerBoard(commands.Cog):
 			database="server_board_up"
 		)
 
+		# setup_database タスクを開始
+		self.setup_database_task = self.bot.loop.create_task(self.setup_database())
+
 	async def cog_unload(self) -> None:
-		self.setup_database.cancel()
+		if self.setup_database_task:
+			self.setup_database_task.cancel()
 		self.check_up_reminder.cancel()
 		if self.pool_main:
 			await self.pool_main.close()
 		if self.pool_up:
 			await self.pool_up.close()
 
-	@tasks.loop(count=1)
 	async def setup_database(self) -> None:
 		try:
 			async with self.pool_main.acquire() as conn:
