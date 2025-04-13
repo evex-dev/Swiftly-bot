@@ -193,14 +193,6 @@ class LoggingCog(commands.Cog):
         self.logger.info("Removed from guild: %s (ID: %s)", guild.name, guild.id)
 
     @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member) -> None:
-        self.logger.info("Member joined: %s (ID: %s) in guild: %s", member.name, member.id, member.guild.name)
-
-    @commands.Cog.listener()
-    async def on_member_remove(self, member: discord.Member) -> None:
-        self.logger.info("Member left: %s (ID: %s) from guild: %s", member.name, member.id, member.guild.name)
-
-    @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
         guild_name = ctx.guild.name if ctx.guild else "DM"
         self.logger.info("Command executed: %s by %s (ID: %s) in guild: %s", ctx.command, ctx.author.name, ctx.author.id, guild_name)
