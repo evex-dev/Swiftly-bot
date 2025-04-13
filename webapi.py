@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import sqlite3
+import asyncpg  # 追加
 from typing import Final, Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -12,6 +12,7 @@ import json
 import uvicorn
 from dotenv import load_dotenv
 import os
+import sqlite3
 
 load_dotenv()
 
@@ -68,26 +69,27 @@ class DatabaseManager:
     """DB操作を管理するクラス"""
 
     def __init__(self, db_path: Path) -> None:
-        self.db_path = db_path
+        # ...existing code...
+        self.db_path = db_path  # 互換性のため残す（使用しません）
+        self.pool = None  # asyncpg用の接続プール
 
-    def get_connection(self) -> sqlite3.Connection:
-        if not self.db_path.exists():
-            raise HTTPException(
-                status_code=500,
-                detail=ERROR_MESSAGES["db_not_found"].format(self.db_path)
+    async def _get_pool(self) -> asyncpg.Pool:
+        if self.pool is None:
+            self.pool = await asyncpg.create_pool(
+                host=os.getenv("DB_HOST"),
+                port=int(os.getenv("DB_PORT", "5432")),
+                database="server_board",
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD")
             )
+        return self.pool
 
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def check_table_exists(self, conn: sqlite3.Connection) -> None:
-        """テーブルの存在確認"""
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='servers'"
+    async def check_table_exists(self, conn: asyncpg.Connection) -> None:
+        # publicスキーマ内のテーブル確認
+        result = await conn.fetchval(
+            "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='servers'"
         )
-        if not cursor.fetchone():
+        if not result:
             raise HTTPException(
                 status_code=500,
                 detail=ERROR_MESSAGES["table_not_found"]
@@ -95,20 +97,19 @@ class DatabaseManager:
 
     async def get_all_servers(self) -> List[Dict[str, Any]]:
         try:
-            with self.get_connection() as conn:
-                self.check_table_exists(conn)
-                cursor = conn.cursor()
-
-                cursor.execute("""
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                await self.check_table_exists(conn)
+                rows = await conn.fetch("""
                     SELECT * FROM servers
                     ORDER BY
                         CASE WHEN last_up_time IS NULL THEN 0 ELSE 1 END DESC,
                         last_up_time DESC,
                         registered_at DESC
                 """)
-                return [dict(row) for row in cursor.fetchall()]
+                return [dict(row) for row in rows]
 
-        except sqlite3.Error as e:
+        except asyncpg.PostgresError as e:
             logger.error("Database error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
@@ -117,21 +118,21 @@ class DatabaseManager:
 
     async def get_server(self, server_id: int) -> Dict[str, Any]:
         try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT * FROM servers WHERE server_id = ?",
-                    (server_id,)
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM servers WHERE server_id = $1",
+                    server_id
                 )
-                if server := cursor.fetchone():
-                    return dict(server)
+                if row:
+                    return dict(row)
 
                 raise HTTPException(
                     status_code=404,
                     detail=ERROR_MESSAGES["server_not_found"]
                 )
 
-        except sqlite3.Error as e:
+        except asyncpg.PostgresError as e:
             logger.error("Database error: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
