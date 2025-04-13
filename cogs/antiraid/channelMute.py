@@ -1,4 +1,6 @@
-import aiosqlite
+import asyncpg
+from dotenv import load_dotenv
+import os
 import discord
 from discord.ext import commands
 from pathlib import Path
@@ -6,17 +8,14 @@ from typing import Final
 import logging
 
 
-DB_PATH: Final[Path] = Path("data/prohibited_channels.db")
-TABLE_NAME: Final[str] = "prohibited_channels"
+load_dotenv()
 
-ERROR_MESSAGES: Final[dict] = {
-    "no_permission": "このコマンドはサーバー管理者のみ実行可能です。",
-    "db_error": "DBエラーが発生しました: {}"
-}
-
-SUCCESS_MESSAGES: Final[dict] = {
-    "added": "{} をコマンド実行禁止チャンネルに追加しました。",
-    "removed": "{} をコマンド実行禁止チャンネルから削除しました。"
+DB_CONFIG: Final[dict] = {
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": "prohibited_channels"
 }
 
 CREATE_TABLE_SQL: Final[str] = """
@@ -29,6 +28,16 @@ CREATE_TABLE_SQL: Final[str] = """
 
 logger = logging.getLogger(__name__)
 
+ERROR_MESSAGES: Final[dict] = {
+    "no_permission": "Botにメッセージ削除の権限がありません。",
+    "db_error": "データベースエラーが発生しました: {}"
+}
+
+SUCCESS_MESSAGES: Final[dict] = {
+    "added": "{} を制限リストに追加しました。",
+    "removed": "{} を制限リストから削除しました。"
+}
+
 class Prohibited(commands.Cog):
     """チャンネルごとのコマンド実行制限を管理"""
 
@@ -37,9 +46,11 @@ class Prohibited(commands.Cog):
 
     async def cog_load(self) -> None:
         try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(CREATE_TABLE_SQL)
-                await db.commit()
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                await conn.execute(CREATE_TABLE_SQL)
+            finally:
+                await conn.close()
         except Exception as e:
             logger.error("Error initializing database: %s", e, exc_info=True)
             raise
@@ -50,15 +61,18 @@ class Prohibited(commands.Cog):
         channel_id: int
     ) -> bool:
         try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                async with db.execute(
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                result = await conn.fetchval(
                     """
                     SELECT 1 FROM prohibited_channels
-                    WHERE guild_id = ? AND channel_id = ?
+                    WHERE guild_id = $1 AND channel_id = $2
                     """,
-                    (str(guild_id), str(channel_id))
-                ) as cursor:
-                    return await cursor.fetchone() is not None
+                    str(guild_id), str(channel_id)
+                )
+                return result is not None
+            finally:
+                await conn.close()
         except Exception as e:
             logger.error(
                 "Error checking prohibited channel: %s", e,
@@ -77,25 +91,27 @@ class Prohibited(commands.Cog):
                 channel_id
             )
 
-            async with aiosqlite.connect(DB_PATH) as db:
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
                 if not is_prohibited:
-                    await db.execute(
+                    await conn.execute(
                         """
                         INSERT INTO prohibited_channels
-                        (guild_id, channel_id) VALUES (?, ?)
+                        (guild_id, channel_id) VALUES ($1, $2)
                         """,
-                        (str(guild_id), str(channel_id))
+                        str(guild_id), str(channel_id)
                     )
                 else:
-                    await db.execute(
+                    await conn.execute(
                         """
                         DELETE FROM prohibited_channels
-                        WHERE guild_id = ? AND channel_id = ?
+                        WHERE guild_id = $1 AND channel_id = $2
                         """,
-                        (str(guild_id), str(channel_id))
+                        str(guild_id), str(channel_id)
                     )
-                await db.commit()
                 return not is_prohibited
+            finally:
+                await conn.close()
         except Exception as e:
             logger.error(
                 "Error toggling channel prohibition: %s", e,

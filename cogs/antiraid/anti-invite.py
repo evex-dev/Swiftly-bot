@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-import aiosqlite
+import asyncpg
+from dotenv import load_dotenv
 import os
 import asyncio
 import re
@@ -27,6 +28,16 @@ ADMIN_ONLY_MESSAGE: Final[str] = "このコマンドはサーバー管理者の�
 GUILD_ONLY_MESSAGE: Final[str] = "このコマンドはサーバー内でのみ使用可能です。"
 INVITE_WARNING: Final[str] = "Discord招待リンクは禁止です。メッセージは削除されました。"
 
+load_dotenv()
+
+DB_CONFIG: Final[dict] = {
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": "anti_invite"
+}
+
 class AntiInvite(commands.Cog):
     """招待リンク自動削除機能"""
 
@@ -35,35 +46,34 @@ class AntiInvite(commands.Cog):
         self.data_dir = Path(os.getcwd()) / "data"
         self.data_dir.mkdir(exist_ok=True)
 
-        self.db_path = self.data_dir / "anti_invite.db"
-        self.db_exempt_path = self.data_dir / "anti_invite_exempt.db"
-
         self._session: Optional[aiohttp.ClientSession] = None
         self._url_cache: deque[str] = deque(maxlen=1000)  # キャッシュの最大サイズを1000に設定
 
     async def cog_load(self) -> None:
         self._session = aiohttp.ClientSession()
 
-        # メインDB
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    guild_id INTEGER PRIMARY KEY,
-                    anti_invite_enabled INTEGER NOT NULL DEFAULT 0
-                )
-            """)
-            await db.commit()
-
-        # 除外リストDB
-        async with aiosqlite.connect(self.db_exempt_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS whitelist (
-                    guild_id INTEGER,
-                    channel_id INTEGER,
-                    PRIMARY KEY (guild_id, channel_id)
-                )
-            """)
-            await db.commit()
+        try:
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                # メインDB
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS settings (
+                        guild_id BIGINT PRIMARY KEY,
+                        anti_invite_enabled BOOLEAN NOT NULL DEFAULT FALSE
+                    )
+                """)
+                # 除外リストDB
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS whitelist (
+                        guild_id BIGINT,
+                        channel_id BIGINT,
+                        PRIMARY KEY (guild_id, channel_id)
+                    )
+                """)
+            finally:
+                await conn.close()
+        except Exception as e:
+            print(f"Error initializing database: {e}")
 
     async def cog_unload(self) -> None:
         if self._session:
@@ -72,22 +82,84 @@ class AntiInvite(commands.Cog):
 
     async def set_setting(self, guild_id: int, enabled: bool) -> None:
         """サーバーごとの設定を保存"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "INSERT OR REPLACE INTO settings (guild_id, anti_invite_enabled) VALUES (?, ?)",
-                (guild_id, int(enabled))
-            )
-            await db.commit()
+        try:
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO settings (guild_id, anti_invite_enabled)
+                    VALUES ($1, $2)
+                    ON CONFLICT (guild_id) DO UPDATE
+                    SET anti_invite_enabled = $2
+                    """,
+                    guild_id, enabled
+                )
+            finally:
+                await conn.close()
+        except Exception as e:
+            print(f"Error setting anti-invite setting: {e}")
 
     async def get_setting(self, guild_id: int) -> bool:
         """サーバーごとの設定を取得"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT anti_invite_enabled FROM settings WHERE guild_id = ?",
-                (guild_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return bool(row[0]) if row else False
+        try:
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                result = await conn.fetchval(
+                    """
+                    SELECT anti_invite_enabled
+                    FROM settings
+                    WHERE guild_id = $1
+                    """,
+                    guild_id
+                )
+                return result if result is not None else False
+            finally:
+                await conn.close()
+        except Exception as e:
+            print(f"Error getting anti-invite setting: {e}")
+            return False
+
+    async def update_whitelist(self, guild_id: int, channels: list[int]) -> None:
+        """ホワイトリストを更新"""
+        try:
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                await conn.execute(
+                    "DELETE FROM whitelist WHERE guild_id = $1",
+                    guild_id
+                )
+                if channels:
+                    await conn.executemany(
+                        """
+                        INSERT INTO whitelist (guild_id, channel_id)
+                        VALUES ($1, $2)
+                        """,
+                        [(guild_id, ch_id) for ch_id in channels]
+                    )
+            finally:
+                await conn.close()
+        except Exception as e:
+            print(f"Error updating whitelist: {e}")
+
+    async def get_whitelist(self, guild_id: int) -> list[int]:
+        """ホワイトリストを取得"""
+        try:
+            conn = await asyncpg.connect(**DB_CONFIG)
+            try:
+                rows = await conn.fetch(
+                    """
+                    SELECT channel_id
+                    FROM whitelist
+                    WHERE guild_id = $1
+                    """,
+                    guild_id
+                )
+                return [row["channel_id"] for row in rows]
+            finally:
+                await conn.close()
+        except Exception as e:
+            print(f"Error getting whitelist: {e}")
+            return []
 
     async def contains_invite(self, content: str) -> bool:
         # 直接の招待リンクチェック
@@ -205,17 +277,7 @@ class AntiInvite(commands.Cog):
             if ch and ch.guild.id == interaction.guild.id
         ]
 
-        async with aiosqlite.connect(self.db_exempt_path) as db:
-            await db.execute(
-                "DELETE FROM whitelist WHERE guild_id = ?",
-                (interaction.guild.id,)
-            )
-            if channels:
-                await db.executemany(
-                    "INSERT INTO whitelist (guild_id, channel_id) VALUES (?, ?)",
-                    [(interaction.guild.id, ch_id) for ch_id in channels]
-                )
-            await db.commit()
+        await self.update_whitelist(interaction.guild.id, channels)
 
         if channels:
             desc = "以下のチャンネルで招待リンクの自動削除が無効化されました。\n" + \
@@ -236,12 +298,7 @@ class AntiInvite(commands.Cog):
         if not await self.get_setting(message.guild.id):
             return
 
-        async with aiosqlite.connect(self.db_exempt_path) as db:
-            async with db.execute(
-                "SELECT channel_id FROM whitelist WHERE guild_id = ?",
-                (message.guild.id,)
-            ) as cursor:
-                whitelist_channels = [row[0] async for row in cursor]
+        whitelist_channels = await self.get_whitelist(message.guild.id)
 
         if message.channel.id in whitelist_channels:
             return
