@@ -71,9 +71,12 @@ class DiscowaremaTen(commands.Cog):
     async def cog_load(self) -> None:
         load_dotenv()
         db_host = os.getenv("DB_HOST")
-        db_port = os.getenv("DP_PORT")
+        db_port = os.getenv("DB_PORT")
         db_user = os.getenv("DB_USER")
         db_password = os.getenv("DB_PASSWORD")
+
+        if not all([db_host, db_port, db_user, db_password]):
+            raise ValueError("One or more database environment variables are missing or invalid.")
         self.db_pool = await asyncpg.create_pool(
             dsn=f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/owarematen"
         )
