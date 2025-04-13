@@ -50,7 +50,8 @@ class DescriptionModal(discord.ui.Modal):
 				)
 			await interaction.response.send_message("サーバーの説明文を更新しました！", ephemeral=True)
 		except Exception as e:
-			pass
+			logger.error(f"An error occurred in up_rank: {e}", exc_info=True)
+			await interaction.followup.send("予期せぬエラーが発生しました。時間をおいて再度お試しください。", ephemeral=True)
 
 class ConfirmView(discord.ui.View):
 	"""登録確認用のビュー"""
@@ -290,11 +291,13 @@ class ServerBoard(commands.Cog):
 				return
 
 			current_time = datetime.datetime.now()
+			logger.debug("up_rank: Acquiring main pool connection")
 			async with self.pool_main.acquire() as conn:
 				row = await conn.fetchrow(
 					"SELECT last_up_time, invite_url FROM servers WHERE server_id = $1",
 					interaction.guild.id
 				)
+				logger.debug(f"up_rank: Fetched row: {row}")
 				if not row:
 					await interaction.followup.send(ERROR_MESSAGES["not_registered"], ephemeral=False)
 					return
@@ -303,10 +306,12 @@ class ServerBoard(commands.Cog):
 
 				if invite_url:
 					try:
+						# fetch_invite でタイムアウトや例外が発生する可能性を考慮
 						invite = await self.bot.fetch_invite(invite_url)
 						if invite.revoked or invite.expires_at:
 							raise discord.NotFound
-					except (discord.NotFound, discord.HTTPException):
+					except (discord.NotFound, discord.HTTPException) as ex:
+						logger.error(f"up_rank: Invalid invite {invite_url}: {ex}")
 						await interaction.followup.send(
 							"登録されている招待リンクが無効です。\n一度/unregisterを行い登録を解除してから/registerコマンドで再登録してください。",
 							ephemeral=False
@@ -323,6 +328,8 @@ class ServerBoard(commands.Cog):
 						)
 						return
 
+			logger.debug("up_rank: Updating server rank")
+			async with self.pool_main.acquire() as conn:
 				await conn.execute(
 					"""
 					UPDATE servers
@@ -349,7 +356,8 @@ class ServerBoard(commands.Cog):
 			)
 
 		except Exception as e:
-			pass
+			logger.error(f"up_rank error: {e}", exc_info=True)
+			await interaction.followup.send("予期せぬエラーが発生しました。", ephemeral=True)
 
 	@app_commands.command(
 		name="board-setting",
