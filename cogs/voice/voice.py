@@ -7,7 +7,8 @@ from typing import Final, Optional, Dict, List
 import logging
 from pathlib import Path
 from datetime import datetime, timedelta
-import sqlite3
+import asyncpg
+from dotenv import load_dotenv
 
 import edge_tts
 import discord
@@ -16,12 +17,22 @@ from discord import ClientException, ConnectionClosed  # ConnectionClosedをイ�
 
 from cogs.premium.premium import PremiumDatabase
 
+# .envファイルから環境変数を読み込む
+load_dotenv()
+
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": "dictionary"
+}
+
 VOICE: Final[str] = "ja-JP-NanamiNeural"
 MAX_MESSAGE_LENGTH: Final[int] = 75
 RATE_LIMIT_SECONDS: Final[int] = 10
 VOLUME_LEVEL: Final[float] = 0.6
 TEMP_DIR: Final[Path] = Path(tempfile.gettempdir()) / "voice_tts"
-DATABASE_PATH: Final[Path] = Path("data/dictionary.db")
 RECONNECT_ATTEMPTS: Final[int] = 3  # 再接続試行回数
 RECONNECT_DELAY: Final[int] = 5  # 再接続の間隔（秒）
 
@@ -116,48 +127,52 @@ class DictionaryManager:
     """辞書管理クラス"""
 
     def __init__(self) -> None:
-        self.conn = sqlite3.connect(DATABASE_PATH)
-        self._create_table()
+        self.pool = None
 
-    def _create_table(self) -> None:
-        with self.conn:
-            self.conn.execute(
+    async def initialize(self) -> None:
+        """データベース接続プールを初期化"""
+        self.pool = await asyncpg.create_pool(**DB_CONFIG)
+        await self._create_table()
+
+    async def _create_table(self) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
                 "CREATE TABLE IF NOT EXISTS dictionary (word TEXT PRIMARY KEY, reading TEXT)"
             )
 
-    def add_word(self, word: str, reading: str) -> None:
-        with self.conn:
-            self.conn.execute(
-                "INSERT OR REPLACE INTO dictionary (word, reading) VALUES (?, ?)",
-                (word, reading)
+    async def add_word(self, word: str, reading: str) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO dictionary (word, reading) VALUES ($1, $2) ON CONFLICT (word) DO UPDATE SET reading = $2",
+                word, reading
             )
 
-    def remove_word(self, word: str) -> None:
-        with self.conn:
-            self.conn.execute(
-                "DELETE FROM dictionary WHERE word = ?",
-                (word,)
+    async def remove_word(self, word: str) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM dictionary WHERE word = $1",
+                word
             )
 
-    def get_reading(self, word: str) -> Optional[str]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT reading FROM dictionary WHERE word = ?",
-            (word,)
-        )
-        result = cursor.fetchone()
-        return result[0] if result else None
+    async def get_reading(self, word: str) -> Optional[str]:
+        async with self.pool.acquire() as conn:
+            result = await conn.fetchrow(
+                "SELECT reading FROM dictionary WHERE word = $1",
+                word
+            )
+            return result["reading"] if result else None
 
-    def list_words(self, limit: int, offset: int) -> List[tuple]:
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT word, reading FROM dictionary LIMIT ? OFFSET ?",
-            (limit, offset)
-        )
-        return cursor.fetchall()
+    async def list_words(self, limit: int, offset: int) -> List[tuple]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT word, reading FROM dictionary LIMIT $1 OFFSET $2",
+                limit, offset
+            )
+            return [(row["word"], row["reading"]) for row in rows]
 
-    def close(self) -> None:
-        self.conn.close()
+    async def close(self) -> None:
+        if self.pool:
+            await self.pool.close()
 
 class MessageProcessor:
     """メッセージの処理を行うクラス"""
@@ -374,6 +389,18 @@ class Voice(commands.Cog):
         self._last_uses: Dict[int, datetime] = {}
         self.dictionary = DictionaryManager()
 
+    async def cog_load(self) -> None:
+        """Cogがロードされたときに呼び出される"""
+        await self.dictionary.initialize()
+
+    async def cog_unload(self) -> None:
+        """Cogがアンロードされたときに呼び出される"""
+        self.state.tts_manager.cleanup_temp_files()
+        for guild_state in self.state.guilds.values():
+            if guild_state.voice_client.is_connected():
+                await guild_state.voice_client.disconnect()
+        await self.dictionary.close()
+
     def _check_rate_limit(
         self,
         user_id: int
@@ -569,7 +596,7 @@ class Voice(commands.Cog):
         reading: str
     ) -> None:
         try:
-            self.dictionary.add_word(word, reading)
+            await self.dictionary.add_word(word, reading)
             embed = discord.Embed(
                 title="辞書に追加しました",
                 description=f"✅ {word} -> {reading}",
@@ -595,7 +622,7 @@ class Voice(commands.Cog):
         word: str
     ) -> None:
         try:
-            self.dictionary.remove_word(word)
+            await self.dictionary.remove_word(word)
             embed = discord.Embed(
                 title="辞書から削除しました",
                 description=f"✅ {word}",
@@ -623,7 +650,7 @@ class Voice(commands.Cog):
         try:
             limit = 10
             offset = (page - 1) * limit
-            words = self.dictionary.list_words(limit, offset)
+            words = await self.dictionary.list_words(limit, offset)
             if not words:
                 await interaction.response.send_message("辞書に単語がありません。", ephemeral=True)
                 return
@@ -748,7 +775,7 @@ class Voice(commands.Cog):
         for guild_state in self.state.guilds.values():
             if guild_state.voice_client.is_connected():
                 await guild_state.voice_client.disconnect()
-        self.dictionary.close()
+        await self.dictionary.close()
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Voice(bot))
