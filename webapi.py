@@ -102,10 +102,7 @@ class DatabaseManager:
                 await self.check_table_exists(conn)
                 rows = await conn.fetch("""
                     SELECT * FROM servers
-                    ORDER BY
-                        CASE WHEN last_up_time IS NULL THEN 0 ELSE 1 END DESC,
-                        last_up_time DESC,
-                        registered_at DESC
+                    ORDER BY last_up_time DESC NULLS LAST, registered_at DESC
                 """)
                 return [dict(row) for row in rows]
 
