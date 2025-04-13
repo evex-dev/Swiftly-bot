@@ -359,7 +359,8 @@ class ServerBoard(commands.Cog):
 						last_up_time = $1
 					WHERE server_id = $2
 					""",
-					current_time.isoformat(), interaction.guild.id
+					current_time,
+					interaction.guild.id
 				)
 			async with self.pool_up.acquire() as conn:
 				await conn.execute(
@@ -370,7 +371,9 @@ class ServerBoard(commands.Cog):
 						channel_id = EXCLUDED.channel_id,
 						last_up_time = EXCLUDED.last_up_time
 					""",
-					interaction.guild.id, interaction.channel.id, current_time.isoformat()
+					interaction.guild.id,
+					interaction.channel.id,
+					current_time  # 修正: current_time.isoformat() を current_time に変更
 				)
 			await interaction.followup.send(
 				"サーバーの表示順位を上げました！2時間後にこの場所で/upを通知します。",
