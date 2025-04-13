@@ -104,7 +104,7 @@ class DatabaseManager:
                 rows = await conn.fetch("""
                     SELECT * FROM servers
                     ORDER BY last_up_time DESC NULLS LAST, registered_at DESC
-                """)
+                """) 
                 return [dict(row) for row in rows]
 
         except asyncpg.PostgresError as e:

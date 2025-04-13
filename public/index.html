@@ -222,6 +222,14 @@
             try {
                 const response = await fetch("https://sw.sakana11.org/api/servers");
                 const servers = await response.json();
+
+                // last_up_timeで降順ソート
+                servers.sort((a, b) => {
+                    const timeA = a.last_up_time ? new Date(a.last_up_time).getTime() : 0;
+                    const timeB = b.last_up_time ? new Date(b.last_up_time).getTime() : 0;
+                    return timeB - timeA;
+                });
+
                 const serverList = document.getElementById("server-list");
                 const template = document.getElementById("server-card-template");
 
@@ -276,4 +284,4 @@
         setInterval(fetchServers, 60000);
     </script>
 </body>
-</html></a>
+</html>
