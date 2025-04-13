@@ -64,6 +64,26 @@ class GameSession:
 class DiscowaremaTen(commands.Cog):
     """終われまテン機能を提供"""
 
+    def _create_game_embed(
+        self,
+        title: str,
+        session: Optional[GameSession] = None,
+        answers: Optional[List[Tuple[int, str]]] = None,
+        color_key: str = "success",
+        error_message: Optional[str] = None
+    ) -> discord.Embed:
+        """ゲーム用の埋め込みメッセージを作成"""
+        embed = discord.Embed(title=title, color=EMBED_COLORS[color_key])
+        if session:
+            embed.add_field(name="お題", value=session.theme, inline=False)
+            embed.set_footer(text=f"セッションID: {session.session_id}")
+        if answers:
+            answer_text = "\n".join([f"<@{user_id}>: {answer}" for user_id, answer in answers])
+            embed.add_field(name="回答一覧", value=answer_text or "なし", inline=False)
+        if error_message:
+            embed.add_field(name="エラー", value=error_message, inline=False)
+        return embed
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.db_pool = None
