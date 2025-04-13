@@ -169,7 +169,8 @@ class Poll(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         load_dotenv()  # 環境変数をロード
-        self.bot.loop.create_task(self.init_db_pool())
+        self.db_pool = None  # db_poolを初期化
+        self.bot.loop.create_task(self.init_db_pool())  # DBプールの初期化を非同期で実行
         self._last_uses = {}
         self.bot.loop.create_task(self.cleanup_old_polls())
         self.bot.loop.create_task(self.check_ended_polls())
@@ -177,16 +178,19 @@ class Poll(commands.Cog):
             self.bot.loop.create_task(self.recover_active_polls())
 
     async def init_db_pool(self):
+        """データベース接続プールを初期化"""
         host = os.environ.get("DB_HOST")
         port = os.environ.get("DB_PORT")
         user = os.environ.get("DB_USER")
         password = os.environ.get("DB_PASSWORD")
         self.db_pool = await asyncpg.create_pool(user=user, password=password, database="poll", host=host, port=port)
+        await self.init_db()  # テーブルを初期化
 
     async def init_db(self):
+        """必要なテーブルを作成"""
         async with self.db_pool.acquire() as conn:
             async with conn.transaction():
-                # pollsテーブル（AUTOINCREMENT→SERIALに変更）
+                # pollsテーブルを作成
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS polls (
                         id SERIAL PRIMARY KEY,
@@ -201,8 +205,7 @@ class Poll(commands.Cog):
                         total_votes INTEGER DEFAULT 0
                     )
                 """)
-
-                # 投票テーブル
+                # votesテーブルを作成
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS votes (
                         poll_id INTEGER NOT NULL,
@@ -210,8 +213,7 @@ class Poll(commands.Cog):
                         choice INTEGER NOT NULL
                     )
                 """)
-
-                # 投票チェック用
+                # vote_checksテーブルを作成
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS vote_checks (
                         vote_hash TEXT PRIMARY KEY
