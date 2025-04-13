@@ -3,20 +3,42 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final, Literal, Optional, Tuple
 import logging
-import aiosqlite
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+import asyncpg
+from dotenv import load_dotenv
 
-DB_PATH: Final[Path] = Path("data/welcome.db")
+load_dotenv()
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+async def get_welcome_conn():
+    return await asyncpg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database="welcome"
+    )
+
+async def get_leave_conn():
+    return await asyncpg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database="leave"
+    )
+
 DEFAULT_INCREMENT: Final[int] = 100
 MIN_INCREMENT: Final[int] = 5
 MAX_INCREMENT: Final[int] = 1000
 JOIN_COOLDOWN: Final[int] = 3  # seconds
-
-LEAVE_DB_PATH: Final[Path] = Path("data/leavemessage.db")
 
 ERROR_MESSAGES: Final[dict] = {
     "no_permission": "コマンドを使用するにはサーバーの管理権限が必要です。",
@@ -75,115 +97,88 @@ class WelcomeDatabase:
 
     @staticmethod
     async def init_database() -> None:
-        """DBを初期化"""
-        os.makedirs(DB_PATH.parent, exist_ok=True)
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(CREATE_TABLE_SQL)
-            await db.commit()
+        conn = await get_welcome_conn()
+        await conn.execute(CREATE_TABLE_SQL)
+        await conn.close()
 
     @staticmethod
-    async def get_settings(
-        guild_id: int
-    ) -> Tuple[bool, int, Optional[int]]:
-        async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute(
-                """
-                SELECT is_enabled, member_increment, channel_id
-                FROM welcome_settings WHERE guild_id = ?
-                """,
-                (guild_id,)
-            ) as cursor:
-                result = await cursor.fetchone()
-                return (
-                    bool(result[0]),
-                    result[1],
-                    result[2]
-                ) if result else (False, DEFAULT_INCREMENT, None)
+    async def get_settings(guild_id: int) -> Tuple[bool, int, Optional[int]]:
+        conn = await get_welcome_conn()
+        result = await conn.fetchrow(
+            """
+            SELECT is_enabled, member_increment, channel_id
+            FROM welcome_settings WHERE guild_id = $1
+            """,
+            guild_id
+        )
+        await conn.close()
+        return (
+            bool(result[0]),
+            result[1],
+            result[2]
+        ) if result else (False, DEFAULT_INCREMENT, None)
 
     @staticmethod
-    async def update_settings(
-        guild_id: int,
-        is_enabled: bool,
-        member_increment: Optional[int] = None,
-        channel_id: Optional[int] = None
-    ) -> None:
-        """サーバーの設定を更新"""
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                """
-                INSERT INTO welcome_settings
-                (guild_id, is_enabled, member_increment, channel_id)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(guild_id) DO UPDATE SET
-                    is_enabled = excluded.is_enabled,
-                    member_increment = COALESCE(?, welcome_settings.member_increment),
-                    channel_id = COALESCE(?, welcome_settings.channel_id)
-                """,
-                (
-                    guild_id,
-                    is_enabled,
-                    member_increment,
-                    channel_id,
-                    member_increment,
-                    channel_id
-                )
-            )
-            await db.commit()
+    async def update_settings(guild_id: int, is_enabled: bool,
+                              member_increment: Optional[int] = None,
+                              channel_id: Optional[int] = None) -> None:
+        conn = await get_welcome_conn()
+        await conn.execute(
+            """
+            INSERT INTO welcome_settings
+            (guild_id, is_enabled, member_increment, channel_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                is_enabled = EXCLUDED.is_enabled,
+                member_increment = COALESCE($5, welcome_settings.member_increment),
+                channel_id = COALESCE($6, welcome_settings.channel_id)
+            """,
+            guild_id, is_enabled, member_increment, channel_id,
+            member_increment, channel_id
+        )
+        await conn.close()
 
 class LeaveDatabase:
     """退室メッセージの設定を管理するDB"""
 
     @staticmethod
     async def init_database() -> None:
-        """DBを初期化"""
-        os.makedirs(LEAVE_DB_PATH.parent, exist_ok=True)
-        async with aiosqlite.connect(LEAVE_DB_PATH) as db:
-            await db.execute(CREATE_LEAVE_TABLE_SQL)
-            await db.commit()
+        conn = await get_leave_conn()
+        await conn.execute(CREATE_LEAVE_TABLE_SQL)
+        await conn.close()
 
     @staticmethod
-    async def get_settings(
-        guild_id: int
-    ) -> Tuple[bool, Optional[int]]:
-        async with aiosqlite.connect(LEAVE_DB_PATH) as db:
-            async with db.execute(
-                """
-                SELECT is_enabled, channel_id
-                FROM leave_settings WHERE guild_id = ?
-                """,
-                (guild_id,)
-            ) as cursor:
-                result = await cursor.fetchone()
-                return (
-                    bool(result[0]),
-                    result[1]
-                ) if result else (False, None)
+    async def get_settings(guild_id: int) -> Tuple[bool, Optional[int]]:
+        conn = await get_leave_conn()
+        result = await conn.fetchrow(
+            """
+            SELECT is_enabled, channel_id
+            FROM leave_settings WHERE guild_id = $1
+            """,
+            guild_id
+        )
+        await conn.close()
+        return (
+            bool(result[0]),
+            result[1]
+        ) if result else (False, None)
 
     @staticmethod
-    async def update_settings(
-        guild_id: int,
-        is_enabled: bool,
-        channel_id: Optional[int] = None
-    ) -> None:
-        """サーバーの設定を更新"""
-        async with aiosqlite.connect(LEAVE_DB_PATH) as db:
-            await db.execute(
-                """
-                INSERT INTO leave_settings
-                (guild_id, is_enabled, channel_id)
-                VALUES (?, ?, ?)
-                ON CONFLICT(guild_id) DO UPDATE SET
-                    is_enabled = excluded.is_enabled,
-                    channel_id = COALESCE(?, leave_settings.channel_id)
-                """,
-                (
-                    guild_id,
-                    is_enabled,
-                    channel_id,
-                    channel_id
-                )
-            )
-            await db.commit()
+    async def update_settings(guild_id: int, is_enabled: bool,
+                              channel_id: Optional[int] = None) -> None:
+        conn = await get_leave_conn()
+        await conn.execute(
+            """
+            INSERT INTO leave_settings
+            (guild_id, is_enabled, channel_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                is_enabled = EXCLUDED.is_enabled,
+                channel_id = COALESCE($4, leave_settings.channel_id)
+            """,
+            guild_id, is_enabled, channel_id, channel_id
+        )
+        await conn.close()
 
 class MemberWelcomeCog(commands.Cog):
     """メンバー参加時のウェルカムメッセージを管理"""
