@@ -396,6 +396,7 @@ class Voice(commands.Cog):
     async def cog_load(self) -> None:
         """Cogがロードされたときに呼び出される"""
         await self.dictionary.initialize()
+        await self.state.premium_db.initialize()  # PremiumDatabaseの初期化を追加
         await self.state.initialize()  # VoiceStateの初期化を追加
 
     async def cog_unload(self) -> None:
