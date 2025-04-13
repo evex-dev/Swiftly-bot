@@ -99,6 +99,11 @@ class WelcomeDatabase:
     async def init_database() -> None:
         conn = await get_welcome_conn()
         await conn.execute(CREATE_TABLE_SQL)
+        # 一意制約を追加
+        await conn.execute("""
+            ALTER TABLE welcome_settings
+            ADD CONSTRAINT unique_guild_id UNIQUE (guild_id)
+        """)
         await conn.close()
 
     @staticmethod
@@ -145,6 +150,11 @@ class LeaveDatabase:
     async def init_database() -> None:
         conn = await get_leave_conn()
         await conn.execute(CREATE_LEAVE_TABLE_SQL)
+        # 一意制約を追加
+        await conn.execute("""
+            ALTER TABLE leave_settings
+            ADD CONSTRAINT unique_guild_id UNIQUE (guild_id)
+        """)
         await conn.close()
 
     @staticmethod
