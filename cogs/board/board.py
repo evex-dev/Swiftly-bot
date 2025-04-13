@@ -196,13 +196,21 @@ class ServerBoard(commands.Cog):
 					)
 					"""
 				)
-				# 既存テーブルに一意制約を追加
-				await conn.execute(
+				# 制約が存在しない場合のみ追加
+				constraint_exists = await conn.fetchval(
 					"""
-					ALTER TABLE up_channels
-					ADD CONSTRAINT up_channels_server_id_unique UNIQUE (server_id)
+					SELECT 1
+					FROM pg_constraint
+					WHERE conname = 'up_channels_server_id_unique'
 					"""
 				)
+				if not constraint_exists:
+					await conn.execute(
+						"""
+						ALTER TABLE up_channels
+						ADD CONSTRAINT up_channels_server_id_unique UNIQUE (server_id)
+						"""
+					)
 		except asyncpg.exceptions.DuplicateObjectError:
 			# 制約が既に存在する場合は無視
 			pass
