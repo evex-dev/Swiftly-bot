@@ -78,8 +78,7 @@ CREATE TABLE IF NOT EXISTS welcome_settings (
     guild_id INTEGER PRIMARY KEY,
     is_enabled INTEGER DEFAULT 0,
     member_increment INTEGER DEFAULT 100,
-    channel_id INTEGER DEFAULT NULL,
-    UNIQUE (guild_id) -- 一意制約を追加
+    channel_id INTEGER DEFAULT NULL
 )
 """
 
@@ -87,8 +86,7 @@ CREATE_LEAVE_TABLE_SQL: Final[str] = """
 CREATE TABLE IF NOT EXISTS leave_settings (
     guild_id INTEGER PRIMARY KEY,
     is_enabled INTEGER DEFAULT 0,
-    channel_id INTEGER DEFAULT NULL,
-    UNIQUE (guild_id) -- 一意制約を追加
+    channel_id INTEGER DEFAULT NULL
 )
 """
 
