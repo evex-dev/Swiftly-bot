@@ -1,70 +1,63 @@
 import re
 import discord
-import sqlite3
 import os
 from discord import app_commands
 from discord.ext import commands
 import urllib.parse
 
+import asyncpg
+from dotenv import load_dotenv
+
 class GGRKS(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.enabled_guilds = set()  # 有効化されているサーバーのIDを格納
+        # DB接続用のプール
+        self.db_pool = None
+        # dotenvから環境変数の読み込み（cog_loadで実施）
         
-        # データベースファイルのパスを設定
-        self.db_path = os.path.join('data', 'ggrks.db')
-        
-        # データディレクトリが存在しない場合は作成
-        os.makedirs(os.path.join('data'), exist_ok=True)
-        
-        # データベース接続とテーブル作成
-        self._init_db()
-        
-        # 起動時に有効なギルドを読み込む
-        self._load_enabled_guilds()
-
-    def _init_db(self):
-        """データベース初期化とテーブル作成"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # enabled_guildsテーブルが存在しなければ作成
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS enabled_guilds (
-            guild_id INTEGER PRIMARY KEY
+    async def cog_load(self):
+        load_dotenv()
+        self.db_pool = await asyncpg.create_pool(
+            host=os.environ.get("DB_HOST"),
+            port=os.environ.get("DB_PORT"),
+            user=os.environ.get("DB_USER"),
+            password=os.environ.get("DB_PASSWORD"),
+            database="ggrks"
         )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
-    def _load_enabled_guilds(self):
-        """データベースから有効なギルドIDを読み込む"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT guild_id FROM enabled_guilds')
-        for (guild_id,) in cursor.fetchall():
-            self.enabled_guilds.add(guild_id)
-        
-        conn.close()
-    
-    def _save_guild_state(self, guild_id, enabled):
-        """ギルドの状態をデータベースに保存"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if enabled:
-            # UPSERTを使用 (SQLite 3.24.0以降)
-            cursor.execute('''
-            INSERT INTO enabled_guilds (guild_id) VALUES (?)
-            ON CONFLICT(guild_id) DO NOTHING
-            ''', (guild_id,))
-        else:
-            cursor.execute('DELETE FROM enabled_guilds WHERE guild_id = ?', (guild_id,))
-        
-        conn.commit()
-        conn.close()
+        await self._init_db()
+        await self._load_enabled_guilds()
+
+    async def cog_unload(self):
+        if self.db_pool:
+            await self.db_pool.close()
+
+    async def _init_db(self):
+        """非同期でデータベースの初期化とテーブル作成"""
+        async with self.db_pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS enabled_guilds (
+                    guild_id BIGINT PRIMARY KEY
+                )
+            """)
+
+    async def _load_enabled_guilds(self):
+        """非同期でデータベースから有効なギルドIDを読み込む"""
+        async with self.db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT guild_id FROM enabled_guilds")
+            for record in rows:
+                self.enabled_guilds.add(record["guild_id"])
+
+    async def _save_guild_state(self, guild_id, enabled):
+        """非同期でギルドの状態をデータベースに保存"""
+        async with self.db_pool.acquire() as conn:
+            if enabled:
+                await conn.execute("""
+                    INSERT INTO enabled_guilds (guild_id) VALUES ($1)
+                    ON CONFLICT (guild_id) DO NOTHING
+                """, guild_id)
+            else:
+                await conn.execute("DELETE FROM enabled_guilds WHERE guild_id = $1", guild_id)
 
     # 管理者権限チェック関数
     def _is_administrator(self, interaction: discord.Interaction) -> bool:
@@ -81,7 +74,7 @@ class GGRKS(commands.Cog):
             return
             
         self.enabled_guilds.add(interaction.guild_id)
-        self._save_guild_state(interaction.guild_id, True)
+        await self._save_guild_state(interaction.guild_id, True)
         await interaction.response.send_message("GGRKSモードを有効化しました。", ephemeral=True)
 
     @app_commands.command(name="ggrks-disable", description="「〜って何？」「〜って誰？」などの質問に対してGoogle検索を促す機能を無効化します")
@@ -93,7 +86,7 @@ class GGRKS(commands.Cog):
             
         if interaction.guild_id in self.enabled_guilds:
             self.enabled_guilds.remove(interaction.guild_id)
-            self._save_guild_state(interaction.guild_id, False)
+            await self._save_guild_state(interaction.guild_id, False)
             await interaction.response.send_message("GGRKSモードを無効化しました。", ephemeral=True)
         else:
             await interaction.response.send_message("GGRKSモードは既に無効化されています。", ephemeral=True)
