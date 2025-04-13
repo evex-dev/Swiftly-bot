@@ -1,15 +1,15 @@
 import discord
 from discord.ext import commands, tasks
-import aiosqlite
 from datetime import datetime, timedelta, timezone
 from typing import Final, Optional, List
 import logging
 from pathlib import Path
+import asyncpg
+from dotenv import load_dotenv
+import os
 
 
 JST: Final[timezone] = timezone(timedelta(hours=9))
-DB_DIR: Final[Path] = Path("data")
-DB_NAME: Final[str] = "timealerts.db"
 MAX_ALERTS_PER_CHANNEL: Final[int] = 3
 TIME_FORMAT: Final[str] = "%H:%M"
 CHECK_INTERVAL: Final[int] = 1  # minutes
@@ -43,74 +43,54 @@ class AlertDatabase:
     """時報DBを管理するクラス"""
 
     def __init__(self) -> None:
-        self._db: Optional[aiosqlite.Connection] = None
-        DB_DIR.mkdir(exist_ok=True)
+        self._pool: Optional[asyncpg.Pool] = None
 
     async def initialize(self) -> None:
-        self._db = await aiosqlite.connect(DB_DIR / DB_NAME)
-        await self._db.execute(CREATE_TABLE_SQL)
-        await self._db.commit()
+        load_dotenv()
+        DB_HOST = os.getenv("DB_HOST")
+        DB_PORT = os.getenv("DB_PORT")
+        DB_USER = os.getenv("DB_USER")
+        DB_PASSWORD = os.getenv("DB_PASSWORD")
+        DB_NAME = "timealert"
+        self._pool = await asyncpg.create_pool(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        await self._pool.execute(CREATE_TABLE_SQL)
 
     async def cleanup(self) -> None:
-        if self._db:
-            await self._db.close()
-            self._db = None
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
 
-    async def get_alert_count(
-        self,
-        channel_id: int
-    ) -> int:
-        if not self._db:
+    async def get_alert_count(self, channel_id: int) -> int:
+        if not self._pool:
             await self.initialize()
+        async with self._pool.acquire() as conn:
+            count = await conn.fetchval("SELECT COUNT(*) FROM alerts WHERE channel_id = $1", channel_id)
+        return int(count)
 
-        async with self._db.execute(
-            "SELECT COUNT(*) FROM alerts WHERE channel_id = ?",
-            (channel_id,)
-        ) as cursor:
-            return (await cursor.fetchone())[0]
-
-    async def add_alert(
-        self,
-        channel_id: int,
-        alert_time: str
-    ) -> None:
-        """時報を追加"""
-        if not self._db:
+    async def add_alert(self, channel_id: int, alert_time: str) -> None:
+        if not self._pool:
             await self.initialize()
+        async with self._pool.acquire() as conn:
+            await conn.execute("INSERT INTO alerts (channel_id, alert_time) VALUES ($1, $2)", channel_id, alert_time)
 
-        await self._db.execute(
-            "INSERT INTO alerts (channel_id, alert_time) VALUES (?, ?)",
-            (channel_id, alert_time)
-        )
-        await self._db.commit()
-
-    async def remove_alert(
-        self,
-        channel_id: int,
-        alert_time: str
-    ) -> None:
-        """時報を削除"""
-        if not self._db:
+    async def remove_alert(self, channel_id: int, alert_time: str) -> None:
+        if not self._pool:
             await self.initialize()
+        async with self._pool.acquire() as conn:
+            await conn.execute("DELETE FROM alerts WHERE channel_id = $1 AND alert_time = $2", channel_id, alert_time)
 
-        await self._db.execute(
-            "DELETE FROM alerts WHERE channel_id = ? AND alert_time = ?",
-            (channel_id, alert_time)
-        )
-        await self._db.commit()
-
-    async def get_channels_for_time(
-        self,
-        alert_time: str
-    ) -> List[int]:
-        if not self._db:
+    async def get_channels_for_time(self, alert_time: str) -> List[int]:
+        if not self._pool:
             await self.initialize()
-
-        async with self._db.execute(
-            "SELECT channel_id FROM alerts WHERE alert_time = ?",
-            (alert_time,)
-        ) as cursor:
-            return [row[0] for row in await cursor.fetchall()]
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch("SELECT channel_id FROM alerts WHERE alert_time = $1", alert_time)
+        return [row["channel_id"] for row in rows]
 
 class TimeAlert(commands.Cog):
     """時報機能を提供"""
