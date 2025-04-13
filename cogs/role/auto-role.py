@@ -1,32 +1,44 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import sqlite3
+import asyncpg
 import os
 import logging
+from dotenv import load_dotenv
 
 class AutoRole(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.db_path = 'data/autorole.db'
-        self._ensure_database()
-    
-    def _ensure_database(self):
-        """データベースとテーブルの存在を確認し、なければ作成する"""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS autoroles (
-            guild_id INTEGER PRIMARY KEY,
-            human_role_id INTEGER,
-            bot_role_id INTEGER
+        self.db_pool: asyncpg.Pool | None = None
+
+    async def cog_load(self):
+        """Cogがロードされたときにデータベース接続を初期化"""
+        load_dotenv()
+        self.db_pool = await asyncpg.create_pool(
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database="autorole"
         )
-        ''')
-        conn.commit()
-        conn.close()
-    
+        await self._ensure_database()
+
+    async def cog_unload(self):
+        """Cogがアンロードされたときにデータベース接続を閉じる"""
+        if self.db_pool:
+            await self.db_pool.close()
+
+    async def _ensure_database(self):
+        """データベースとテーブルの存在を確認し、なければ作成する"""
+        async with self.db_pool.acquire() as conn:
+            await conn.execute('''
+            CREATE TABLE IF NOT EXISTS autoroles (
+                guild_id BIGINT PRIMARY KEY,
+                human_role_id BIGINT,
+                bot_role_id BIGINT
+            )
+            ''')
+
     async def _check_admin_permission(self, interaction: discord.Interaction) -> bool:
         """ユーザーが管理者権限を持っているかチェックする"""
         if not interaction.guild:
@@ -68,30 +80,24 @@ class AutoRole(commands.Cog):
             await interaction.response.send_message("指定されたロールがBotの最上位ロールよりも上位にあるため、自動付与できません。", ephemeral=True)
             return
         
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 現在の設定を取得
-        cursor.execute("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = ?", (guild_id,))
-        result = cursor.fetchone()
-        
-        human_id = human.id if human else (result[0] if result else None)
-        bot_id = bot.id if bot else (result[1] if result else None)
-        
-        # 設定を更新または挿入
-        if result:
-            cursor.execute(
-                "UPDATE autoroles SET human_role_id = ?, bot_role_id = ? WHERE guild_id = ?",
-                (human_id, bot_id, guild_id)
-            )
-        else:
-            cursor.execute(
-                "INSERT INTO autoroles (guild_id, human_role_id, bot_role_id) VALUES (?, ?, ?)",
-                (guild_id, human_id, bot_id)
-            )
-        
-        conn.commit()
-        conn.close()
+        async with self.db_pool.acquire() as conn:
+            # 現在の設定を取得
+            result = await conn.fetchrow("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = $1", guild_id)
+            
+            human_id = human.id if human else (result["human_role_id"] if result else None)
+            bot_id = bot.id if bot else (result["bot_role_id"] if result else None)
+
+            # 設定を更新または挿入
+            if result:
+                await conn.execute(
+                    "UPDATE autoroles SET human_role_id = $1, bot_role_id = $2 WHERE guild_id = $3",
+                    human_id, bot_id, guild_id
+                )
+            else:
+                await conn.execute(
+                    "INSERT INTO autoroles (guild_id, human_role_id, bot_role_id) VALUES ($1, $2, $3)",
+                    guild_id, human_id, bot_id
+                )
         
         # 応答メッセージの作成
         response = []
@@ -115,22 +121,15 @@ class AutoRole(commands.Cog):
             
         guild_id = interaction.guild.id
         
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 現在の設定を確認
-        cursor.execute("SELECT * FROM autoroles WHERE guild_id = ?", (guild_id,))
-        result = cursor.fetchone()
-        
-        if not result:
-            await interaction.response.send_message("このサーバーでは自動ロール機能は既に設定されていません。", ephemeral=True)
-            conn.close()
-            return
-        
-        # 設定を削除
-        cursor.execute("DELETE FROM autoroles WHERE guild_id = ?", (guild_id,))
-        conn.commit()
-        conn.close()
+        async with self.db_pool.acquire() as conn:
+            # 現在の設定を確認
+            result = await conn.fetchrow("SELECT * FROM autoroles WHERE guild_id = $1", guild_id)
+            if not result:
+                await interaction.response.send_message("このサーバーでは自動ロール機能は既に設定されていません。", ephemeral=True)
+                return
+            
+            # 設定を削除
+            await conn.execute("DELETE FROM autoroles WHERE guild_id = $1", guild_id)
         
         await interaction.response.send_message("自動ロール機能を無効化しました。新しく参加するメンバーにはロールが自動付与されなくなります。", ephemeral=True)
 
@@ -144,13 +143,9 @@ class AutoRole(commands.Cog):
             
         guild_id = interaction.guild.id
         
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 現在の設定を取得
-        cursor.execute("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = ?", (guild_id,))
-        result = cursor.fetchone()
-        conn.close()
+        async with self.db_pool.acquire() as conn:
+            # 現在の設定を取得
+            result = await conn.fetchrow("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = $1", guild_id)
         
         if not result:
             await interaction.response.send_message("このサーバーでは自動ロール機能は設定されていません。", ephemeral=True)
@@ -192,12 +187,8 @@ class AutoRole(commands.Cog):
                 logging.warning(f"サーバー {member.guild.name} でロール管理権限がありません")
                 return
                 
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = ?", (guild_id,))
-            result = cursor.fetchone()
-            conn.close()
+            async with self.db_pool.acquire() as conn:
+                result = await conn.fetchrow("SELECT human_role_id, bot_role_id FROM autoroles WHERE guild_id = $1", guild_id)
             
             if not result:
                 return
