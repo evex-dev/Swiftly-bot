@@ -1,17 +1,15 @@
 import discord
 from discord.ext import commands
-import aiosqlite
-import uuid
-import asyncio
-from pathlib import Path
+import asyncpg
+import os
+from dotenv import load_dotenv
 from typing import Final, Optional, List, Tuple
 import logging
-
+import uuid
+import asyncio
 
 VERSION: Final[str] = "V1.0 by K-Nana"
 SESSION_TIMEOUT: Final[int] = 3600  # 1時間（秒）
-DB_DIR: Final[Path] = Path("data")
-DB_NAME: Final[str] = "owarematen_session.db"
 
 CREATE_SESSIONS_TABLE: Final[str] = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -24,7 +22,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE_ANSWERS_TABLE: Final[str] = """
 CREATE TABLE IF NOT EXISTS answers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     session_id TEXT,
     user_id INTEGER,
     answer TEXT,
@@ -68,150 +66,64 @@ class DiscowaremaTen(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.db_path = DB_DIR / DB_NAME
-        DB_DIR.mkdir(exist_ok=True)
+        self.db_pool = None
 
     async def cog_load(self) -> None:
-        """Cogのロード時にDBを初期化"""
+        load_dotenv()
+        db_host = os.getenv("DB_HOST")
+        db_port = os.getenv("DP_PORT")
+        db_user = os.getenv("DB_USER")
+        db_password = os.getenv("DB_PASSWORD")
+        self.db_pool = await asyncpg.create_pool(
+            dsn=f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/owarematen"
+        )
         await self._init_db()
 
     async def _init_db(self) -> None:
-        """DBを初期化"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(CREATE_SESSIONS_TABLE)
-            await db.execute(CREATE_ANSWERS_TABLE)
-            await db.commit()
+        async with self.db_pool.acquire() as conn:
+            await conn.execute(CREATE_SESSIONS_TABLE)
+            await conn.execute(CREATE_ANSWERS_TABLE)
 
-    async def _get_session(
-        self,
-        channel_id: int,
-        guild_id: int
-    ) -> Optional[GameSession]:
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                """
-                SELECT session_id, theme
-                FROM sessions
-                WHERE channel_id = ? AND guild_id = ?
-                """,
-                (channel_id, guild_id)
-            ) as cursor:
-                if row := await cursor.fetchone():
-                    return GameSession(
-                        row[0], channel_id, guild_id, row[1]
-                    )
+    async def _get_session(self, channel_id: int, guild_id: int) -> Optional[GameSession]:
+        async with self.db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT session_id, theme FROM sessions WHERE channel_id = $1 AND guild_id = $2",
+                channel_id, guild_id
+            )
+            if row:
+                return GameSession(row["session_id"], channel_id, guild_id, row["theme"])
         return None
 
-    async def _get_answers(
-        self,
-        session_id: str
-    ) -> List[Tuple[int, str]]:
-        """セッションの回答を取得"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                """
-                SELECT user_id, answer
-                FROM answers
-                WHERE session_id = ?
-                """,
-                (session_id,)
-            ) as cursor:
-                return await cursor.fetchall()
+    async def _get_answers(self, session_id: str) -> List[Tuple[int, str]]:
+        async with self.db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT user_id, answer FROM answers WHERE session_id = $1",
+                session_id
+            )
+            return [(r["user_id"], r["answer"]) for r in rows]
 
     async def _clear_session(self, session_id: str) -> None:
-        """セッションをクリア"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "DELETE FROM sessions WHERE session_id = ?",
-                (session_id,)
-            )
-            await db.execute(
-                "DELETE FROM answers WHERE session_id = ?",
-                (session_id,)
-            )
-            await db.commit()
+        async with self.db_pool.acquire() as conn:
+            await conn.execute("DELETE FROM sessions WHERE session_id = $1", session_id)
+            await conn.execute("DELETE FROM answers WHERE session_id = $1", session_id)
 
-    def _create_game_embed(
-        self,
-        title: str,
-        session: Optional[GameSession] = None,
-        answers: Optional[List[Tuple[int, str]]] = None,
-        color_key: str = "success",
-        error_message: Optional[str] = None
-    ) -> discord.Embed:
-        """ゲーム情報表示用のEmbedを作成"""
-        embed = discord.Embed(
-            title=title,
-            description=VERSION,
-            color=EMBED_COLORS[color_key]
-        )
-
-        if error_message:
-            embed.add_field(
-                name="エラー",
-                value=error_message,
-                inline=False
-            )
-            return embed
-
-        if session:
-            embed.add_field(
-                name="お題",
-                value=session.theme,
-                inline=False
-            )
-            if answers:
-                if not answers:
-                    embed.add_field(
-                        name="おっと。",
-                        value="誰も答えていないようです...",
-                        inline=False
-                    )
-                else:
-                    for user_id, answer in answers:
-                        embed.add_field(
-                            name=f"ユーザーID: {user_id}の回答",
-                            value=answer,
-                            inline=False
-                        )
-            embed.set_footer(text=f"セッションID: {session.session_id}")
-
-        return embed
-
-    async def auto_open(
-        self,
-        session_id: str,
-        channel_id: int,
-        guild_id: int
-    ) -> None:
+    async def auto_open(self, session_id: str, channel_id: int, guild_id: int) -> None:
         await asyncio.sleep(SESSION_TIMEOUT)
-
         try:
-            session = GameSession(
-                session_id, channel_id, guild_id,
-                "Unknown Theme"
-            )
-            async with aiosqlite.connect(self.db_path) as db:
-                async with db.execute(
-                    "SELECT theme FROM sessions WHERE session_id = ?",
-                    (session_id,)
-                ) as cursor:
-                    if row := await cursor.fetchone():
-                        session.theme = row[0]
-                    else:
-                        return
-
+            session = GameSession(session_id, channel_id, guild_id, "Unknown Theme")
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT theme FROM sessions WHERE session_id = $1", session_id
+                )
+                if row:
+                    session.theme = row["theme"]
+                else:
+                    return
             answers = await self._get_answers(session_id)
             await self._clear_session(session_id)
-
             if channel := self.bot.get_channel(channel_id):
-                embed = self._create_game_embed(
-                    "自動終了: 終われまテン",
-                    session,
-                    answers
-                )
+                embed = self._create_game_embed("自動終了: 終われまテン", session, answers)
                 await channel.send(embed=embed)
-
         except Exception as e:
             logger.error("Error in auto_open: %s", e, exc_info=True)
 
@@ -219,105 +131,48 @@ class DiscowaremaTen(commands.Cog):
         name="owarematen-start-custom",
         description="終われまテンをカスタムお題で開始します。"
     )
-    async def start_custom(
-        self,
-        interaction: discord.Interaction,
-        theme: str
-    ) -> None:
-        """カスタムお題でゲームを開始"""
+    async def start_custom(self, interaction: discord.Interaction, theme: str) -> None:
         try:
-            if session := await self._get_session(
-                interaction.channel_id,
-                interaction.guild_id
-            ):
+            if session := await self._get_session(interaction.channel_id, interaction.guild_id):
                 embed = self._create_game_embed(
-                    "終われまテン",
-                    session,
+                    "終われまテン", session,
                     color_key="error",
                     error_message=ERROR_MESSAGES["game_in_progress"]
                 )
-                await interaction.response.send_message(
-                    embed=embed
-                )
+                await interaction.response.send_message(embed=embed)
                 return
 
             session_id = uuid.uuid4().hex
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    """
-                    INSERT INTO sessions
-                    (session_id, channel_id, guild_id, theme)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        session_id,
-                        interaction.channel_id,
-                        interaction.guild_id,
-                        theme
-                    )
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO sessions (session_id, channel_id, guild_id, theme) VALUES ($1, $2, $3, $4)",
+                    session_id, interaction.channel_id, interaction.guild_id, theme
                 )
-                await db.commit()
 
-            session = GameSession(
-                session_id,
-                interaction.channel_id,
-                interaction.guild_id,
-                theme
-            )
-            embed = self._create_game_embed(
-                "終われまテン",
-                session,
-                color_key="start"
-            )
-            embed.add_field(
-                name="回答方法",
-                value="/owarematen-answerで回答できます。",
-                inline=False
-            )
-            embed.add_field(
-                name="注意",
-                value="このセッションは1時間後に自動で終了し回答が公開されます。",
-                inline=False
-            )
+            session = GameSession(session_id, interaction.channel_id, interaction.guild_id, theme)
+            embed = self._create_game_embed("終われまテン", session, color_key="start")
+            embed.add_field(name="回答方法", value="/owarematen-answerで回答できます。", inline=False)
+            embed.add_field(name="注意", value="このセッションは1時間後に自動で終了し回答が公開されます。", inline=False)
             await interaction.response.send_message(embed=embed)
 
-            self.bot.loop.create_task(
-                self.auto_open(
-                    session_id,
-                    interaction.channel_id,
-                    interaction.guild_id
-                )
-            )
+            self.bot.loop.create_task(self.auto_open(session_id, interaction.channel_id, interaction.guild_id))
 
         except Exception as e:
             logger.error("Error in start_custom: %s", e, exc_info=True)
             await interaction.response.send_message(
-                ERROR_MESSAGES["db_error"].format(str(e)),
-                ephemeral=True
+                ERROR_MESSAGES["db_error"].format(str(e)), ephemeral=True
             )
 
     @discord.app_commands.command(
         name="owarematen-open-answers",
         description="全員の回答を開きます。終われまテンの終了コマンドも兼ねています。"
     )
-    async def open_answers(
-        self,
-        interaction: discord.Interaction
-    ) -> None:
-        """回答を公開してゲームを終了"""
+    async def open_answers(self, interaction: discord.Interaction) -> None:
         try:
-            if session := await self._get_session(
-                interaction.channel_id,
-                interaction.guild_id
-            ):
+            if session := await self._get_session(interaction.channel_id, interaction.guild_id):
                 answers = await self._get_answers(session.session_id)
                 await self._clear_session(session.session_id)
-
-                embed = self._create_game_embed(
-                    "終われまテン",
-                    session,
-                    answers
-                )
+                embed = self._create_game_embed("終われまテン", session, answers)
                 await interaction.response.send_message(embed=embed)
             else:
                 embed = self._create_game_embed(
@@ -330,104 +185,54 @@ class DiscowaremaTen(commands.Cog):
         except Exception as e:
             logger.error("Error in open_answers: %s", e, exc_info=True)
             await interaction.response.send_message(
-                ERROR_MESSAGES["db_error"].format(str(e)),
-                ephemeral=True
+                ERROR_MESSAGES["db_error"].format(str(e)), ephemeral=True
             )
 
     @discord.app_commands.command(
         name="owarematen-answer",
         description="終われまテンに回答します。"
     )
-    async def answer(
-        self,
-        interaction: discord.Interaction,
-        answer: str
-    ) -> None:
-        """回答を提出"""
+    async def answer(self, interaction: discord.Interaction, answer: str) -> None:
         try:
-            if not (session := await self._get_session(
-                interaction.channel_id,
-                interaction.guild_id
-            )):
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["no_game"],
-                    ephemeral=True
-                )
+            if not (session := await self._get_session(interaction.channel_id, interaction.guild_id)):
+                await interaction.response.send_message(ERROR_MESSAGES["no_game"], ephemeral=True)
                 return
 
-            async with aiosqlite.connect(self.db_path) as db:
-                # 回答済みチェック
-                async with db.execute(
-                    """
-                    SELECT 1 FROM answers
-                    WHERE session_id = ? AND user_id = ?
-                    """,
-                    (session.session_id, interaction.user.id)
-                ) as cursor:
-                    if await cursor.fetchone():
-                        await interaction.response.send_message(
-                            ERROR_MESSAGES["already_answered"],
-                            ephemeral=True
-                        )
-                        return
-
-                # 回答を保存
-                await db.execute(
-                    """
-                    INSERT INTO answers
-                    (session_id, user_id, answer)
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        session.session_id,
-                        interaction.user.id,
-                        answer
-                    )
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT 1 FROM answers WHERE session_id = $1 AND user_id = $2",
+                    session.session_id, interaction.user.id
                 )
-                await db.commit()
+                if row:
+                    await interaction.response.send_message(ERROR_MESSAGES["already_answered"], ephemeral=True)
+                    return
 
-                # 回答数を取得
-                async with db.execute(
-                    """
-                    SELECT COUNT(*) FROM answers
-                    WHERE session_id = ?
-                    """,
-                    (session.session_id,)
-                ) as cursor:
-                    count = (await cursor.fetchone())[0]
+                await conn.execute(
+                    "INSERT INTO answers (session_id, user_id, answer) VALUES ($1, $2, $3)",
+                    session.session_id, interaction.user.id, answer
+                )
+                count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM answers WHERE session_id = $1",
+                    session.session_id
+                )
 
-            # 回答完了通知
-            await interaction.response.send_message(
-                f"{answer}で回答しました",
-                ephemeral=True
-            )
+            await interaction.response.send_message(f"{answer}で回答しました", ephemeral=True)
 
-            # 全体通知
             notify_embed = discord.Embed(
                 title="回答受付",
                 description=f"ユーザーID: {interaction.user.id}が回答しました。",
                 color=EMBED_COLORS["notify"]
             )
-            notify_embed.add_field(
-                name="現在の回答数",
-                value=str(count),
-                inline=False
-            )
-            notify_embed.set_footer(
-                text=f"セッションID: {session.session_id}"
-            )
+            notify_embed.add_field(name="現在の回答数", value=str(count), inline=False)
+            notify_embed.set_footer(text=f"セッションID: {session.session_id}")
             await interaction.channel.send(embed=notify_embed)
 
-        except aiosqlite.IntegrityError:
-            await interaction.response.send_message(
-                ERROR_MESSAGES["already_answered"],
-                ephemeral=True
-            )
+        except asyncpg.UniqueViolationError:
+            await interaction.response.send_message(ERROR_MESSAGES["already_answered"], ephemeral=True)
         except Exception as e:
             logger.error("Error in answer: %s", e, exc_info=True)
             await interaction.response.send_message(
-                ERROR_MESSAGES["db_error"].format(str(e)),
-                ephemeral=True
+                ERROR_MESSAGES["db_error"].format(str(e)), ephemeral=True
             )
 
 
