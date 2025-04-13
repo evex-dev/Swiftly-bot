@@ -319,7 +319,16 @@ class ServerBoard(commands.Cog):
 						return
 
 				if last_up_time:
-					last_up = last_up_time
+					try:
+						last_up = datetime.datetime.fromisoformat(last_up_time)
+					except ValueError as e:
+						logger.error(f"up_rank: Failed to parse last_up_time: {last_up_time}, error: {e}")
+						await interaction.followup.send(
+							"登録されているデータに問題があります。管理者にお問い合わせください。",
+							ephemeral=True
+						)
+						return
+
 					if (current_time - last_up).total_seconds() < UP_COOLDOWN:
 						remaining_time = datetime.timedelta(seconds=UP_COOLDOWN) - (current_time - last_up)
 						await interaction.followup.send(
