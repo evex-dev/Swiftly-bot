@@ -200,7 +200,7 @@ class MessageProcessor:
         return message
 
     @staticmethod
-    def process_message(
+    async def process_message(
         message: str,
         attachments: List[discord.Attachment] = None,
         dictionary: DictionaryManager = None
@@ -209,7 +209,7 @@ class MessageProcessor:
         result = MessageProcessor.limit_message(result)
         if dictionary:
             for word in result.split():
-                reading = dictionary.get_reading(word)
+                reading = await dictionary.get_reading(word)
                 if reading:
                     result = result.replace(word, reading)
         if attachments:
@@ -548,7 +548,7 @@ class Voice(commands.Cog):
                 )
                 return
 
-            processed_message = MessageProcessor.process_message(message, dictionary=self.dictionary)
+            processed_message = await MessageProcessor.process_message(message, dictionary=self.dictionary)
             
             # プレミアムユーザーのボイス情報を取得
             user_id = interaction.user.id
@@ -688,7 +688,7 @@ class Voice(commands.Cog):
             # 追加: /joinで指定されたテキストチャンネル以外は処理しない
             if message.channel.id != guild_state.text_channel_id:
                 return
-            processed_message = MessageProcessor.process_message(
+            processed_message = await MessageProcessor.process_message(
                 message.content,
                 message.attachments,
                 self.dictionary
@@ -751,7 +751,7 @@ class Voice(commands.Cog):
             if not voice_client or not voice_client.is_connected():
                 return
 
-            processed_message = MessageProcessor.process_message(msg, dictionary=self.dictionary)
+            processed_message = await MessageProcessor.process_message(msg, dictionary=self.dictionary)
             async with guild_state.lock:
                 guild_state.tts_queue.append({
                     "message": processed_message,
