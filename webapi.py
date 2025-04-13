@@ -61,7 +61,7 @@ class Server(BaseModel):
     icon_url: Optional[str] = Field(None, description="アイコンURL")
     description: Optional[str] = Field(None, description="説明")
     last_up_time: Optional[datetime] = Field(None, description="最終アップ時間")
-    registered_at: datetime = Field(..., description="登録日時")
+    registered_at: Optional[datetime] = Field(None, description="登録日時")
     invite_url: Optional[str] = Field(None, description="招待URL")
     time_since_last_up: Optional[str] = Field(None, description="最終アップからの経過時間")
 
