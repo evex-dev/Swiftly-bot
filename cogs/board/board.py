@@ -364,24 +364,24 @@ class ServerBoard(commands.Cog):
 					"""
 					UPDATE servers
 					SET rank_points = rank_points + 1,
-						last_up_time = $1
+						last_up_time = $1::timestamp
 					WHERE server_id = $2
 					""",
-					current_time,
+					current_time,  # current_time をそのまま渡すが明示的にキャスト
 					interaction.guild.id
 				)
 			async with self.pool_up.acquire() as conn:
 				await conn.execute(
 					"""
 					INSERT INTO up_channels (server_id, channel_id, last_up_time)
-					VALUES ($1, $2, $3)
+					VALUES ($1, $2, $3::timestamp)
 					ON CONFLICT (server_id) DO UPDATE SET
 						channel_id = EXCLUDED.channel_id,
 						last_up_time = EXCLUDED.last_up_time
 					""",
 					interaction.guild.id,
 					interaction.channel.id,
-					current_time  # 修正: current_time.isoformat() を current_time に変更
+					current_time
 				)
 			await interaction.followup.send(
 				"サーバーの表示順位を上げました！2時間後にこの場所で/upを通知します。",
