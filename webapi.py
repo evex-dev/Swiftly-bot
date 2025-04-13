@@ -80,7 +80,8 @@ class DatabaseManager:
                 port=int(os.getenv("DB_PORT", "5432")),
                 database="server_board",
                 user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD")
+                password=os.getenv("DB_PASSWORD"),
+                max_size=10  # 追加：接続プールの最大接続数を制限
             )
         return self.pool
 
