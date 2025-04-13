@@ -2,25 +2,14 @@ import discord
 from discord.ext import commands
 from discord.ui import View
 from datetime import datetime, timezone, timedelta
-import asyncpg
+import aiosqlite
 from pathlib import Path
 from typing import Final, Optional
 import logging
-from dotenv import load_dotenv
-import os
 
 
 JST: Final[timezone] = timezone(timedelta(hours=9))
-load_dotenv()
-
-DB_CONFIG: Final[dict] = {
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "database": "anticheat"
-}
-
+DB_PATH: Final[Path] = Path("data/anticheat.db")
 BUTTON_TIMEOUT: Final[int] = 60
 WARNING_DELETE_DELAY: Final[int] = 5
 
@@ -59,52 +48,43 @@ class AntiRaidDatabase:
     @staticmethod
     async def init_db() -> None:
         """DBを初期化"""
-        conn = await asyncpg.connect(**DB_CONFIG)
-        try:
-            await conn.execute(
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS enabled_servers
-                (guild_id INTEGER PRIMARY KEY)
+                (guild_id TEXT PRIMARY KEY)
                 """
             )
-        finally:
-            await conn.close()
+            await db.commit()
 
     @staticmethod
     async def is_enabled(guild_id: int) -> bool:
-        conn = await asyncpg.connect(**DB_CONFIG)
-        try:
-            result = await conn.fetchval(
-                "SELECT 1 FROM enabled_servers WHERE guild_id = $1",
-                guild_id
-            )
-            return result is not None
-        finally:
-            await conn.close()
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT 1 FROM enabled_servers WHERE guild_id = ?",
+                (str(guild_id),)
+            ) as cursor:
+                return await cursor.fetchone() is not None
 
     @staticmethod
     async def enable(guild_id: int) -> None:
         """サーバーの機能を有効化"""
-        conn = await asyncpg.connect(**DB_CONFIG)
-        try:
-            await conn.execute(
-                "INSERT INTO enabled_servers (guild_id) VALUES ($1) ON CONFLICT DO NOTHING",
-                guild_id
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO enabled_servers (guild_id) VALUES (?)",
+                (str(guild_id),)
             )
-        finally:
-            await conn.close()
+            await db.commit()
 
     @staticmethod
     async def disable(guild_id: int) -> None:
         """サーバーの機能を無効化"""
-        conn = await asyncpg.connect(**DB_CONFIG)
-        try:
-            await conn.execute(
-                "DELETE FROM enabled_servers WHERE guild_id = $1",
-                guild_id
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "DELETE FROM enabled_servers WHERE guild_id = ?",
+                (str(guild_id),)
             )
-        finally:
-            await conn.close()
+            await db.commit()
 
 class EnableAnticheatView(View):
     """荒らし対策有効化用のビュー"""
