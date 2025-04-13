@@ -52,7 +52,7 @@ class AntiRaidDatabase:
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS enabled_servers
-                (guild_id INTEGER PRIMARY KEY)
+                (guild_id TEXT PRIMARY KEY)
                 """
             )
             await db.commit()
@@ -62,7 +62,7 @@ class AntiRaidDatabase:
         async with aiosqlite.connect(DB_PATH) as db:
             async with db.execute(
                 "SELECT 1 FROM enabled_servers WHERE guild_id = ?",
-                (guild_id,)
+                (str(guild_id),)
             ) as cursor:
                 return await cursor.fetchone() is not None
 
@@ -72,7 +72,7 @@ class AntiRaidDatabase:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
                 "INSERT OR IGNORE INTO enabled_servers (guild_id) VALUES (?)",
-                (guild_id,)
+                (str(guild_id),)
             )
             await db.commit()
 
@@ -82,7 +82,7 @@ class AntiRaidDatabase:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
                 "DELETE FROM enabled_servers WHERE guild_id = ?",
-                (guild_id,)
+                (str(guild_id),)
             )
             await db.commit()
 
