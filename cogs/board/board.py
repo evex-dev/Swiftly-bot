@@ -193,8 +193,18 @@ class ServerBoard(commands.Cog):
 					)
 					"""
 				)
-		except Exception as e:
+				# 既存テーブルに一意制約を追加
+				await conn.execute(
+					"""
+					ALTER TABLE up_channels
+					ADD CONSTRAINT up_channels_server_id_unique UNIQUE (server_id)
+					"""
+				)
+		except asyncpg.exceptions.DuplicateObjectError:
+			# 制約が既に存在する場合は無視
 			pass
+		except Exception as e:
+			logger.error(f"setup_database error: {e}", exc_info=True)
 
 	@tasks.loop(minutes=1)
 	async def check_up_reminder(self) -> None:
