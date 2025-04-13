@@ -1,8 +1,16 @@
-import aiosqlite
-from discord.ext import commands
+from dotenv import load_dotenv
+import os
+import asyncpg
 import discord
+from discord.ext import commands
 
-DB_PATH = "data/authpanel.db"
+load_dotenv()
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = "authpanel"
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 class AuthRemove(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -17,30 +25,27 @@ class AuthRemove(commands.Cog):
         message_id="削除する認証パネルのメッセージID"
     )
     async def remove_auth_panel(self, interaction: discord.Interaction, message_id: int) -> None:
-        async with aiosqlite.connect(DB_PATH) as conn:
-            async with conn.execute(
-                "SELECT channel_id, guild_id FROM panels WHERE message_id = ?", (message_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if not row:
-                    await interaction.response.send_message("指定されたメッセージIDの認証パネルが見つかりません。", ephemeral=True)
-                    return
+        conn = await asyncpg.connect(DATABASE_URL)
+        try:
+            row = await conn.fetchrow(
+                "SELECT channel_id FROM panels WHERE message_id = $1", message_id
+            )
+            if not row:
+                await interaction.response.send_message("指定されたメッセージIDの認証パネルが見つかりません。", ephemeral=True)
+                return
 
-                channel_id, guild_id = row
-                if guild_id != interaction.guild.id:
-                    await interaction.response.send_message("指定されたメッセージIDはこのサーバーのものではありません。", ephemeral=True)
-                    return
+            channel_id = row["channel_id"]
+            channel = interaction.guild.get_channel(channel_id)
+            if channel:
+                try:
+                    message = await channel.fetch_message(message_id)
+                    await message.delete()
+                except discord.NotFound:
+                    pass
 
-                channel = interaction.guild.get_channel(channel_id)
-                if channel:
-                    try:
-                        message = await channel.fetch_message(message_id)
-                        await message.delete()
-                    except discord.NotFound:
-                        pass
-
-            await conn.execute("DELETE FROM panels WHERE message_id = ?", (message_id,))
-            await conn.commit()
+            await conn.execute("DELETE FROM panels WHERE message_id = $1", message_id)
+        finally:
+            await conn.close()
 
         await interaction.response.send_message("認証パネルを削除しました。", ephemeral=True)
 
