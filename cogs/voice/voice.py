@@ -318,7 +318,7 @@ class VoiceState:
 
         # ボイスが指定されていない場合は、プレミアムユーザーのボイスまたはデフォルトボイスを使用
         if voice is None:
-            user_data = self.premium_db.get_user(user_id) if user_id else None
+            user_data = await self.premium_db.get_user(user_id) if user_id else None
             voice = user_data[0] if user_data and len(user_data) > 0 else VOICE
 
         temp_path = await self.tts_manager.generate_audio(message, guild_id, voice)
@@ -552,7 +552,7 @@ class Voice(commands.Cog):
             
             # プレミアムユーザーのボイス情報を取得
             user_id = interaction.user.id
-            user_data = self.state.premium_db.get_user(user_id)
+            user_data = await self.state.premium_db.get_user(user_id)
             voice = user_data[0] if user_data and len(user_data) > 0 else None
             
             guild_state = self.state.guilds[guild_id]
@@ -696,7 +696,7 @@ class Voice(commands.Cog):
             
             # プレミアムユーザーのボイス情報を取得
             user_id = message.author.id
-            user_data = self.state.premium_db.get_user(user_id) 
+            user_data = await self.state.premium_db.get_user(user_id) 
             voice = user_data[0] if user_data and len(user_data) > 0 else None
             
             async with guild_state.lock:
