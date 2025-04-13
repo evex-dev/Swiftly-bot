@@ -235,6 +235,11 @@ class VoiceState:
         self.tts_manager = TTSManager()
         self.premium_db = PremiumDatabase()  # PremiumDatabaseのインスタンスを追加
 
+    async def initialize(self) -> None:
+        """状態管理の初期化"""
+        # PremiumDatabaseを初期化
+        await self.premium_db.initialize()
+
     async def reconnect_voice(self, guild_id: int, bot) -> bool:
         """ボイス接続が切断された場合に再接続を試みる"""
         guild_state = self.guilds.get(guild_id)
@@ -392,6 +397,7 @@ class Voice(commands.Cog):
     async def cog_load(self) -> None:
         """Cogがロードされたときに呼び出される"""
         await self.dictionary.initialize()
+        await self.state.initialize()  # VoiceStateの初期化を追加
 
     async def cog_unload(self) -> None:
         """Cogがアンロードされたときに呼び出される"""
