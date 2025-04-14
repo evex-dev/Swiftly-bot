@@ -48,13 +48,14 @@ class AntiInvite(commands.Cog):
 
         self._session: Optional[aiohttp.ClientSession] = None
         self._url_cache: deque[str] = deque(maxlen=1000)  # キャッシュの最大サイズを1000に設定
+        self._db_pool: Optional[asyncpg.Pool] = None  # 接続プールを追加
 
     async def cog_load(self) -> None:
         self._session = aiohttp.ClientSession()
 
         try:
-            conn = await asyncpg.connect(**DB_CONFIG)
-            try:
+            self._db_pool = await asyncpg.create_pool(**DB_CONFIG)  # 接続プールを作成
+            async with self._db_pool.acquire() as conn:
                 # メインDB
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS settings (
@@ -70,8 +71,6 @@ class AntiInvite(commands.Cog):
                         PRIMARY KEY (guild_id, channel_id)
                     )
                 """)
-            finally:
-                await conn.close()
         except Exception as e:
             print(f"Error initializing database: {e}")
 
@@ -79,12 +78,13 @@ class AntiInvite(commands.Cog):
         if self._session:
             await self._session.close()
             self._session = None
+        if self._db_pool:
+            await self._db_pool.close()  # 接続プールを閉じる
 
     async def set_setting(self, guild_id: int, enabled: bool) -> None:
         """サーバーごとの設定を保存"""
         try:
-            conn = await asyncpg.connect(**DB_CONFIG)
-            try:
+            async with self._db_pool.acquire() as conn:
                 await conn.execute(
                     """
                     INSERT INTO settings (guild_id, anti_invite_enabled)
@@ -94,16 +94,13 @@ class AntiInvite(commands.Cog):
                     """,
                     guild_id, enabled
                 )
-            finally:
-                await conn.close()
         except Exception as e:
             print(f"Error setting anti-invite setting: {e}")
 
     async def get_setting(self, guild_id: int) -> bool:
         """サーバーごとの設定を取得"""
         try:
-            conn = await asyncpg.connect(**DB_CONFIG)
-            try:
+            async with self._db_pool.acquire() as conn:
                 result = await conn.fetchval(
                     """
                     SELECT anti_invite_enabled
@@ -113,8 +110,6 @@ class AntiInvite(commands.Cog):
                     guild_id
                 )
                 return result if result is not None else False
-            finally:
-                await conn.close()
         except Exception as e:
             print(f"Error getting anti-invite setting: {e}")
             return False
@@ -122,8 +117,7 @@ class AntiInvite(commands.Cog):
     async def update_whitelist(self, guild_id: int, channels: list[int]) -> None:
         """ホワイトリストを更新"""
         try:
-            conn = await asyncpg.connect(**DB_CONFIG)
-            try:
+            async with self._db_pool.acquire() as conn:
                 await conn.execute(
                     "DELETE FROM whitelist WHERE guild_id = $1",
                     guild_id
@@ -136,16 +130,13 @@ class AntiInvite(commands.Cog):
                         """,
                         [(guild_id, ch_id) for ch_id in channels]
                     )
-            finally:
-                await conn.close()
         except Exception as e:
             print(f"Error updating whitelist: {e}")
 
     async def get_whitelist(self, guild_id: int) -> list[int]:
         """ホワイトリストを取得"""
         try:
-            conn = await asyncpg.connect(**DB_CONFIG)
-            try:
+            async with self._db_pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
                     SELECT channel_id
@@ -155,8 +146,6 @@ class AntiInvite(commands.Cog):
                     guild_id
                 )
                 return [row["channel_id"] for row in rows]
-            finally:
-                await conn.close()
         except Exception as e:
             print(f"Error getting whitelist: {e}")
             return []

@@ -25,7 +25,8 @@ DB_CONFIG = {
     "port": os.getenv("DB_PORT"),
     "user": os.getenv("DB_USER"),
     "password": os.getenv("DB_PASSWORD"),
-    "database": "dictionary"
+    "database": "dictionary",
+    "max_size": 10  # 最大接続数を10に制限
 }
 
 VOICE: Final[str] = "ja-JP-NanamiNeural"
@@ -171,6 +172,7 @@ class DictionaryManager:
             return [(row["word"], row["reading"]) for row in rows]
 
     async def close(self) -> None:
+        """接続プールを閉じる"""
         if self.pool:
             await self.pool.close()
 
@@ -397,14 +399,14 @@ class Voice(commands.Cog):
         """Cogがロードされたときに呼び出される"""
         await self.dictionary.initialize()
         await self.state.initialize()
-        
+
     async def cog_unload(self) -> None:
         """Cogがアンロードされたときに呼び出される"""
         self.state.tts_manager.cleanup_temp_files()
         for guild_state in self.state.guilds.values():
             if guild_state.voice_client.is_connected():
                 await guild_state.voice_client.disconnect()
-        await self.dictionary.close()
+        await self.dictionary.close()  # 接続プールを閉じる
 
     def _check_rate_limit(
         self,
