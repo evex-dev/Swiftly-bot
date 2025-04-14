@@ -229,7 +229,7 @@ class LoggingCog(commands.Cog):
                     )
                     # エラーレポートボタンを追加
                     view = ErrorReportView(event_id)
-                    await ctx.send(embed=embed, view=view)
+                    await ctx.send(embed=embed, view=view, ephemeral=True)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message to user: {e}")
                     # バックアップとして通常のメッセージを試す
@@ -276,10 +276,10 @@ class LoggingCog(commands.Cog):
                     # インタラクションの応答状態を確認
                     if not interaction.response.is_done():
                         # まだ応答していない場合は通常の応答として送信
-                        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+                        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
                     else:
                         # 既に応答済みの場合はフォローアップとして送信
-                        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+                        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message via interaction: {e}")
                     # DMを試みる
@@ -315,7 +315,7 @@ class LoggingCog(commands.Cog):
                                 color=discord.Color.red()
                             )
                             view = ErrorReportView(event_id)
-                            await ctx.send(embed=embed, view=view)
+                            await ctx.send(embed=embed, view=view, ephemeral=True)
                         elif isinstance(args[0], discord.Interaction):
                             # スラッシュコマンドの場合
                             interaction = args[0]
@@ -329,10 +329,10 @@ class LoggingCog(commands.Cog):
                                 
                                 if interaction.response.is_done():
                                     # 既に応答済みの場合はフォローアップとして送信
-                                    await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+                                    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
                                 else:
                                     # まだ応答していない場合は通常の応答として送信
-                                    await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+                                    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
                             except Exception as e:
                                 # インタラクションへの応答が失敗した場合はDMを試みる
                                 self.logger.error(f"Failed to send error message via interaction: {e}")
@@ -384,9 +384,9 @@ class LoggingCog(commands.Cog):
                     view = ErrorReportView(event_id)
                     
                     if not interaction.response.is_done():
-                        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+                        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
                     else:
-                        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+                        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
                 except Exception as e:
                     self.logger.error(f"Failed to send error message via interaction: {e}")
                     try:
@@ -394,13 +394,6 @@ class LoggingCog(commands.Cog):
                         await interaction.user.send(embed=embed, view=view)
                     except Exception as dm_error:
                         self.logger.error(f"Failed to send DM with error message: {dm_error}")
-        
-        # 元のエラーハンドラが存在する場合は呼び出す
-        if self.old_tree_on_error:
-            try:
-                await self.old_tree_on_error(interaction, error)
-            except Exception as e:
-                self.logger.error(f"Error in original tree error handler: {e}")
 
     @commands.command(name="test_sentry")
     async def test_sentry(self, ctx: commands.Context) -> None:
