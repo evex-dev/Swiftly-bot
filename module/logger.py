@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -106,8 +107,14 @@ class LoggingCog(commands.Cog):
         self.bot = bot
         self.logger = logging.getLogger("bot")
         self._init_sentry()
-        self.bot.on_error = self.on_global_error  # Assign on_global_error method
-
+        
+        # グローバルエラーハンドラを設定
+        self.old_on_error = bot.on_error
+        bot.on_error = self.on_global_error
+        
+        # コマンドツリーのエラーハンドラも設定（スラッシュコマンド用）
+        self.old_tree_on_error = bot.tree.on_error
+        bot.tree.on_error = self.on_app_command_tree_error
         
         # 永続的なViewを追加（ボットが再起動してもボタンが機能するために必要）
         bot.add_view(ErrorReportView("dummy"))  # ダミーIDでViewを初期化
@@ -147,12 +154,12 @@ class LoggingCog(commands.Cog):
             
     def _before_send_event(self, event: dict, hint: Optional[dict]) -> dict:
         """Sentryイベント送信前の処理"""
-        _, exc_value, _ = hint["exc_info"]  # Removed unused variables
-        exc_type, exc_value, tb = hint["exc_info"]
-        # エラーの種類によって処理を分けることができる
-        if isinstance(exc_value, commands.CommandNotFound):
-            # コマンドが見つからないエラーは無視する例
-            return None
+        if hint and "exc_info" in hint:
+            exc_type, exc_value, tb = hint["exc_info"]
+            # エラーの種類によって処理を分けることができる
+            if isinstance(exc_value, commands.CommandNotFound):
+                # コマンドが見つからないエラーは無視する例
+                return None
         return event
 
     @commands.Cog.listener()
@@ -280,11 +287,7 @@ class LoggingCog(commands.Cog):
                         await interaction.user.send(embed=embed, view=view)
                     except Exception as dm_error:
                         self.logger.error(f"Failed to send DM with error message: {dm_error}")
-    async def on_global_error(self, event_method: str, *args, **kwargs) -> None:
-        """Handle global errors."""
-        self.logger.error("Global error occurred in %s: %s", event_method, args)
 
-    @commands.command(name="test_sentry")
     @commands.command(name="test_sentry")
     async def test_sentry(self, ctx: commands.Context) -> None:
         """Sentryへのテスト接続を行うコマンド（特定ユーザー限定）"""
