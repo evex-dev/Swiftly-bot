@@ -330,5 +330,16 @@ class LoggingCog(commands.Cog):
             self.logger.error(f"Failed to send manual test event to Sentry: {e}")
             await ctx.send(f"❌ Sentryへのテスト送信に失敗しました: {e}")
 
+    async def on_global_error(self, event_method: str, *args, **kwargs) -> None:
+        """グローバルエラーハンドラ"""
+        self.logger.error("Global error in method %s with args: %s, kwargs: %s", event_method, args, kwargs)
+        # 必要に応じてSentryにエラーを送信
+        if sentry_sdk.Hub.current.client:
+            with sentry_sdk.push_scope() as scope:
+                scope.set_tag("event_method", event_method)
+                scope.set_extra("args", args)
+                scope.set_extra("kwargs", kwargs)
+                sentry_sdk.capture_message(f"Global error in {event_method}", level="error")
+
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(LoggingCog(bot))
