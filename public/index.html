@@ -165,13 +165,109 @@
             text-decoration: underline;
         }
 
+        /* 拡張されたレスポンシブデザイン */
+        @media (max-width: 1200px) {
+            .container {
+                padding: 1.5rem;
+            }
+            
+            .server-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 1.5rem;
+            }
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 2rem;
             }
+            
+            .hero-section {
+                padding: 3rem 1.5rem;
+            }
+
+            .description {
+                font-size: 1rem;
+            }
 
             .server-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 1.25rem;
+            }
+            
+            .container {
+                padding: 1.25rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            .hero-section {
+                padding: 2.5rem 1rem;
+            }
+            
+            .description {
+                font-size: 0.95rem;
+            }
+            
+            .server-grid {
                 grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1rem 0;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .server-card {
+                padding: 1.25rem;
+            }
+            
+            .server-header {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .server-icon {
+                margin-right: 0;
+                margin-bottom: 0.75rem;
+            }
+            
+            .server-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: center;
+            }
+            
+            .join-button {
+                padding: 0.7rem 1.25rem;
+            }
+        }
+        
+        @media (max-width: 320px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .hero-section {
+                padding: 2rem 0.75rem;
+            }
+            
+            .server-card {
+                padding: 1rem;
+            }
+            
+            .server-icon {
+                width: 56px;
+                height: 56px;
+            }
+            
+            .server-name {
+                font-size: 1.1rem;
             }
         }
     </style>
@@ -189,7 +285,6 @@
     </div>
     <div class="container">
         <div id="server-list" class="server-grid">
-            <!-- サーバーカードが動的に追加されます -->
         </div>
 
         <div class="home-link">
