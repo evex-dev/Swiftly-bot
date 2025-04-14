@@ -4,7 +4,16 @@ from prometheus_client import Counter, Gauge, start_http_server
 import json
 import os
 from asyncio import Lock
-import sqlite3
+import asyncpg
+from dotenv import load_dotenv
+
+load_dotenv()
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_USER = os.getenv("DB_USER", "user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "password")
+DB_NAME = "premium"
+CONN_STR = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 class PrometheusCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -128,19 +137,17 @@ class PrometheusCog(commands.Cog):
             self._message_count_temp = 0
 
         # Update premium user count
-        premium_user_count = self.get_premium_user_count()
+        premium_user_count = await self.get_premium_user_count()
         self.premium_user_count.set(premium_user_count)
 
-    def get_premium_user_count(self):
+    async def get_premium_user_count(self):
         # Load premium user count from the database
         try:
-            conn = sqlite3.connect('data/premium.db')
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM premium_users")
-            count = cursor.fetchone()[0]
-            conn.close()
-            return count
-        except sqlite3.Error:
+            async with asyncpg.create_pool(CONN_STR) as pool:
+                async with pool.acquire() as conn:
+                    count = await conn.fetchval("SELECT COUNT(*) FROM premium_users")
+                    return count
+        except asyncpg.PostgresError:
             return 0
 
     @update_gauges.before_loop
