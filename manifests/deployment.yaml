@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: swiftlybot
-        image: iruka541/swiftlybot:latest
+        image: ghcr.io/techfish-11/swiftlybot:latest
         imagePullPolicy: Always
         envFrom:
           - secretRef:
