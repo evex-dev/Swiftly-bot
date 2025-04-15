@@ -323,21 +323,6 @@ class ServerBoard(commands.Cog):
 					await interaction.followup.send(ERROR_MESSAGES["not_registered"], ephemeral=False)
 					return
 				last_up_time = row["last_up_time"]
-				invite_url = row["invite_url"]
-
-				if invite_url:
-					try:
-						# fetch_invite でタイムアウトや例外が発生する可能性を考慮
-						invite = await self.bot.fetch_invite(invite_url)
-						if invite.revoked or invite.expires_at:
-							raise discord.NotFound
-					except (discord.NotFound, discord.HTTPException) as ex:
-						logger.error(f"up_rank: Invalid invite {invite_url}: {ex}")
-						await interaction.followup.send(
-							"登録されている招待リンクが無効です。\n一度/unregisterを行い登録を解除してから/registerコマンドで再登録してください。",
-							ephemeral=False
-						)
-						return
 
 				if last_up_time:
 					try:
