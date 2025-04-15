@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swiftlybot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: swiftlybot 
+  template:
+    metadata:
+      labels:
+        name: swiftlybot
+    spec:
+      containers:
+      - name: swiftlybot
+        image: ghcr.io/evex-dev/swiftlybot:main
+        imagePullPolicy: Always
+        envFrom:
+          - secretRef:
+              name: swiftly-secrets
