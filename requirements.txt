@@ -28,3 +28,4 @@ prometheus_client
 jwt
 sentry_sdk
 asyncpg
+psutil

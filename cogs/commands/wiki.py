@@ -190,24 +190,15 @@ class WikipediaCog(commands.Cog):
             # 結果の送信
             embed = self._create_search_embed(title, summary, url)
             await interaction.followup.send(embed=embed)
-
         except DisambiguationError as e:
             logger.info("Disambiguation for query '%s': %s", query, e.options)
-            embed = self._create_disambiguation_embed(e.options)
-            await interaction.followup.send(embed=embed)
-
+            return
         except PageError:
             logger.warning("Page not found for query '%s'", query)
-            await interaction.followup.send(
-                ERROR_MESSAGES["page_not_found"].format(query)
-            )
-
+            return
         except Exception as e:
             logger.error("Error in wikipedia search: %s", e, exc_info=True)
-            await interaction.followup.send(
-                ERROR_MESSAGES["unexpected"].format(str(e)),
-                ephemeral=True
-            )
+            return
 
     @app_commands.command(
         name="random_wikipedia",
@@ -226,13 +217,9 @@ class WikipediaCog(commands.Cog):
             # 結果の送信
             embed = self._create_search_embed(title, summary, url)
             await interaction.followup.send(embed=embed)
-
         except Exception as e:
             logger.error("Error in random wikipedia: %s", e, exc_info=True)
-            await interaction.followup.send(
-                ERROR_MESSAGES["unexpected"].format(str(e)),
-                ephemeral=True
-            )
+            return
 
 
 async def setup(bot: commands.Bot) -> None:
