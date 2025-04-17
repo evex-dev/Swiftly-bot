@@ -35,7 +35,6 @@ class Snapshot(commands.Cog):
                     await message.channel.send("返信先のメッセージが取得できませんでした。")
                     return
             else:
-                await message.channel.send("このコマンドは返信でのみ使用できます。")
                 return
 
             img = await self.create_snapshot_image(ref_msg, rainbow=rainbow)
