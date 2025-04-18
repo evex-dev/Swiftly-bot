@@ -201,6 +201,7 @@ class ServerBoardAPI:
         logger.info("Database path: %s", PATHS['db'])
         logger.info("User count file path: %s", PATHS['user_count'])
         logger.info("Public directory path: %s", PATHS['public'])
+        self.latency_file = Path(__file__).parent / "data/latency.json"
 
     def _setup_middleware(self) -> None:
         """ミドルウェアの設定"""
@@ -219,7 +220,8 @@ class ServerBoardAPI:
         self.app.get("/api/users")(self.get_total_users)
         self.app.get("/admin/requests")(self.get_requests)
         self.app.delete("/admin/requests/{user_id}/{message}/{date}")(self.delete_request)
-        self.app.get("/api/analytics/")(self.get_analytics)  # 新規追加
+        self.app.get("/api/analytics/")(self.get_analytics)
+        self.app.get("/api/latency")(self.get_latency)
         self.app.mount(
             "/",
             StaticFiles(directory=PATHS["public"], html=True),
