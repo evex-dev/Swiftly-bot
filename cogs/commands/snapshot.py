@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 from textwrap import wrap
 import re
+from pytz import timezone
 
 url_pattern = re.compile(r'https?://\S+|www\.\S+')
 
@@ -103,7 +104,10 @@ class Snapshot(commands.Cog):
         name_height = name_bbox[3] - name_bbox[1]
         name_width = name_bbox[2] - name_bbox[0]
 
-        dt_str = ref_msg.created_at.strftime("%H:%M")
+        jst = timezone('Asia/Tokyo')
+        dt_jst = ref_msg.created_at.astimezone(jst)
+        dt_str = dt_jst.strftime("%H:%M")
+
         dt_bbox = font_small.getbbox(dt_str)
         dt_height = dt_bbox[3] - dt_bbox[1]
 
