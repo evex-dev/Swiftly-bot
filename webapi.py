@@ -371,6 +371,17 @@ class ServerBoardAPI:
                 headers={"WWW-Authenticate": "Basic"}
             )
 
+    async def get_latency(self) -> dict:
+        if not self.latency_file.exists():
+            raise HTTPException(status_code=404, detail="latency.jsonが見つかりません")
+        try:
+            with self.latency_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data
+        except Exception as e:
+            logger.error("latency.json読み込みエラー: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"latency.jsonの読み込みに失敗しました: {e}")
+
 # APIインスタンスの作成
 api = ServerBoardAPI()
 app = api.app
