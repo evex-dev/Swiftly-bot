@@ -9,12 +9,10 @@ from datetime import datetime, timedelta
 
 
 API_BASE_URL: Final[str] = "https://image-ai.evex.land"
-RATE_LIMIT_SECONDS: Final[int] = 60
 MAX_PROMPT_LENGTH: Final[int] = 1000
 
 ERROR_MESSAGES: Final[dict] = {
     "generation_failed": "画像の生成に失敗しました。時間をおいて再度お試しください。",
-    "rate_limit": "レート制限中です。{}秒後にお試しください。",
     "prompt_too_long": f"プロンプトは{MAX_PROMPT_LENGTH}文字以内で指定してください。",
     "invalid_prompt": "プロンプトに不適切な文字が含まれています。",
     "api_error": "APIエラーが発生しました: {}"
@@ -33,7 +31,6 @@ class ImageGen(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._session: Optional[aiohttp.ClientSession] = None
-        self._last_uses = {}  # ユーザーごとの最終使用時刻
 
     async def cog_load(self) -> None:
         self._session = aiohttp.ClientSession()
@@ -58,18 +55,6 @@ class ImageGen(commands.Cog):
                 return False, ERROR_MESSAGES["invalid_prompt"]
 
         return True, None
-
-    def _check_rate_limit(
-        self,
-        user_id: int
-    ) -> tuple[bool, Optional[int]]:
-        now = datetime.now()
-        if user_id in self._last_uses:
-            time_diff = now - self._last_uses[user_id]
-            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
-                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
-                return True, remaining
-        return False, None
 
     def _create_image_embed(
         self,
@@ -128,17 +113,6 @@ class ImageGen(commands.Cog):
                 )
                 return
 
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                interaction.user.id
-            )
-            if is_limited:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["rate_limit"].format(remaining),
-                    ephemeral=True
-                )
-                return
-
             await interaction.response.defer(thinking=True)
 
             # 画像の生成
@@ -149,9 +123,6 @@ class ImageGen(commands.Cog):
                     ephemeral=True
                 )
                 return
-
-            # レート制限の更新
-            self._last_uses[interaction.user.id] = datetime.now()
 
             # 結果の送信
             file = discord.File(

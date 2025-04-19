@@ -1,6 +1,3 @@
-# Swiftly DiscordBot.
-# Developed by: TechFish_1
-# Standard library imports
 import asyncio
 import json
 import logging
