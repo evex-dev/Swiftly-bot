@@ -16,7 +16,7 @@ RATE_LIMIT_SECONDS = 5  # コマンドのレート制限
 VOTE_RATE_LIMIT_SECONDS = 2  # 投票アクションのレート制限
 CLEANUP_DAYS = 1  # 終了した投票を保持する日数
 MAX_OPTIONS = 5  # 最大選択肢数（Discordの制限に合わせる）
-RECOVER = False  # BOT再起動時にアクティブな投票を復元するかどうか(レートリミット注意)
+RECOVER = True  # BOT再起動時にアクティブな投票を復元するかどうか(レートリミット注意)
 
 
 DURATION_CHOICES = [
@@ -176,6 +176,15 @@ class Poll(commands.Cog):
         self.bot.loop.create_task(self.check_ended_polls())
         if RECOVER:
             self.bot.loop.create_task(self.recover_active_polls())
+
+    def _check_rate_limit(self, user_id: int) -> tuple[bool, Optional[int]]:
+        now = datetime.now()
+        if user_id in self._last_uses:
+            time_diff = now - self._last_uses[user_id]
+            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
+                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
+                return True, remaining
+        return False, None
 
     async def init_db_pool(self):
         """データベース接続プールを初期化"""
