@@ -1,7 +1,8 @@
+# Copied from the v2 source code.
+# https://github.com/evex-dev/Swiftly-v2/blob/main/src/commands/sandbox.py
 import asyncio
 import json
 import time
-import re
 from typing import Final, Optional, Tuple, Dict, Any
 import logging
 from datetime import datetime, timedelta
@@ -11,16 +12,19 @@ import discord
 from discord.ext import commands
 
 
-API_BASE_URL: Final[str] = "https://js-sandbox.evex.land/"
+API_BASE_URLS: Final[dict] = {
+    "python": "https://py-sandbox.evex.land/",
+    "javascript": "https://js-sandbox.evex.land/"
+}
 SUPPORT_FOOTER: Final[str] = "API Powered by EvexDevelopers"
-RATE_LIMIT_SECONDS: Final[int] = 30
+# RATE_LIMIT_SECONDS: Final[int] = 30  # 削除
 MAX_CODE_LENGTH: Final[int] = 2000
 EXECUTION_TIMEOUT: Final[int] = 30
 
 ERROR_MESSAGES: Final[dict] = {
-    "no_code": "実行するJavaScriptコードを入力してください。",
+    "no_code": "実行するコードを入力してください。",
     "code_too_long": f"コードは{MAX_CODE_LENGTH}文字以内で指定してください。",
-    "rate_limit": "レート制限中です。{}秒後にお試しください。",
+    # "rate_limit": "レート制限中です。{}秒後にお試しください。",  # 削除
     "execution_failed": "コードの実行に失敗しました。",
     "api_error": "API通信エラー: {}",
     "parse_error": "APIからの応答の解析に失敗しました。",
@@ -37,21 +41,12 @@ EMBED_COLORS: Final[dict] = {
 logger = logging.getLogger(__name__)
 
 class CodeExecutor:
-    """JavaScriptコードの実行を管理するクラス"""
+    """コードの実行を管理するクラス"""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, language: str) -> None:
         self.code = code
-        self._sanitize_code()
+        self.language = language
         self._validate_code()
-
-    def _sanitize_code(self) -> None:
-        """
-        Discordのコードブロック（```）が含まれている場合に、それを取り除きます。
-        """
-        pattern = r"^```(?:\w+\n)?(.*?)```$"
-        m = re.match(pattern, self.code, re.DOTALL)
-        if m:
-            self.code = m.group(1).strip()
 
     def _validate_code(self) -> None:
         """コードのバリデーション"""
@@ -59,13 +54,20 @@ class CodeExecutor:
             raise ValueError(ERROR_MESSAGES["code_too_long"])
 
         # 危険な操作のチェック
-        dangerous_keywords = [
-            "require(", "process.", "global.",
-            "__dirname", "__filename", "module."
-        ]
-        for keyword in dangerous_keywords:
+        dangerous_keywords = {
+            "python": [
+                "import os", "import sys", "import subprocess",
+                "__import__", "eval(", "exec(", "open("
+            ],
+            "javascript": [
+                "require(", "process.", "global.",
+                "__dirname", "__filename", "module."
+            ]
+        }
+
+        for keyword in dangerous_keywords.get(self.language, []):
             if keyword in self.code:
-                self.code = f"// 安全性の理由で{keyword}は使用できません\n{self.code}"
+                self.code = f"# 安全性の理由で{keyword}は使用できません\n{self.code}" if self.language == "python" else f"// 安全性の理由で{keyword}は使用できません\n{self.code}"
 
     async def execute(
         self,
@@ -77,7 +79,7 @@ class CodeExecutor:
         try:
             start_time = time.monotonic()
             async with session.post(
-                API_BASE_URL,
+                API_BASE_URLS[self.language],
                 json=payload,
                 headers=headers,
                 timeout=EXECUTION_TIMEOUT
@@ -108,7 +110,7 @@ class CodeExecutor:
             return None, ERROR_MESSAGES["unexpected"].format(str(e)), 0.0
 
 class Sandbox(commands.Cog):
-    """JavaScriptサンドボックス機能を提供"""
+    """コードサンドボックス機能を提供"""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -126,7 +128,8 @@ class Sandbox(commands.Cog):
         self,
         result: Optional[dict] = None,
         error: Optional[str] = None,
-        elapsed_time: float = 0.0
+        elapsed_time: float = 0.0,
+        language: str = ""
     ) -> discord.Embed:
         if error:
             embed = discord.Embed(
@@ -159,7 +162,7 @@ class Sandbox(commands.Cog):
                         output = output[:997] + "..."
                     embed.add_field(
                         name="出力",
-                        value=f"```javascript\n{output}\n```",
+                        value=f"```{language}\n{output}\n```",
                         inline=False
                     )
                 else:
@@ -179,76 +182,58 @@ class Sandbox(commands.Cog):
 
     @discord.app_commands.command(
         name="sandbox",
-        description="JavaScript コードをサンドボックスで実行し、結果を返します。"
+        description="コードをサンドボックスで実行し、結果を返します。"
     )
     @discord.app_commands.describe(
-        code="実行するJavaScriptコード"
+        language="コードの言語 (python または javascript)",
+        code="実行するコード"
     )
     async def sandbox(
         self,
         interaction: discord.Interaction,
+        language: str,
         code: str
     ) -> None:
         try:
+            # 言語のバリデーション
+            if language not in API_BASE_URLS:
+                await interaction.response.send_message(
+                    "サポートされていない言語です。python または javascript を指定してください。",
+                    ephemeral=True
+                )
+                return
+
             await interaction.response.defer(thinking=True)
 
             # コードの実行
-            executor = CodeExecutor(code)
+            executor = CodeExecutor(code, language)
             if not self._session:
                 self._session = aiohttp.ClientSession()
 
-            result, error, elapsed_time = await executor.execute(self._session)
+            result, error, elapsed_time = await executor.execute(
+                self._session
+            )
 
             # 結果の送信
-            embed = await self.create_result_embed(result, error, elapsed_time)
+            embed = await self.create_result_embed(
+                result,
+                error,
+                elapsed_time,
+                language
+            )
             await interaction.followup.send(embed=embed)
 
         except ValueError as e:
-            await interaction.response.send_message(str(e), ephemeral=True)
+            await interaction.response.send_message(
+                str(e),
+                ephemeral=True
+            )
         except Exception as e:
             logger.error("Error in sandbox command: %s", e, exc_info=True)
             await interaction.followup.send(
                 ERROR_MESSAGES["unexpected"].format(str(e)),
                 ephemeral=True
             )
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
-        if message.author.bot:
-            return
-
-        if not message.content.startswith("?sandbox"):
-            return
-
-        try:
-            # コード取得（"?sandbox "の後の部分）
-            code = message.content[len("?sandbox "):].strip()
-            if not code:
-                await message.channel.send(ERROR_MESSAGES["no_code"])
-                return
-
-            # 進捗表示
-            progress_message = await message.channel.send("実行中...")
-
-            # コードの実行
-            executor = CodeExecutor(code)
-            if not self._session:
-                self._session = aiohttp.ClientSession()
-
-            result, error, elapsed_time = await executor.execute(self._session)
-
-            # 結果の送信
-            embed = await self.create_result_embed(result, error, elapsed_time)
-            await progress_message.edit(content=None, embed=embed)
-
-        except ValueError as e:
-            await message.channel.send(str(e))
-        except Exception as e:
-            logger.error("Error in message handler: %s", e, exc_info=True)
-            await message.channel.send(
-                ERROR_MESSAGES["unexpected"].format(str(e))
-            )
-
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Sandbox(bot))
