@@ -336,9 +336,15 @@ class VoiceState:
                 logger.error("Error playing audio: %s", error, exc_info=True)
                 # ConnectionClosedエラーを検出して再接続ロジックをトリガー
                 if isinstance(error, ConnectionClosed):
-                    asyncio.create_task(self._handle_connection_closed(guild_id))
+                    # guild_idがまだ有効か確認してから再接続
+                    if guild_id in self.guilds:
+                        try:
+                            asyncio.create_task(self._handle_connection_closed(guild_id))
+                        except Exception as e:
+                            logger.error(f"Error scheduling reconnection: {e}", exc_info=True)
             
             async def play_next():
+                # guild_idがまだ有効か確認
                 if guild_id in self.guilds and self.guilds[guild_id].voice_client.is_connected():
                     async with guild_state.lock:
                         if guild_state.tts_queue:
@@ -348,7 +354,10 @@ class VoiceState:
                             next_voice = next_item.get("voice")
                             await self.play_tts(guild_id, next_message, next_user_id, next_voice)
             
-            asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
+            try:
+                asyncio.run_coroutine_threadsafe(play_next(), voice_client.loop)
+            except Exception as e:
+                logger.error(f"Error running play_next coroutine: {e}", exc_info=True)
 
         try:
             voice_client.play(
@@ -362,11 +371,19 @@ class VoiceState:
             logger.error(f"Error starting voice playback: {e}", exc_info=True)
             # 再生中にエラーが発生した場合も再接続を試みる
             if isinstance(e, ConnectionClosed):
-                asyncio.create_task(self._handle_connection_closed(guild_id))
+                if guild_id in self.guilds:
+                    try:
+                        asyncio.create_task(self._handle_connection_closed(guild_id))
+                    except Exception as ex:
+                        logger.error(f"Error scheduling reconnection: {ex}", exc_info=True)
 
     async def _handle_connection_closed(self, guild_id: int):
         """ConnectionClosedエラーを処理し、必要に応じて再接続を試みる"""
         logger.warning(f"Voice connection closed unexpectedly for guild {guild_id}, attempting to reconnect")
+        # guild_idがまだ有効か確認
+        if guild_id not in self.guilds:
+            logger.warning(f"Guild {guild_id} not found in self.guilds during reconnection handling")
+            return
         # Voice.botへの参照を取得するため、一時的な回避策としてcogからbotを取得
         for cog in self.guilds[guild_id].voice_client.client.cogs.values():
             if isinstance(cog, Voice):
