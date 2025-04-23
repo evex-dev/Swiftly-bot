@@ -28,6 +28,7 @@ class AdminOption(str, Enum):
     """管理コマンドのオプション"""
     SERVERS = "servers"
     DEBUG = "debug"
+    VOICE = "voice"
 
 class PaginationView(View):
     """ページネーション用のカスタムビュー"""
@@ -255,6 +256,47 @@ class BotAdmin(commands.Cog):
 
         return embeds
 
+    async def create_voice_channel_embeds(self) -> List[discord.Embed]:
+        """現在ボットが参加しているVC一覧を作成"""
+        embeds = []
+        current_embed = discord.Embed(
+            title="ボットが参加しているVC一覧",
+            color=EMBED_COLORS["info"]
+        )
+
+        voice_states = [
+            (guild.name, channel.name, len(channel.members))
+            for guild in self.bot.guilds
+            for channel in guild.voice_channels
+            if channel.guild.voice_client and channel.guild.voice_client.channel == channel
+        ]
+
+        if not voice_states:
+            current_embed.description = "現在ボットはどのVCにも参加していません。"
+            embeds.append(current_embed)
+            return embeds
+
+        for i, (guild_name, channel_name, member_count) in enumerate(voice_states, 1):
+            value = (
+                f"サーバー: {guild_name}\n"
+                f"チャンネル: {channel_name}\n"
+                f"メンバー数: {member_count}"
+            )
+            current_embed.add_field(
+                name=f"VC {i}",
+                value=value,
+                inline=False
+            )
+
+            if i % SERVERS_PER_PAGE == 0 or i == len(voice_states):
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="ボットが参加しているVC一覧 (続き)",
+                    color=EMBED_COLORS["info"]
+                )
+
+        return embeds
+
     async def generate_premium_token(self, user_id: int) -> str:
         """指定したユーザーにプレミアムトークンを発行し、DMを送信"""
         user_data = self.db.get_user(user_id)
@@ -307,6 +349,15 @@ class BotAdmin(commands.Cog):
             elif option == "viewreq":
                 embeds = await self.create_request_embeds()
                 view = RequestPaginationView(embeds)
+                await interaction.response.send_message(
+                    embed=embeds[0],
+                    view=view,
+                    ephemeral=True
+                )
+
+            elif option == AdminOption.VOICE:
+                embeds = await self.create_voice_channel_embeds()
+                view = PaginationView(embeds)
                 await interaction.response.send_message(
                     embed=embeds[0],
                     view=view,
