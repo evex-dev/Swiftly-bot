@@ -384,6 +384,18 @@ class ServerBoardAPI:
             logger.error("latency.json読み込みエラー: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=f"latency.jsonの読み込みに失敗しました: {e}")
 
+    async def get_server_count(self) -> Dict[str, Any]:
+        """サーバー数を取得するエンドポイント"""
+        if not self.server_count_file.exists():
+            raise HTTPException(status_code=404, detail="server_count.jsonが見つかりません")
+        try:
+            with self.server_count_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data
+        except Exception as e:
+            logger.error("server_count.json読み込みエラー: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"server_count.jsonの読み込みに失敗しました: {e}")
+
 # APIインスタンスの作成
 api = ServerBoardAPI()
 app = api.app
