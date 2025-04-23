@@ -9,7 +9,7 @@ from typing import Any, Dict, Final, Optional, Set
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-import aiosqlite
+import asyncpg
 import discord
 import dotenv
 from discord.ext import commands
@@ -91,31 +91,37 @@ class CogReloader(FileSystemEventHandler):
             except Exception as e:
                 logger.error("Failed to reload %s: %s", module_path, e, exc_info=True)
 
-class DatabaseManager:
-    """DB操作を管理するクラス"""
+DB_CONFIG: Final[dict] = {
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": "prohibited_channels"
+}
 
-    def __init__(self, db_path: Path) -> None:
-        self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection: Optional[aiosqlite.Connection] = None
+class DatabaseManager:
+    """DB操作を管理するクラス（asyncpg版）"""
+
+    def __init__(self) -> None:
+        self._pool: Optional[asyncpg.Pool] = None
 
     async def initialize(self) -> None:
         """DBを初期化"""
-        self._connection = await aiosqlite.connect(self.db_path)
-        await self._connection.execute("""
-            CREATE TABLE IF NOT EXISTS prohibited_channels (
-                guild_id TEXT,
-                channel_id TEXT,
-                PRIMARY KEY (guild_id, channel_id)
-            )
-        """)
-        await self._connection.commit()
+        self._pool = await asyncpg.create_pool(**DB_CONFIG)
+        async with self._pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS prohibited_channels (
+                    guild_id TEXT,
+                    channel_id TEXT,
+                    PRIMARY KEY (guild_id, channel_id)
+                )
+            """)
 
     async def cleanup(self) -> None:
         """DB接続を閉じる"""
-        if self._connection:
-            await self._connection.close()
-            self._connection = None
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
 
     async def is_channel_prohibited(
         self,
@@ -123,18 +129,17 @@ class DatabaseManager:
         channel_id: int
     ) -> bool:
         try:
-            if not self._connection:
+            if not self._pool:
                 await self.initialize()
-
-            async with self._connection.execute(
-                """
-                SELECT 1 FROM prohibited_channels
-                WHERE guild_id = ? AND channel_id = ?
-                """,
-                (str(guild_id), str(channel_id))
-            ) as cursor:
-                return bool(await cursor.fetchone())
-
+            async with self._pool.acquire() as conn:
+                result = await conn.fetchval(
+                    """
+                    SELECT 1 FROM prohibited_channels
+                    WHERE guild_id = $1 AND channel_id = $2
+                    """,
+                    str(guild_id), str(channel_id)
+                )
+                return result is not None
         except Exception as e:
             logger.error("Database error: %s", e, exc_info=True)
             return False
@@ -201,7 +206,7 @@ class SwiftlyBot(commands.AutoShardedBot):
             help_command=None  # sw!helpコマンドを無効化
         )
 
-        self.db = DatabaseManager(PATHS["db"])
+        self.db = DatabaseManager()  # パス引数不要に
         self.user_count = UserCountManager(PATHS["user_count"])
         self._setup_logging()
 
