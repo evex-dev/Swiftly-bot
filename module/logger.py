@@ -206,6 +206,9 @@ class LoggingCog(commands.Cog):
         if isinstance(error, commands.CommandNotFound):
             # コマンドが見つからない場合は何もしない
             return
+        if isinstance(error, commands.CheckFailure):
+            # コマンドの実行が禁止されている場合は通知をスキップ
+            return
             
         # Sentryにエラーイベントを明示的に送信
         if sentry_sdk.Hub.current.client:
