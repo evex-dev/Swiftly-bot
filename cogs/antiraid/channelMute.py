@@ -138,7 +138,7 @@ class Prohibited(commands.Cog):
 
     @discord.app_commands.command(
         name="set_mute_channel",
-        description="特定のチャンネルでのコマンドの利用を禁止する"
+        description="特定のチャンネルでのコマンドの利用を禁止する。もう一度実行すると解除される。"
     )
     @discord.app_commands.describe(
         channel="制限を設定するチャンネル"
