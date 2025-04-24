@@ -10,6 +10,7 @@ class Calculator(commands.Cog):
     @app_commands.command(name="calculator", description="数式を計算します")
     @app_commands.describe(expression="計算したい数式を入力してください")
     async def calculator(self, interaction: discord.Interaction, expression: str):
+            await interaction.response.defer(thinking=True)
             allowed_names = {k: v for k, v in np.__dict__.items() if not k.startswith("__")}
             allowed_names.update({"abs": abs, "round": round})
             result = eval(expression, {"__builtins__": {}}, allowed_names)
@@ -21,7 +22,7 @@ class Calculator(commands.Cog):
             )
             embed.add_field(name="結果", value=f"`{result}`", inline=False)
             embed.set_footer(text="計算完了 🎉")
-            await interaction.response.send_message(embed=embed)
+            await interaction.followup.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Calculator(bot))
