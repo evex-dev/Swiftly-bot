@@ -8,7 +8,8 @@ from discord import app_commands
 from discord.ext import commands
 import asyncpg  # 追加
 from dotenv import load_dotenv  # 追加
-from discord.app_commands import Transform, RoleTransformer  # 追加
+from discord.app_commands import Transform  # 追加
+from discord import Role  # 修正
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ class RolePanel(commands.Cog):
         self,
         interaction: discord.Interaction,
         panel_id: str,
-        role: Transform[discord.Role, RoleTransformer],  # 修正
+        role: Role,  # 修正
         emoji: str,
         description: str = ""
     ):
