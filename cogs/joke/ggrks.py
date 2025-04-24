@@ -40,6 +40,20 @@ class GGRKS(commands.Cog):
                     guild_id BIGINT PRIMARY KEY
                 )
             """)
+            # ユニーク制約を追加
+            await conn.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'enabled_guilds_guild_id_key'
+                    ) THEN
+                        ALTER TABLE enabled_guilds
+                        ADD CONSTRAINT enabled_guilds_guild_id_key UNIQUE (guild_id);
+                    END IF;
+                END $$;
+            """)
 
     async def _load_enabled_guilds(self):
         """非同期でデータベースから有効なギルドIDを読み込む"""
