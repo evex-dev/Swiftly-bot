@@ -75,7 +75,6 @@ class Time(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.api = TimeAPI()
-        self._last_uses = {}
 
     async def cog_load(self) -> None:
         """Cogのロード時にAPIを初期化"""
@@ -84,18 +83,6 @@ class Time(commands.Cog):
     async def cog_unload(self) -> None:
         """Cogのアンロード時にAPIをクリーンアップ"""
         await self.api.cleanup()
-
-    def _check_rate_limit(
-        self,
-        user_id: int
-    ) -> tuple[bool, Optional[int]]:
-        now = datetime.now()
-        if user_id in self._last_uses:
-            time_diff = now - self._last_uses[user_id]
-            if time_diff < timedelta(seconds=RATE_LIMIT_SECONDS):
-                remaining = RATE_LIMIT_SECONDS - int(time_diff.total_seconds())
-                return True, remaining
-        return False, None
 
     def _format_time(self, time_str: str) -> str:
         try:
@@ -146,19 +133,6 @@ class Time(commands.Cog):
         interaction: discord.Interaction
     ) -> None:
         try:
-            # レート制限のチェック
-            is_limited, remaining = self._check_rate_limit(
-                interaction.user.id
-            )
-            if is_limited:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["rate_limit"].format(remaining),
-                    ephemeral=True
-                )
-                return
-
-            await interaction.response.defer()
-
             # 時刻の取得
             data = await self.api.get_current_time()
             if not data or "time" not in data:
@@ -169,9 +143,6 @@ class Time(commands.Cog):
                     )
                 )
                 return
-
-            # レート制限の更新
-            self._last_uses[interaction.user.id] = datetime.now()
 
             # 結果の送信
             embed = self._create_time_embed(data["time"])

@@ -8,11 +8,11 @@ class AdminErrorCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="raise_error", description="わざとエラーを発生させるコマンド")
+    @app_commands.command(name="raise_error", description="わざとエラーを発生させるコマンド (管理者テスト用)")
     async def raise_error(self, interaction: discord.Interaction) -> None:
         """わざとエラーを発生させるコマンド"""
         if interaction.user.id != 1241397634095120438:
-            await interaction.response.send_message("❌ このコマンドを実行する権限がありません。", ephemeral=True)
+            await interaction.response.send_message("❌ このコマンドを実行する権限がありません。bot管理者のみ実行可能です。", ephemeral=True)
             return
 
         try:

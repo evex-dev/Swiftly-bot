@@ -372,14 +372,13 @@ class TetrisView(discord.ui.View):
                     content=content,
                     view=self
                 )
+        except discord.errors.NotFound:
+            logger.warning("Interaction token expired, cannot update message")
+            # インタラクションが期限切れの場合、フォローアップメッセージを送信
+            await self.send_interaction_expired_message(new_interaction)
         except discord.errors.HTTPException as e:
-            if e.code == 50027:  # Invalid Webhook Token
-                logger.warning("Interaction token expired, cannot update message")
-                # インタラクションが期限切れの場合、フォローアップメッセージを送信
-                await self.send_interaction_expired_message(new_interaction)
-            else:
-                # その他のHTTPエラーは再スロー
-                raise
+            # その他のHTTPエラーは再スロー
+            raise
 
     async def send_interaction_expired_message(self, interaction: Optional[discord.Interaction]) -> None:
         if not interaction:
@@ -496,14 +495,10 @@ class Tetri(commands.Cog):
                     view.game.move_down()
                     try:
                         await view.update_message()
-                    except discord.errors.HTTPException as e:
-                        if e.code == 50027:  # Invalid Webhook Token
-                            logger.warning("Auto-drop: Interaction token expired")
-                            # 自動落下ではフォローアップメッセージを送信できないので、
-                            # ここでは処理を停止する
-                            return
-                        else:
-                            raise
+                    except discord.errors.NotFound:
+                        logger.warning("Auto-drop: Interaction token expired")
+                        # 自動落下ではフォローアップメッセージを送信できないので、処理を停止
+                        return
         except asyncio.CancelledError:
             pass
         except Exception as e:
