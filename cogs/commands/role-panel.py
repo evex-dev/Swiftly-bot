@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 import asyncpg  # 追加
 from dotenv import load_dotenv  # 追加
+from discord.app_commands import Transform, RoleTransformer  # 追加
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ class RolePanel(commands.Cog):
     @role_panel_group.command(name="add", description="ロールパネルにロールを追加します")
     @app_commands.describe(
         panel_id="ロールパネルのメッセージID",
-        role="追加するロール",
+        role="追加するロール（ロールが表示されない場合は、ロールIDを入力してください）",
         emoji="関連付けるリアクション絵文字",
         description="ロールの説明（任意）"
     )
@@ -160,7 +161,7 @@ class RolePanel(commands.Cog):
         self,
         interaction: discord.Interaction,
         panel_id: str,
-        role: discord.Role,
+        role: Transform[discord.Role, RoleTransformer],  # 修正
         emoji: str,
         description: str = ""
     ):
