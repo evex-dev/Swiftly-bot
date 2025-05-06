@@ -71,7 +71,7 @@ class Privacy(commands.Cog):
             self.private_users.add(uid)
             self._add_private_user(uid)
             try:
-                await interaction.user.send('プライバシーモードが有効になりました。以降一切のコマンドやメッセージを受け取りません。そのため、botの仕様が不可能になります。\nしかし、荒らし対策系は安全のため引き続き検知します。')
+                await interaction.user.send('プライバシーモードが有効になりました。以降一切のコマンドやメッセージを受け取りません。そのため、botの使用が不可能になります。\nしかし、荒らし対策系は安全のため引き続き検知します。')
             except discord.Forbidden:
                 pass
             await interaction.response.send_message('プライバシーモードを有効化しました。', ephemeral=True)
