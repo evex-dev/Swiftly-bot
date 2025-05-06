@@ -253,6 +253,10 @@ class Help(commands.Cog):
         description="Swiftlyのヘルプを表示します。"
     )
     async def help_command(self, interaction: discord.Interaction) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             embeds = self._create_paginated_embeds()
             view = HelpPaginator(embeds, interaction.user)

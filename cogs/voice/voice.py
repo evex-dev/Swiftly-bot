@@ -445,6 +445,10 @@ class Voice(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             member = interaction.guild.get_member(interaction.user.id)
             if not member or not member.voice:
@@ -497,6 +501,10 @@ class Voice(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             member = interaction.guild.get_member(interaction.user.id)
             if not member or not member.voice:
@@ -547,6 +555,10 @@ class Voice(commands.Cog):
         interaction: discord.Interaction,
         message: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             member = interaction.guild.get_member(interaction.user.id)
             if not member or not member.voice:
@@ -619,6 +631,10 @@ class Voice(commands.Cog):
         word: str,
         reading: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             await self.dictionary.add_word(word, reading)
             embed = discord.Embed(
@@ -645,6 +661,10 @@ class Voice(commands.Cog):
         interaction: discord.Interaction,
         word: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             await self.dictionary.remove_word(word)
             embed = discord.Embed(
@@ -671,6 +691,10 @@ class Voice(commands.Cog):
         interaction: discord.Interaction,
         page: int = 1
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             limit = 10
             offset = (page - 1) * limit
@@ -702,6 +726,10 @@ class Voice(commands.Cog):
         self,
         message: discord.Message
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(message.author.id):
+            return
         try:
             if message.author.bot:
                 return

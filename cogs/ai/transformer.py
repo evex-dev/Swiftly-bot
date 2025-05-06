@@ -38,6 +38,10 @@ class Mind(commands.Cog):
         description="返信先のメッセージの感情予測を行います"
     )
     async def mind(self, ctx: commands.Context) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(ctx.author.id):
+            return
         try:
             async with ctx.typing():
                 # レート制限のチェック
@@ -52,6 +56,11 @@ class Mind(commands.Cog):
                     return
 
                 referenced_message = ctx.message.reference.resolved
+
+                # 返信先のメンバーもプライバシーモードかチェック
+                if privacy_cog and privacy_cog.is_private_user(referenced_message.author.id):
+                    return
+
                 text = referenced_message.content
 
                 # テキストをトークン化

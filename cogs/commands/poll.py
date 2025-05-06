@@ -67,6 +67,12 @@ class PollButton(discord.ui.Button):
         return False, None
 
     async def callback(self, interaction: discord.Interaction):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = interaction.client.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            await interaction.response.send_message("この操作はご利用いただけません（プライバシーモード）", ephemeral=True)
+            return
+
         # レート制限
         is_limited, remaining = self._check_rate_limit(interaction.user.id)
         if is_limited:
@@ -425,6 +431,12 @@ class Poll(commands.Cog):
                    description: Optional[str] = None,
                    duration: Optional[app_commands.Choice[int]] = None,
                    options: Optional[str] = None):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            await interaction.response.send_message("この操作はご利用いただけません（プライバシーモード）", ephemeral=True)
+            return
+
         # レート制限チェック
         is_limited, remaining = self._check_rate_limit(interaction.user.id)
         if is_limited:

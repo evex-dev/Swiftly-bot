@@ -84,6 +84,11 @@ class VulnerabilityCog(commands.Cog):
     
     @app_commands.command(name="vuln", description="ボットの脆弱性を報告します")
     async def vulnerability_report(self, interaction: discord.Interaction):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         modal = VulnerabilityReportModal()
         await interaction.response.send_modal(modal)
 

@@ -155,6 +155,10 @@ class DiscowaremaTen(commands.Cog):
         description="終われまテンをカスタムお題で開始します。"
     )
     async def start_custom(self, interaction: discord.Interaction, theme: str) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             if session := await self._get_session(interaction.channel_id, interaction.guild_id):
                 embed = self._create_game_embed(
@@ -191,6 +195,10 @@ class DiscowaremaTen(commands.Cog):
         description="全員の回答を開きます。終われまテンの終了コマンドも兼ねています。"
     )
     async def open_answers(self, interaction: discord.Interaction) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             if session := await self._get_session(interaction.channel_id, interaction.guild_id):
                 answers = await self._get_answers(session.session_id)
@@ -216,6 +224,10 @@ class DiscowaremaTen(commands.Cog):
         description="終われまテンに回答します。"
     )
     async def answer(self, interaction: discord.Interaction, answer: str) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             if not (session := await self._get_session(interaction.channel_id, interaction.guild_id)):
                 await interaction.response.send_message(ERROR_MESSAGES["no_game"], ephemeral=True)

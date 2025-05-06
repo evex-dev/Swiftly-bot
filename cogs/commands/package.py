@@ -164,6 +164,10 @@ class PackageSearch(commands.Cog):
         manager: str,
         package: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             if manager not in PACKAGE_MANAGERS:
                 await interaction.response.send_message(

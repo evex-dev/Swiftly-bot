@@ -54,6 +54,11 @@ class PersistentAuthView(discord.ui.View):
         self.add_item(button)
 
     async def auth_button_callback(self, interaction: discord.Interaction) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy") if hasattr(self, "bot") else None
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         image_bytes, answer, error = await self.fetch_captcha()
         if error:
             await interaction.response.send_message(error, ephemeral=True)
@@ -97,6 +102,11 @@ class PersistentModalButtonView(discord.ui.View):
         self.add_item(button)
 
     async def modal_button_callback(self, interaction: discord.Interaction) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy") if hasattr(self, "bot") else None
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         modal = PersistentAuthModal(self.answer, self.role_id)
         await interaction.response.send_modal(modal)
 
@@ -119,6 +129,11 @@ class PersistentAuthModal(discord.ui.Modal):
         self.add_item(self.answer_input)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy") if hasattr(self, "bot") else None
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if self.answer_input.value.lower() == self.answer.lower():
             role = interaction.guild.get_role(self.role_id)
             if role:
@@ -175,6 +190,11 @@ class Auth(commands.Cog):
         difficulty="CAPTCHAの難易度 (1-10)(よほどのことがない限り1をおすすめします。)"
     )
     async def create_auth_panel(self, interaction: discord.Interaction, role: discord.Role, difficulty: int = MIN_DIFFICULTY) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if not MIN_DIFFICULTY <= difficulty <= MAX_DIFFICULTY:
             await interaction.response.send_message(ERROR_MESSAGES["invalid_difficulty"], ephemeral=True)
             return

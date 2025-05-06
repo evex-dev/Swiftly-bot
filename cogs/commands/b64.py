@@ -79,6 +79,11 @@ class Base64(commands.Cog):
         action: str,
         content: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if action not in ACTIONS:
             await interaction.response.send_message(
                 INVALID_ACTION_MESSAGE,

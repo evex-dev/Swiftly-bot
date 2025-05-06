@@ -122,6 +122,11 @@ class Premium(commands.Cog):
         description="読み上げボイスを設定します (プレミアムユーザーのみ)"
     )
     async def set_voice(self, interaction: discord.Interaction):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         options = [
             discord.SelectOption(label="Keita", value="ja-JP-KeitaNeural", description="男性ボイス"),
             discord.SelectOption(label="Nanami", value="ja-JP-NanamiNeural", description="女性ボイス")
@@ -137,6 +142,11 @@ class Premium(commands.Cog):
                 )
 
             async def callback(self, interaction: discord.Interaction):
+                # プライバシーモードのユーザーを無視
+                privacy_cog = self.view.cog.bot.get_cog("Privacy")
+                if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+                    return
+
                 selected_voice = self.values[0]
                 user_id = interaction.user.id
                 user_data = await self.view.cog.db.get_user(user_id)

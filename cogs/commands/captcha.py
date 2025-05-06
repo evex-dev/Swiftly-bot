@@ -32,9 +32,10 @@ logger = logging.getLogger(__name__)
 class CaptchaModal(ui.Modal):
     """CAPTCHA回答用のモーダル"""
 
-    def __init__(self, answer: str) -> None:
+    def __init__(self, answer: str, bot) -> None:
         super().__init__(title="CAPTCHA 認証")
         self.answer = answer
+        self.bot = bot
         self.answer_input = ui.TextInput(
             label="画像に表示されている文字を入力してください",
             placeholder="ここに文字を入力",
@@ -52,6 +53,11 @@ class CaptchaModal(ui.Modal):
         interaction : discord.Interaction
             インタラクションコンテキスト
         """
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         is_correct = self.answer_input.value.lower() == self.answer.lower()
         message = SUCCESS_MESSAGES["correct"] if is_correct else SUCCESS_MESSAGES["incorrect"].format(self.answer)
         await interaction.response.send_message(message, ephemeral=True)
@@ -59,13 +65,14 @@ class CaptchaModal(ui.Modal):
 class CaptchaButton(ui.Button):
     """CAPTCHA回答ボタン"""
 
-    def __init__(self, answer: str) -> None:
+    def __init__(self, answer: str, bot) -> None:
         super().__init__(
             label="回答する",
             style=discord.ButtonStyle.primary,
             custom_id="captcha_answer"
         )
         self.answer = answer
+        self.bot = bot
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """
@@ -76,19 +83,29 @@ class CaptchaButton(ui.Button):
         interaction : discord.Interaction
             インタラクションコンテキスト
         """
-        modal = CaptchaModal(self.answer)
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+        modal = CaptchaModal(self.answer, self.bot)
         await interaction.response.send_modal(modal)
 
 class CaptchaView(ui.View):
     """CAPTCHA表示用のビュー"""
 
-    def __init__(self, answer: str) -> None:
+    def __init__(self, answer: str, bot) -> None:
         super().__init__(timeout=TIMEOUT_SECONDS)
-        self.add_item(CaptchaButton(answer))
+        self.add_item(CaptchaButton(answer, bot))
         self.message: Optional[discord.Message] = None
+        self.bot = bot
 
     async def on_timeout(self) -> None:
         """タイムアウト時の処理"""
+        # プライバシーモードのユーザーを無視（メッセージ送信時 author チェック）
+        if self.message and hasattr(self.message, "author"):
+            privacy_cog = self.bot.get_cog("Privacy")
+            if privacy_cog and privacy_cog.is_private_user(self.message.author.id):
+                return
         try:
             for item in self.children:
                 item.disabled = True
@@ -168,6 +185,11 @@ class Captcha(commands.Cog):
         interaction: discord.Interaction,
         difficulty: int = MIN_DIFFICULTY
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if not MIN_DIFFICULTY <= difficulty <= MAX_DIFFICULTY:
             await interaction.response.send_message(
                 ERROR_MESSAGES["invalid_difficulty"],
@@ -187,7 +209,7 @@ class Captcha(commands.Cog):
             filename="captcha.png"
         )
         embed = self._create_captcha_embed(difficulty)
-        view = CaptchaView(answer)
+        view = CaptchaView(answer, self.bot)
 
         message = await interaction.followup.send(
             embed=embed,

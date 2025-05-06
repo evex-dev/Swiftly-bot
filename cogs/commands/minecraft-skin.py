@@ -120,6 +120,10 @@ class MinecraftSkin(commands.Cog):
         username: str,
         view_type: str = "armor"
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             # ユーザー名のバリデーション
             if not self._validate_username(username):

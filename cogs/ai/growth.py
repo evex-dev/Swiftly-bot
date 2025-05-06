@@ -302,6 +302,11 @@ class Growth(commands.Cog):
         target: int,
         show_graph: bool = True
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         try:
             await interaction.response.defer(thinking=True)
 

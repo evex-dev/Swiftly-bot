@@ -29,6 +29,11 @@ class Yen5000(commands.Cog):
 
     @discord.app_commands.command(name="5000", description="5000兆円ジェネレーター")
     async def yen5000(self, interaction: discord.Interaction, top: str, bottom: str) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         await interaction.response.defer(thinking=True)
 
         try:

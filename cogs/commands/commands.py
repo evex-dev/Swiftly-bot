@@ -115,6 +115,10 @@ class CommandListView(discord.ui.View):
         interaction: discord.Interaction,
         _: discord.ui.Button
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         """前のページに移動"""
         try:
             if self.current_page > 0:
@@ -140,6 +144,10 @@ class CommandListView(discord.ui.View):
         interaction: discord.Interaction,
         _: discord.ui.Button
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         """次のページに移動"""
         try:
             if self.current_page < self.max_pages - 1:
@@ -166,6 +174,10 @@ class CommandListView(discord.ui.View):
         interaction: discord.Interaction,
         select: discord.ui.Select
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         """カテゴリを選択"""
         try:
             category = select.values[0]
@@ -215,6 +227,10 @@ class CommandList(commands.Cog):
         description="Swiftlyが提供するすべてのコマンドを表示します。"
     )
     async def command_list(self, interaction: discord.Interaction) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             commands_list = list(self.bot.tree.get_commands())
             view = CommandListView(commands_list)

@@ -19,6 +19,11 @@ class NSFWDetection(commands.Cog):
 
     @commands.command(name="nsfwdetect")
     async def analyze_nsfw(self, ctx):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(ctx.author.id):
+            return
+
         user_id = ctx.author.id
         premium_db = PremiumDatabase()
         user_data = premium_db.get_user(user_id)

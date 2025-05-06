@@ -14,6 +14,11 @@ class InviteCommand(commands.Cog):
         interaction: discord.Interaction
     ) -> None:
         """Botの招待リンクを送信するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         try:
             invite_url = "https://discord.com/oauth2/authorize?client_id=1310198598213963858"
             embed = discord.Embed(

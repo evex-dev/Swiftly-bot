@@ -30,6 +30,10 @@ class Minecraft(commands.Cog):
 
     @app_commands.command(name="minecraft", description="Get the status of a Minecraft server")
     async def minecraft(self, interaction: discord.Interaction, address: str):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         # レート制限のチェック
         is_limited, remaining = self._check_rate_limit(interaction.user.id)
         if is_limited:

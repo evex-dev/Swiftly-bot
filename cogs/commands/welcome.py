@@ -213,6 +213,11 @@ class MemberWelcomeCog(commands.Cog):
         channel: Optional[discord.TextChannel] = None
     ) -> None:
         """ウェルカムメッセージの設定を行うコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if not interaction.user.guild_permissions.manage_guild:
             await interaction.response.send_message(
                 ERROR_MESSAGES["no_permission"],
@@ -293,6 +298,11 @@ class MemberWelcomeCog(commands.Cog):
         channel: Optional[discord.TextChannel] = None
     ) -> None:
         """退室メッセージの設定を行うコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if not interaction.user.guild_permissions.manage_guild:
             await interaction.response.send_message(
                 ERROR_MESSAGES["no_permission"],

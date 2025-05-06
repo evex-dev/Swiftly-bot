@@ -48,6 +48,11 @@ class FirstComment(commands.Cog):
         self,
         message: discord.Message
     ) -> discord.Embed:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(message.author.id):
+            return None
+
         embed = discord.Embed(
             title="最初のメッセージ",
             description=(
@@ -93,6 +98,10 @@ class FirstComment(commands.Cog):
             if channel.id in self.message_cache:
                 cached = self.message_cache[channel.id]
                 if not cached.is_expired():
+                    # プライバシーモードのユーザーを無視
+                    privacy_cog = self.bot.get_cog("Privacy")
+                    if privacy_cog and privacy_cog.is_private_user(cached.message.author.id):
+                        return None
                     return cached.message
                 # 期限切れの場合はキャッシュを削除
                 del self.message_cache[channel.id]
@@ -102,6 +111,10 @@ class FirstComment(commands.Cog):
                 limit=1,
                 oldest_first=True
             ):
+                # プライバシーモードのユーザーを無視
+                privacy_cog = self.bot.get_cog("Privacy")
+                if privacy_cog and privacy_cog.is_private_user(message.author.id):
+                    continue
                 self.message_cache[channel.id] = CachedMessage(message)
                 return message
 
@@ -127,6 +140,14 @@ class FirstComment(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            await interaction.response.send_message(
+                "プライバシーモードのため、このコマンドは利用できません。",
+                ephemeral=True
+            )
+            return
         try:
             # 権限チェック
             if not interaction.channel.permissions_for(
@@ -144,6 +165,12 @@ class FirstComment(commands.Cog):
 
             if first_message:
                 embed = self._create_message_embed(first_message)
+                if embed is None:
+                    await interaction.response.send_message(
+                        "プライバシーモードのユーザーによる最初のメッセージは表示できません。",
+                        ephemeral=True
+                    )
+                    return
                 await interaction.response.send_message(embed=embed)
             else:
                 await interaction.response.send_message(

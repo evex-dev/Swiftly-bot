@@ -250,6 +250,10 @@ class JokeCommands(commands.Cog):
         user2: discord.User
     ) -> None:
         """愛の相性を計算するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             if user1 == user2:
                 embed = discord.Embed(
@@ -281,6 +285,10 @@ class JokeCommands(commands.Cog):
         user: discord.User
     ) -> None:
         """ファンタジーステータスを表示するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             stats = self._calculate_stats(user.name)
             embed = self._create_status_embed(user, stats)
@@ -303,6 +311,10 @@ class JokeCommands(commands.Cog):
         user: discord.User
     ) -> None:
         """ユーザーに対応するCPU/GPUを表示するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             random.seed(user.name)
             embed = discord.Embed(
@@ -339,6 +351,10 @@ class JokeCommands(commands.Cog):
         user2: discord.User
     ) -> None:
         """ユーザー同士の対戦を実行するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             if user1 == user2:
                 embed = discord.Embed(

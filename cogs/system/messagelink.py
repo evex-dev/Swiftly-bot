@@ -8,6 +8,11 @@ class MessageLink(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(message.author.id):
+            return
+
         link_pattern = r"https://(?:canary\.|ptb\.)?discord\.com/channels/(\d+)/(\d+)/(\d+)"
         match = re.search(link_pattern, message.content)
         if match:

@@ -25,6 +25,11 @@ class AuthRemove(commands.Cog):
         message_id="削除する認証パネルのメッセージID"
     )
     async def remove_auth_panel(self, interaction: discord.Interaction, message_id: int) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         conn = await asyncpg.connect(DATABASE_URL)
         try:
             row = await conn.fetchrow(

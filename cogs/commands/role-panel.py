@@ -120,10 +120,14 @@ class RolePanel(commands.Cog):
         title: str,
         description: str
     ):
-        """新しいロールパネルを作成する"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         if not await self._check_admin(interaction):
             return
             
+        """新しいロールパネルを作成する"""
         embed = discord.Embed(
             title=title,
             description=description,
@@ -166,6 +170,11 @@ class RolePanel(commands.Cog):
         emoji: str,
         description: str = ""
     ):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+            
         """ロールパネルに新しいロールを追加する"""
         try:
             panel_id = int(panel_id)
@@ -235,6 +244,11 @@ class RolePanel(commands.Cog):
         panel_id: str,
         emoji: str
     ):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+            
         """ロールパネルから特定のロールを削除する"""
         try:
             panel_id = int(panel_id)
@@ -299,6 +313,11 @@ class RolePanel(commands.Cog):
     @app_commands.describe(panel_id="削除するロールパネルのメッセージID")
     @app_commands.default_permissions(administrator=True)
     async def delete_panel(self, interaction: discord.Interaction, panel_id: str):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+            
         """ロールパネルを完全に削除する"""
         try:
             panel_id = int(panel_id)
@@ -335,6 +354,11 @@ class RolePanel(commands.Cog):
     @role_panel_group.command(name="list", description="サーバー内のすべてのロールパネルを表示します")
     @app_commands.default_permissions(administrator=True)
     async def list_panels(self, interaction: discord.Interaction):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+            
         """サーバー内のすべてのロールパネルを表示"""
         if not self.panels:
             await interaction.response.send_message("このサーバーにはロールパネルが作成されていません。", ephemeral=True)
@@ -366,6 +390,11 @@ class RolePanel(commands.Cog):
     @app_commands.describe(panel_id="更新するロールパネルのメッセージID")
     @app_commands.default_permissions(administrator=True)
     async def refresh_panel(self, interaction: discord.Interaction, panel_id: str):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+            
         """ロールパネルを再読み込みして更新する"""
         try:
             panel_id = int(panel_id)

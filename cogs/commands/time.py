@@ -132,6 +132,10 @@ class Time(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             # 時刻の取得
             data = await self.api.get_current_time()

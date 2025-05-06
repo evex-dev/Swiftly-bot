@@ -194,6 +194,10 @@ class Sandbox(commands.Cog):
         language: str,
         code: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             # 言語のバリデーション
             if language not in API_BASE_URLS:

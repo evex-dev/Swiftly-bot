@@ -82,6 +82,11 @@ class GGRKS(commands.Cog):
 
     @app_commands.command(name="ggrks-enable", description="「〜って何？」「〜って誰？」などの質問に対してGoogle検索を促す機能を有効化します")
     async def ggrks_enable(self, interaction: discord.Interaction):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         # 管理者権限チェック
         if not self._is_administrator(interaction):
             await interaction.response.send_message("このコマンドはサーバー管理者のみが実行できます。", ephemeral=True)
@@ -93,6 +98,11 @@ class GGRKS(commands.Cog):
 
     @app_commands.command(name="ggrks-disable", description="「〜って何？」「〜って誰？」などの質問に対してGoogle検索を促す機能を無効化します")
     async def ggrks_disable(self, interaction: discord.Interaction):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         # 管理者権限チェック
         if not self._is_administrator(interaction):
             await interaction.response.send_message("このコマンドはサーバー管理者のみが実行できます。", ephemeral=True)
@@ -107,6 +117,11 @@ class GGRKS(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(message.author.id):
+            return
+
         # 自身のメッセージには反応しない
         if message.author.bot:
             return

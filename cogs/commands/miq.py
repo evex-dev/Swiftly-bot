@@ -34,6 +34,11 @@ class MakeItQuoteCog(commands.Cog):
         self,
         ctx: commands.Context
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(ctx.author.id):
+            return
+
         try:
             # 返信先のメッセージを取得
             if not ctx.message.reference:

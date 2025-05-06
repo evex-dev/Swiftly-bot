@@ -143,6 +143,10 @@ class IP(commands.Cog):
         interaction: discord.Interaction,
         ip_addr: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             # IPアドレスのバリデーション
             if not self._validate_ip(ip_addr):

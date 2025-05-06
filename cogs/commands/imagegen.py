@@ -103,6 +103,10 @@ class ImageGen(commands.Cog):
         interaction: discord.Interaction,
         prompt: str
     ) -> None:
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
         try:
             # プロンプトのバリデーション
             is_valid, error_message = self._validate_prompt(prompt)

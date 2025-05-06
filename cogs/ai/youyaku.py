@@ -131,6 +131,11 @@ class Youyaku(commands.Cog):
         num_messages: int = DEFAULT_MESSAGES
     ) -> None:
         try:
+            # プライバシーモードのユーザーを無視
+            privacy_cog = self.bot.get_cog("Privacy")
+            if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+                return
+
             # メッセージ数の制限チェック
             if num_messages > MAX_MESSAGES:
                 await interaction.response.send_message(
@@ -158,6 +163,12 @@ class Youyaku(commands.Cog):
                     limit=num_messages
                 )
             ]
+            # プライバシーモードのユーザーのメッセージを除外
+            if privacy_cog:
+                messages = [
+                    message for message in messages
+                    if not privacy_cog.is_private_user(message.author.id)
+                ]
             message_contents = [
                 message.content
                 for message in messages

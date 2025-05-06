@@ -21,6 +21,10 @@ class Snapshot(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(message.author.id):
+            return
         if message.author.bot:
             return
         content = message.content.strip()
