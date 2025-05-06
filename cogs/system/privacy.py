@@ -59,22 +59,23 @@ class Privacy(commands.Cog):
             cursor.execute('DELETE FROM private_users WHERE user_id = ?', (user_id,))
             conn.commit()
 
-    @commands.slash_command(name='privacy', description='プライバシーモードを切り替えます。')
-    async def privacy(self, ctx: discord.ApplicationContext):
+    @discord.app_commands.command(name='privacy', description='プライバシーモードを切り替えます。')
+    async def privacy(self, interaction: discord.Interaction):
         """自身をプライバシーモードにして以降のイベントを一切受け付けなくします。再度実行で解除されます。"""
-        uid = ctx.author.id
+        uid = interaction.user.id
         if uid in self.private_users:
             self.private_users.remove(uid)
             self._remove_private_user(uid)
-            await ctx.respond('プライバシーモードを解除しました。', ephemeral=True)
+            await interaction.response.send_message('プライバシーモードを解除しました。', ephemeral=True)
         else:
             self.private_users.add(uid)
             self._add_private_user(uid)
             try:
-                await ctx.author.send('プライバシーモードが有効になりました。以降一切のコマンドやメッセージを受け取りません。そのため、botの仕様が不可能になります。\nしかし、荒らし対策系は安全のため引き続き検知します。')
+                await interaction.user.send('プライバシーモードが有効になりました。以降一切のコマンドやメッセージを受け取りません。そのため、botの仕様が不可能になります。\nしかし、荒らし対策系は安全のため引き続き検知します。')
             except discord.Forbidden:
                 pass
-            await ctx.respond('プライバシーモードを有効化しました。', ephemeral=True)
+            await interaction.response.send_message('プライバシーモードを有効化しました。', ephemeral=True)
+
 
 
     def is_private_user(self, user_id: int) -> bool:
