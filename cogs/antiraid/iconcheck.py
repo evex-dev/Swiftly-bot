@@ -193,7 +193,11 @@ class IconCheck(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
-        """荒らし対策を有効化するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if error_embed := await self._check_command_context(interaction):
             await interaction.response.send_message(
                 embed=error_embed,
@@ -232,7 +236,11 @@ class IconCheck(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
-        """荒らし対策を無効化するコマンド"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if error_embed := await self._check_command_context(interaction):
             await interaction.response.send_message(
                 embed=error_embed,

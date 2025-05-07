@@ -212,7 +212,11 @@ class AntiInvite(commands.Cog):
         discord.app_commands.Choice(name="disable", value="disable")
     ])
     async def anti_invite(self, interaction: discord.Interaction, action: str) -> None:
-        """招待リンク自動削除の有効/無効を設定"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message(ADMIN_ONLY_MESSAGE, ephemeral=True)
             return
@@ -249,7 +253,11 @@ class AntiInvite(commands.Cog):
         channel_9: Optional[discord.TextChannel] = None,
         channel_10: Optional[discord.TextChannel] = None
     ) -> None:
-        """ホワリスチャンネルの設定"""
+        # プライバシーモードのユーザーを無視
+        privacy_cog = self.bot.get_cog("Privacy")
+        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
+            return
+
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message(ADMIN_ONLY_MESSAGE, ephemeral=True)
             return
