@@ -2,6 +2,14 @@ import discord
 from discord.ext import commands
 import re
 
+class DeleteButtonView(discord.ui.View):
+    def __init__(self, *, timeout=180):
+        super().__init__(timeout=timeout)
+
+    @discord.ui.button(label="削除", style=discord.ButtonStyle.danger, custom_id="delete_embed_button")
+    async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.message.delete()
+
 class MessageLink(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -36,7 +44,8 @@ class MessageLink(commands.Cog):
                 embed.set_footer(
                     text=f"Sent on {target_message.created_at.strftime('%Y-%m-%d %H:%M:%S')} in {guild.name}"
                 )
-                await message.channel.send(embed=embed)
+                view = DeleteButtonView()
+                await message.channel.send(embed=embed, view=view)
             except Exception as e:
                 print(f"Error fetching message: {e}")
 
