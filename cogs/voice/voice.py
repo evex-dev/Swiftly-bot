@@ -437,6 +437,14 @@ class Voice(commands.Cog):
                 return True, remaining
         return False, None
 
+    async def _send_migration_message(self, interaction: discord.Interaction) -> None:
+        """機能移行メッセージを送信"""
+        await interaction.response.send_message(
+            "この機能はSwiftly読み上げ専用botに移行しました。読み上げ機能を使用するにはこのbotを導入してください。"
+            "https://discord.com/oauth2/authorize?client_id=1371465579780767824",
+            ephemeral=True
+        )
+
     @discord.app_commands.command(
         name="join",
         description="ボイスチャンネルに参加します"
@@ -445,53 +453,7 @@ class Voice(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
-            return
-        try:
-            member = interaction.guild.get_member(interaction.user.id)
-            if not member or not member.voice:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["not_in_voice"],
-                    ephemeral=True
-                )
-                return
-
-            voice_channel = member.voice.channel
-            guild_id = interaction.guild.id
-
-            is_limited, remaining = self._check_rate_limit(interaction.user.id)
-            if is_limited:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["rate_limit"].format(remaining),
-                    ephemeral=True
-                )
-                return
-
-            if guild_id in self.state.guilds:
-                # 既存の場合はチャンネル移動とテキストチャンネル更新
-                await self.state.guilds[guild_id].voice_client.move_to(voice_channel)
-                self.state.guilds[guild_id].text_channel_id = interaction.channel.id  # 更新
-            else:
-                voice_client = await voice_channel.connect()
-                # ミュート状態に変更
-                await voice_client.guild.change_voice_state(
-                    channel=voice_client.channel,
-                    self_deaf=True
-                )
-                self.state.guilds[guild_id] = GuildTTS(voice_channel.id, voice_client, interaction.channel.id)
-            self._last_uses[interaction.user.id] = datetime.now()
-            await interaction.response.send_message(
-                SUCCESS_MESSAGES["joined"].format(voice_channel.name)
-            )
-
-        except Exception as e:
-            logger.error("Error in join command: %s", e, exc_info=True)
-            await interaction.response.send_message(
-                ERROR_MESSAGES["unexpected"].format(str(e)),
-                ephemeral=True
-            )
+        await self._send_migration_message(interaction)
 
     @discord.app_commands.command(
         name="leave",
@@ -501,50 +463,7 @@ class Voice(commands.Cog):
         self,
         interaction: discord.Interaction
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
-            return
-        try:
-            member = interaction.guild.get_member(interaction.user.id)
-            if not member or not member.voice:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["not_in_voice"],
-                    ephemeral=True
-                )
-                return
-
-            guild_id = interaction.guild.id
-
-            if guild_id not in self.state.guilds:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["bot_not_in_voice"],
-                    ephemeral=True
-                )
-                return
-
-            voice_client = self.state.guilds[guild_id].voice_client
-
-            is_limited, remaining = self._check_rate_limit(interaction.user.id)
-            if is_limited:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["rate_limit"].format(remaining),
-                    ephemeral=True
-                )
-                return
-
-            await voice_client.disconnect()
-            del self.state.guilds[guild_id]
-            self._last_uses[interaction.user.id] = datetime.now()
-
-            await interaction.response.send_message(SUCCESS_MESSAGES["left"])
-
-        except Exception as e:
-            logger.error("Error in leave command: %s", e, exc_info=True)
-            await interaction.response.send_message(
-                ERROR_MESSAGES["unexpected"].format(str(e)),
-                ephemeral=True
-            )
+        await self._send_migration_message(interaction)
 
     @discord.app_commands.command(
         name="vc-tts",
@@ -555,71 +474,7 @@ class Voice(commands.Cog):
         interaction: discord.Interaction,
         message: str
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
-            return
-        try:
-            member = interaction.guild.get_member(interaction.user.id)
-            if not member or not member.voice:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["not_in_voice"],
-                    ephemeral=True
-                )
-                return
-
-            guild_id = interaction.guild.id
-            if guild_id not in self.state.guilds:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["bot_not_in_voice"],
-                    ephemeral=True
-                )
-                return
-
-            is_limited, remaining = self._check_rate_limit(interaction.user.id)
-            if is_limited:
-                await interaction.response.send_message(
-                    ERROR_MESSAGES["rate_limit"].format(remaining),
-                    ephemeral=True
-                )
-                return
-
-            processed_message = await MessageProcessor.process_message(message, dictionary=self.dictionary)
-            
-            # プレミアムユーザーのボイス情報を取得
-            user_id = interaction.user.id
-            user_data = await self.state.premium_db.get_user(user_id)
-            voice = user_data[0] if user_data and len(user_data) > 0 else None
-            
-            guild_state = self.state.guilds[guild_id]
-            async with guild_state.lock:
-                # メッセージとユーザーID、ボイス情報をキューに追加
-                guild_state.tts_queue.append({
-                    "message": processed_message,
-                    "user_id": user_id,
-                    "voice": voice
-                })
-                
-                if not guild_state.voice_client.is_playing():
-                    next_item = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(
-                        guild_id, 
-                        next_item["message"], 
-                        next_item["user_id"],
-                        next_item.get("voice")
-                    )
-
-            self._last_uses[interaction.user.id] = datetime.now()
-            await interaction.response.send_message(
-                SUCCESS_MESSAGES["tts_played"].format(processed_message)
-            )
-
-        except Exception as e:
-            logger.error("Error in vc_tts command: %s", e, exc_info=True)
-            await interaction.response.send_message(
-                ERROR_MESSAGES["unexpected"].format(str(e)),
-                ephemeral=True
-            )
+        await self._send_migration_message(interaction)
 
     @discord.app_commands.command(
         name="dictionary_add",
@@ -631,26 +486,7 @@ class Voice(commands.Cog):
         word: str,
         reading: str
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
-            return
-        try:
-            await self.dictionary.add_word(word, reading)
-            embed = discord.Embed(
-                title="辞書に追加しました",
-                description=f"✅ {word} -> {reading}",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            logger.error("Error in dictionary_add command: %s", e, exc_info=True)
-            embed = discord.Embed(
-                title="エラー",
-                description=ERROR_MESSAGES["unexpected"].format(str(e)),
-                color=discord.Color.red()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self._send_migration_message(interaction)
 
     @discord.app_commands.command(
         name="dictionary_remove",
@@ -661,26 +497,7 @@ class Voice(commands.Cog):
         interaction: discord.Interaction,
         word: str
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
-            return
-        try:
-            await self.dictionary.remove_word(word)
-            embed = discord.Embed(
-                title="辞書から削除しました",
-                description=f"✅ {word}",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            logger.error("Error in dictionary_remove command: %s", e, exc_info=True)
-            embed = discord.Embed(
-                title="エラー",
-                description=ERROR_MESSAGES["unexpected"].format(str(e)),
-                color=discord.Color.red()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self._send_migration_message(interaction)
 
     @discord.app_commands.command(
         name="dictionary_list",
@@ -691,85 +508,15 @@ class Voice(commands.Cog):
         interaction: discord.Interaction,
         page: int = 1
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(interaction.user.id):
-            return
-        try:
-            limit = 10
-            offset = (page - 1) * limit
-            words = await self.dictionary.list_words(limit, offset)
-            if not words:
-                await interaction.response.send_message("辞書に単語がありません。", ephemeral=True)
-                return
-
-            embed = discord.Embed(
-                title=f"辞書のリスト (ページ {page})",
-                color=discord.Color.blue()
-            )
-            for word, reading in words:
-                embed.add_field(name=word, value=reading, inline=False)
-
-            await interaction.response.send_message(embed=embed)
-
-        except Exception as e:
-            logger.error("Error in dictionary_list command: %s", e, exc_info=True)
-            embed = discord.Embed(
-                title="エラー",
-                description=ERROR_MESSAGES["unexpected"].format(str(e)),
-                color=discord.Color.red()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self._send_migration_message(interaction)
 
     @commands.Cog.listener()
     async def on_message(
         self,
         message: discord.Message
     ) -> None:
-        # プライバシーモードのユーザーを無視
-        privacy_cog = self.bot.get_cog("Privacy")
-        if privacy_cog and privacy_cog.is_private_user(message.author.id):
-            return
-        try:
-            if message.author.bot:
-                return
-            guild = message.guild
-            if not guild or guild.id not in self.state.guilds:
-                return
-            guild_state = self.state.guilds[guild.id]
-            # 追加: /joinで指定されたテキストチャンネル以外は処理しない
-            if message.channel.id != guild_state.text_channel_id:
-                return
-            processed_message = await MessageProcessor.process_message(
-                message.content,
-                message.attachments,
-                self.dictionary
-            )
-            
-            # プレミアムユーザーのボイス情報を取得
-            user_id = message.author.id
-            user_data = await self.state.premium_db.get_user(user_id) 
-            voice = user_data[0] if user_data and len(user_data) > 0 else None
-            
-            async with guild_state.lock:
-                # メッセージとユーザーID、ボイス情報をキューに追加
-                guild_state.tts_queue.append({
-                    "message": processed_message,
-                    "user_id": user_id,
-                    "voice": voice
-                })
-                
-                if not guild_state.voice_client.is_playing():
-                    next_item = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(
-                        guild.id, 
-                        next_item["message"], 
-                        next_item["user_id"],
-                        next_item.get("voice")
-                    )
-
-        except Exception as e:
-            logger.error("Error in message handler: %s", e, exc_info=True)
+        # メッセージ処理を無効化
+        pass
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -778,56 +525,8 @@ class Voice(commands.Cog):
         before: discord.VoiceState,
         after: discord.VoiceState
     ) -> None:
-        try:
-            guild = member.guild
-            guild_state = self.state.guilds.get(guild.id)
-            if not guild_state:
-                return
-
-            voice_client = guild_state.voice_client
-            # ボットのみになった場合は切断
-            if voice_client and len(voice_client.channel.members) == 1:
-                await voice_client.disconnect()
-                del self.state.guilds[guild.id]
-                return
-
-            # 参加・退出時にTTSを再生
-            if before.channel is None and after.channel is not None:
-                msg = f"{member.display_name}が参加しました。"
-            elif before.channel is not None and after.channel is None:
-                msg = f"{member.display_name}が退出しました。"
-            else:
-                return
-
-            # ボイスクライアントが接続されていることを確認
-            if not voice_client or not voice_client.is_connected():
-                return
-
-            processed_message = await MessageProcessor.process_message(msg, dictionary=self.dictionary)
-            async with guild_state.lock:
-                guild_state.tts_queue.append({
-                    "message": processed_message,
-                    "user_id": member.id,
-                    "voice": None
-                })
-                if not voice_client.is_playing():
-                    next_item = guild_state.tts_queue.pop(0)
-                    await self.state.play_tts(
-                        guild.id, 
-                        next_item["message"], 
-                        next_item.get("user_id"),
-                        next_item.get("voice")
-                    )
-
-        except Exception as e:
-            logger.error("Error in voice state update: %s", e, exc_info=True)
-
-    async def cog_unload(self) -> None:
-        self.state.tts_manager.cleanup_temp_files()
-        for guild_state in self.state.guilds.values():
-            if guild_state.voice_client.is_connected():
-                await guild_state.voice_client.disconnect()
-        await self.dictionary.close()
+        # ボイス状態更新処理を無効化
+        pass
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Voice(bot))
