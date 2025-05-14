@@ -328,18 +328,20 @@ class SwiftlyBot(commands.AutoShardedBot):
     async def on_ready(self) -> None:
         """準備完了時の処理"""
         logger.info("Logged in as %s", self.user)
-
-        # ギルドメンバーを非同期タスクでチャンク
+        
         async def chunk_guilds():
-            for guild in self.guilds:
-                try:
-                    await guild.chunk()
-                    logger.info("Successfully chunked guild: %s", guild.name)
-                except Exception as e:
-                    logger.error("Failed to chunk guild %s: %s", guild.name, e, exc_info=True)
-                await asyncio.sleep(1)  # 各ギルドチャンク間に1秒の遅延を追加
+            semaphore = asyncio.Semaphore(10)
+            async def chunk_one(guild):
+                async with semaphore:
+                    try:
+                        await guild.chunk()
+                        logger.info("Successfully chunked guild: %s", guild.name)
+                    except Exception as e:
+                        logger.error("Failed to chunk guild %s: %s", guild.name, e, exc_info=True)
+            tasks = [asyncio.create_task(chunk_one(guild)) for guild in self.guilds]
+            await asyncio.gather(*tasks)
 
-        asyncio.create_task(chunk_guilds())  # 非同期タスクとして実行
+        await chunk_guilds()  # 非同期タスクとして並行実行
         await self.count_unique_users()
         await self.update_presence()  # on_readyで一度だけ呼び出す
 
