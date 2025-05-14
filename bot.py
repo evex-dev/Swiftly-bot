@@ -203,7 +203,8 @@ class SwiftlyBot(commands.AutoShardedBot):
             command_prefix=COMMAND_PREFIX,
             intents=intents,
             shard_count=SHARD_COUNT,
-            help_command=None  # sw!helpコマンドを無効化
+            help_command=None,  # sw!helpコマンドを無効化
+            chunk_guilds_at_startup=False  # ギルドチャンクを無効化
         )
 
         self.db = DatabaseManager()  # パス引数不要に
@@ -305,9 +306,10 @@ class SwiftlyBot(commands.AutoShardedBot):
     async def update_presence(self) -> None:
         """ステータスを更新"""
         while True:
+            latency_ms = round(self.latency * 1000) if self.latency < float('inf') else -1  # 無限大の場合は -1 に設定
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"{len(self.guilds)}のサーバー数 || {round(self.latency * 1000)}ms || {self.shard_count}shards",
+                    name=f"{len(self.guilds)}のサーバー数 || {latency_ms}ms || {self.shard_count}shards",
                 )
             )
             await asyncio.sleep(300)  # 5分ごとに更新
@@ -326,6 +328,15 @@ class SwiftlyBot(commands.AutoShardedBot):
     async def on_ready(self) -> None:
         """準備完了時の処理"""
         logger.info("Logged in as %s", self.user)
+
+        # ギルドメンバーを手動でチャンク
+        for guild in self.guilds:
+            try:
+                await guild.chunk()
+                logger.info("Successfully chunked guild: %s", guild.name)
+            except Exception as e:
+                logger.error("Failed to chunk guild %s: %s", guild.name, e, exc_info=True)
+
         await self.count_unique_users()
         await self.update_presence()  # on_readyで一度だけ呼び出す
 
