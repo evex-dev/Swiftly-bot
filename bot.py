@@ -17,7 +17,7 @@ from module.logger import LoggingCog
 from module.prometheus import PrometheusCog
 
 
-SHARD_COUNT: Final[int] = None
+SHARD_COUNT: Final[int] = 3
 COMMAND_PREFIX: Final[str] = "sw!"
 STATUS_UPDATE_COOLDOWN: Final[int] = 5
 LOG_RETENTION_DAYS: Final[int] = 7
