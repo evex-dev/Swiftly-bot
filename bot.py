@@ -307,13 +307,13 @@ class SwiftlyBot(commands.AutoShardedBot):
         """ステータスを更新"""
         while True:
             latency_ms = round(self.latency * 1000) if self.latency < float('inf') else -1  # 無限大の場合は -1 に設定
+            guild_count = len(self.guilds)  # キャッシュされたギルド数を使用
             await self.change_presence(
                 activity=discord.Game(
-                    name=f"{len(self.guilds)}のサーバー数 || {latency_ms}ms || {self.shard_count}shards",
+                    name=f"{guild_count}のサーバー数 || {latency_ms}ms || {self.shard_count}shards",
                 )
             )
-            await asyncio.sleep(300)  # 5分ごとに更新
-
+            await asyncio.sleep(600)  # 更新間隔を10分に延長
 
     async def count_unique_users(self) -> None:
         """ユニークユーザー数を集計"""
@@ -329,14 +329,17 @@ class SwiftlyBot(commands.AutoShardedBot):
         """準備完了時の処理"""
         logger.info("Logged in as %s", self.user)
 
-        # ギルドメンバーを手動でチャンク
-        for guild in self.guilds:
-            try:
-                await guild.chunk()
-                logger.info("Successfully chunked guild: %s", guild.name)
-            except Exception as e:
-                logger.error("Failed to chunk guild %s: %s", guild.name, e, exc_info=True)
+        # ギルドメンバーを非同期タスクでチャンク
+        async def chunk_guilds():
+            for guild in self.guilds:
+                try:
+                    await guild.chunk()
+                    logger.info("Successfully chunked guild: %s", guild.name)
+                except Exception as e:
+                    logger.error("Failed to chunk guild %s: %s", guild.name, e, exc_info=True)
+                await asyncio.sleep(1)  # 各ギルドチャンク間に1秒の遅延を追加
 
+        asyncio.create_task(chunk_guilds())  # 非同期タスクとして実行
         await self.count_unique_users()
         await self.update_presence()  # on_readyで一度だけ呼び出す
 
