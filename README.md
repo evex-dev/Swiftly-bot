@@ -1,3 +1,11 @@
+> [!NOTE]
+> このプロジェクトは終了しました。
+> 現在は、読み上げボットが開発されています。
+> 
+> https://github.com/techfish-11/swiftlytts
+> 
+> https://discord.com/oauth2/authorize?client_id=1371465579780767824
+
 # Swiftly-bot
 Swiftly, a multi-function Discord bot
 
